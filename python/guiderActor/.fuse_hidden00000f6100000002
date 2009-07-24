@@ -1,0 +1,91 @@
+import Queue, time
+
+from guiderActor import *
+import guiderActor.myGlobals
+
+class GuiderState(object):
+    """Save the state of the guider"""
+
+    class Fiber(object):
+        def __init__(self, enabled=True):
+            self.enabled = True
+
+    def __init__(self):
+        self.deleteAllFibers()
+
+    def deleteAllFibers(self):
+        """Delete all fibers """
+        self.fibers = {}
+
+    def setFiberState(self, fiber, enabled=True):
+        """Set a fiber's state.  If fiber is none, delete all fibers """
+
+        if self.fibers.has_key(fiber):
+            self.fibers[fiber].enabled = enabled
+        else:
+            self.fibers[fiber] = GuiderState.Fiber(enabled)
+
+def daemon(actor, queues):
+    timeout = guiderActor.myGlobals.actorState.timeout
+
+    gState = GuiderState()
+    guideCmd = None                     # the Cmd that started the guide loop
+    
+    while True:
+        try:
+            msg = queues[MASTER].get(timeout=timeout)
+
+            if msg.type == Msg.START_GUIDING:
+                cmd, start = msg.data
+
+                if start:
+                    guideCmd = cmd
+
+                    guideCmd.respond("guideState=starting")
+                    queues[GCAM].put(Msg(Msg.START_GUIDING, (cmd, True)))
+                else:
+                    if not guideCmd:
+                        cmd.fail("text=\"The guider is already off\"")
+                        continue
+
+                    guideCmd = None
+                    cmd.respond("guideState=stopping")
+                    queues[GCAM].put(Msg(Msg.START_GUIDING, (cmd, False)))
+            elif msg.type == Msg.EXPOSURE_FINISHED:
+                guideCmd.respond("text=\"Got file\"")
+            elif msg.type == Msg.LOAD_CARTRIDGE:
+                gState.deleteAllFibers()
+
+                gState.plate, gState.pointing, fiberList = data
+                print "Looking up plate %d, pointing %s" % (plate, pointing)
+
+                # find the min and max fibre listed in fiberList
+                min, max = None, None
+                for id, enabled in fiberList:
+                    if min is None or id < min:
+                        min = id
+                    if max is None or id > max:
+                        max = id
+
+                if max is not None:
+                    gState.fibers[i] = max*None
+                for i in range(min, max+1):
+                    gState.setFiberState(i, fiberList[i])
+                
+                queues[MASTER].put(Msg(Msg.STATUS, (cmd)))
+
+            elif msg.type == Msg.ENABLE_FIBER:
+                fiber, enabled = msg.data
+                gState.setFiberState(fiber, enabled)
+            elif msg.type == Msg.STATUS:
+                cmd = msg.data
+
+                cmd.result("plate=%d pointing=%s" % (plate, pointing)
+
+                fibers = []
+                for f in sorted(gState.fibers.keys()):
+                    print "%-2d %s" % (f, gState.fibers[f].enabled)
+            else:
+                raise ValueError, ("Unknown message type %d" % msg.type)
+        except Queue.Empty:
+            actor.bcast.diag("text=\"master alive\"")
