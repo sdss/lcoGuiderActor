@@ -27,15 +27,17 @@ class Msg(object):
     class ABORT_EXPOSURE(): pass
     class SET_TIME(): pass
 
-    def __init__(self, type, data=None, priority=NORMAL):
+    def __init__(self, type, cmd=None, priority=NORMAL, **data):
         self.type = type
+        self.cmd = cmd
         self.data = data
         self.priority = priority
 
     def __str__(self):
-        return "%s : %s" % (self.type, self.data)
+        return "%s : [%s]" % (self.type, self.data)
 
     def __repr__(self, rhs):
+        """Used when sorting the messages in a priority queue"""
         return self.priority - rhs.priority
 
 def flushQueue(queue):
