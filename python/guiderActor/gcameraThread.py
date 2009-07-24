@@ -15,7 +15,7 @@ def main(actor, queues):
             msg = queues[GCAMERA].get(timeout=timeout)
             
             if msg.type == Msg.EXPOSE:
-                cmd, expTime = msg.data
+                cmd, expTime = msg.cmd, msg.data["time"]
 
                 cmd.respond("text=\"starting exposure\"")
                 #
@@ -35,19 +35,19 @@ def main(actor, queues):
 
                 filename = cmdVar.getLastKeyVarData(filenameKey)[0]
 
-                queues[MASTER].put(Msg(Msg.EXPOSURE_FINISHED, (filename, aborted)))
+                queues[MASTER].put(Msg(Msg.EXPOSURE_FINISHED, None, filename=filename, aborted=aborted))
                 #
                 # Abort logic
                 #
                 if False:
                     msg2 = queues[GCAMERA].get(timeout=expTime) # start fake exposure
 
-                    cmd2 = msg2.data[0]
+                    cmd2 = msg2.cmd
                     #import pdb; pdb.set_trace()
                     if msg2.type == Msg.ABORT_EXPOSURE:
                         aborted = True
 
-                        quiet = msg2.data[1]
+                        quiet = msg2.data["quiet"]
                         guiderActor.flushQueue(queues[GCAMERA])
 
                         if quiet:
@@ -61,10 +61,10 @@ def main(actor, queues):
                     else:
                         raise RuntimeError, ("Unexpected message type %d" % msg.type)
 
-                    queues[MASTER].put(Msg(Msg.EXPOSURE_FINISHED, (filename, aborted)))
+                    queues[MASTER].put(Msg(Msg.EXPOSURE_FINISHED, None, filename=filename, aborted=aborted))
                 continue
             elif msg.type == Msg.ABORT_EXPOSURE:
-                cmd, quiet = msg.data
+                cmd, quiet = msg.cmd, msg.data["quiet"]
                 if not quiet:
                     cmd.respond("text=\"Request to abort an exposure when none are in progress\"")
                 guiderActor.flushQueue(queues[GCAMERA])

@@ -91,7 +91,7 @@ class Guider(actorcore.Actor.Actor):
         except ConfigParser.NoOptionError:
             expTime = 10
 
-        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, (None, float(expTime))))
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, None, time=float(expTime)))
         #
         # Finally start the reactor
         #

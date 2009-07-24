@@ -30,10 +30,10 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         # Set the keyword dictionary
         #
         self.keys = keys.KeysDictionary("guidercommands", (1, 1),
-                                        keys.Key("id", types.String(), help="An actor.key, e.g. mcp.needsIack"),
+                                        keys.Key("cartridge", types.Int(), help="A cartridge ID"),
                                         keys.Key("fibers", types.Int()*(1,None), help="A list of fibers"),
-                                        keys.Key("plate", types.Int(), help="A plugplate"),
-                                        keys.Key("pointing", types.Enum("A", "B"),
+                                        keys.Key("plate", types.Int(), help="A plugplate ID"),
+                                        keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
                                         keys.Key("time", types.Float(), help="Exposure time for guider"),
                                         )
@@ -49,7 +49,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
             ("setTime", "<time>", self.setTime),
             ("disableFibers", "<fibers>", self.disableFibers),
             ("enableFibers", "<fibers>", self.enableFibers),
-            ("loadCartridge", "<plate> [<pointing>]", self.loadCartridge),
+            ("loadCartridge", "<cartridge> <plate> [<pointing>]", self.loadCartridge),
             ('ping', '', self.ping),
             ('axes', '(on|off)', self.axes),
             ('focus', '(on|off)', self.focus),
@@ -63,7 +63,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         """Disable a set of fibers"""
 
         for f in cmd.cmd.keywords["fibers"].values:
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.ENABLE_FIBER, (cmd, f, enable)))
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.ENABLE_FIBER, cmd, fiber=f, enable=enable))
 
         self.status(cmd)                # finishes this command
 
@@ -81,30 +81,31 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         """Set the exposure time"""
 
         time = cmd.cmd.keywords["time"].values[0]
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, (cmd, time)))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd, time=time))
 
     if False:
         def guideOn(self, cmd):
             """Turn guiding on"""
 
-            time = cmd.cmd.keywords["time"].values[0]
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, (cmd, True, time)))
+            expTime = cmd.cmd.keywords["time"].values[0]
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd, start=True, time=expTime))
 
         def guideOff(self, cmd):
             """Turn guiding off"""
 
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, (cmd, False, None)))
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd, start=False))
     else:
         def guide(self, cmd):
             """Turn guiding on or off"""
 
             on = "on" in cmd.cmd.keywords
             expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, (cmd, on, expTime)))
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd, start=on, time=expTime))
 
     def loadCartridge(self, cmd):
         """Load a cartridge"""
 
+        cartridge = cmd.cmd.keywords["cartridge"].values[0]
         plate = cmd.cmd.keywords["plate"].values[0]
         pointing = cmd.cmd.keywords["pointing"].values[0] if "pointing" in cmd.cmd.keywords else "A"
         #
@@ -114,8 +115,9 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         for f in range(1, 12):
             fiberList.append((f, True))
         
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE,
-                                                                (cmd, plate, pointing, fiberList)))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd,
+                                                                cartridge=cartridge, plate=plate, pointing=pointing,
+                                                                fiberList=fiberList))
 
     def ping(self, cmd):
         """ Top-level "ping" command handler. Query the actor for liveness/happiness. """
@@ -126,7 +128,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         """Turn guiding something on or off"""
 
         on = "on" in cmd.cmd.keywords
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, (cmd, what, on)))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd, what=what, enabled=on))
 
     def axes(self, cmd):
         """Turn guiding the plate axes on or off"""
@@ -146,4 +148,4 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
     def status(self, cmd):
         """Return guide status status"""
 
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, (cmd, True)))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd, finish=True))

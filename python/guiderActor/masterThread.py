@@ -12,8 +12,9 @@ class GuiderState(object):
             self.enabled = True
 
     def __init__(self):
+        self.cartridge = -1
         self.plate = -1
-        self.pointing = None
+        self.pointing = "?"
         self.time = 0
 
         self.deleteAllFibers()
@@ -58,7 +59,7 @@ def main(actor, queues):
 
             if msg.type == Msg.START_GUIDING:
                 #import pdb; pdb.set_trace()
-                cmd, start, expTime = msg.data
+                cmd, start, expTime = msg.cmd, msg.data["start"], msg.data.get("time")
                 if expTime >= 0:
                     gState.time = expTime
 
@@ -70,7 +71,7 @@ def main(actor, queues):
                     guideCmd = cmd
 
                     guideCmd.respond("guideState=starting")
-                    queues[GCAMERA].put(Msg(Msg.EXPOSE, (cmd, gState.time)))
+                    queues[GCAMERA].put(Msg(Msg.EXPOSE, cmd, time=gState.time))
                 else:
                     if not guideCmd:
                         cmd.fail("text=\"The guider is already off\"")
@@ -78,14 +79,14 @@ def main(actor, queues):
 
                     cmd.respond("guideState=stopping")
                     quiet = True
-                    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, (cmd, quiet), priority=msg.MEDIUM))
+                    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, cmd, quiet=quiet, priority=msg.MEDIUM))
                     guideCmd.finish("guideState=off")
                     guideCmd = None
             elif msg.type == Msg.EXPOSURE_FINISHED:
-                filename, aborted = msg.data
+                filename, aborted = msg.data["filename"], msg.data["aborted"]
 
                 if not aborted:
-                    guideCmd.respond("text=\"Processing %s\"" % filename)
+                    guideCmd.respond("processing=%s" % filename)
 
                     import gcamera.pyGuide_test as pg
                     # plate == 3210
@@ -117,20 +118,40 @@ def main(actor, queues):
                     dAz = dx/float(n)
                     dAlt = dy/float(n)
                     dRot = 1e-5
+
+                    posPID = {"P" : 0.5, "I" : 0, "D" : 0}
+                    offsetAz = posPID["P"]*dAz
+                    offsetAlt = posPID["P"]*dAlt
+                    offsetRot = posPID["P"]*dRot
+
+                    guideCmd.respond("axisErr=%g, %g, %g" % (dAz, dAlt, dRot))
+                    guideCmd.respond("axisChange=%g, %g, %g, %s" % (offsetAz, offsetAlt, offsetRot,
+                                                                    "enabled" if gState.guideAxes else "disabled"))
+
                     dFocus = -1e-3
-                    dScale = 1e-5
-                    guideCmd.respond("offsets=%g, %g, %g, %s" % (dAz, dAlt, dRot,
-                                                                 "enabled" if gState.guideAxes else "disabled"))
-                    guideCmd.respond("focusChange=%g, %s" % (dFocus,
+                    focusPID = {"P" : 0.5, "I" : 0, "D" : 0}
+                    offsetFocus = posScale["P"]*scalePID
+
+                    guideCmd.respond("focusErr=%g" % (dFocus))
+                    guideCmd.respond("focusChange=%g, %s" % (offsetFocus,
                                                              "enabled" if gState.guideFocus else "disabled"))
-                    guideCmd.respond("scaleChange=%g, %s" % (dScale,
+
+                    dScale = 1e-5
+                    scalePID = {"P" : 0.5, "I" : 0, "D" : 0}
+                    offsetScale = posScale["P"]*scalePID
+
+                    guideCmd.respond("scaleErr=%g" % (dScale))
+                    guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                                              "enabled" if gState.guideScale else "disabled"))
 
-                    queues[GCAMERA].put(Msg(Msg.EXPOSE, (guideCmd, gState.time)))
+                    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, time=gState.time))
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.deleteAllFibers()
 
-                cmd, gState.plate, gState.pointing, fiberList = msg.data
+                cmd = msg.cmd
+                gState.cartridge, gState.plate, gState.pointing = \
+                                  msg.data["cartridge"], msg.data["plate"], msg.data["pointing"]
+                fiberList = msg.data["fiberList"]
                 #
                 # Set the gState.fibers array; note that the fiber IDs may not be 0-indexed
                 #
@@ -150,19 +171,19 @@ def main(actor, queues):
                 #
                 # Report the cartridge status
                 #
-                queues[MASTER].put(Msg(Msg.STATUS, (cmd, True)))
+                queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
 
             elif msg.type == Msg.SET_GUIDE_MODE:
-                cmd, what, enabled = msg.data
+                cmd, what, enabled = msg.cmd, msg.data["what"], msg.data["enabled"]
                 
                 gState.setGuideMode(what, enabled)
                 #
                 # Report the cartridge status
                 #
-                queues[MASTER].put(Msg(Msg.STATUS, (cmd, True)))
+                queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
 
             elif msg.type == Msg.ENABLE_FIBER:
-                cmd, fiber, enabled = msg.data
+                cmd, fiber, enabled = msg.cmd, msg.data["fiber"], msg.data["enable"]
 
                 if gState.plate < 0:
                     cmd.error("test=\"no plate is loaded\"")
@@ -170,14 +191,14 @@ def main(actor, queues):
                 
                 gState.setFiberState(fiber, enabled)
             elif msg.type == Msg.SET_TIME:
-                cmd, gState.time = msg.data
+                cmd, gState.time = msg.cmd, msg.data["time"]
 
                 if cmd:
-                    queues[MASTER].put(Msg(Msg.STATUS, (cmd, True)))
+                    queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             elif msg.type == Msg.STATUS:
-                cmd, finish = msg.data
+                cmd, finish = msg.cmd, msg.data["finish"]
 
-                cmd.respond("plate=%d pointing=%s" % (gState.plate, gState.pointing))
+                cmd.respond("cartridgeLoaded=%d, %d, %s" % (gState.cartridge, gState.plate, gState.pointing))
 
                 fiberState = []
                 for f in gState.fibers:
@@ -185,7 +206,7 @@ def main(actor, queues):
                         fiberState.append("\"(%d=%s)\"" % (f.id, f.enabled))
 
                 cmd.respond("fibers=%s" % ", ".join(fiberState))
-                cmd.respond("axes=%s focus=%s scale=%s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
+                cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 cmd.respond("time=%g" % (gState.time))
 
                 if finish:
