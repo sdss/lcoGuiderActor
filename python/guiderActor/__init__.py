@@ -16,16 +16,16 @@ class Msg(object):
     MEDIUM = 4
     NORMAL = 6
     
-    # Command types
-    START_GUIDING = 0
-    EXPOSE = 1
-    EXPOSURE_FINISHED = 2
-    ENABLE_FIBER = 3
-    LOAD_CARTRIDGE = 4
-    SET_GUIDE_MODE = 5
-    STATUS = 6
-    ABORT_EXPOSURE = 7
-    SET_TIME = 8
+    # Command types; use classes so that the unique IDs are automatically generated
+    class START_GUIDING(): pass
+    class EXPOSE(): pass
+    class EXPOSURE_FINISHED(): pass
+    class ENABLE_FIBER(): pass
+    class LOAD_CARTRIDGE(): pass
+    class SET_GUIDE_MODE(): pass
+    class STATUS(): pass
+    class ABORT_EXPOSURE(): pass
+    class SET_TIME(): pass
 
     def __init__(self, type, data=None, priority=NORMAL):
         self.type = type

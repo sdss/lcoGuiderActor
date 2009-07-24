@@ -45,7 +45,8 @@ class GuiderState(object):
         else:
             raise RuntimeError, ("Unknown guide mode %s" % what)
 
-def daemon(actor, queues):
+def main(actor, queues):
+    """Main look for master thread"""
     timeout = guiderActor.myGlobals.actorState.timeout
 
     gState = GuiderState()

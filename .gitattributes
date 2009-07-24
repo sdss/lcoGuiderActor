@@ -7,6 +7,6 @@ python/guiderActor/Commands/__init__.py -text
 python/guiderActor/__init__.py -text
 python/guiderActor/gcameraThread.py -text
 python/guiderActor/main.py -text
-python/guiderActor/master.py -text
+python/guiderActor/masterThread.py -text
 python/guiderActor/myGlobals.py -text
 ups/guiderActor.table -text

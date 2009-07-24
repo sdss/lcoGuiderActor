@@ -3,7 +3,9 @@ import Queue, time
 from guiderActor import *
 import guiderActor.myGlobals
 
-def daemon(actor, queues):
+def main(actor, queues):
+    """Main look for thread to talk to gcamera"""
+
     timeout = guiderActor.myGlobals.actorState.timeout
 
     expNum = 0
