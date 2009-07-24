@@ -12,7 +12,7 @@ import actorcore.CmdrConnection
 
 import actorkeys
 
-import gcamera
+import gcameraThread
 import master
         
 from guiderActor import *
@@ -76,7 +76,7 @@ class Guider(actorcore.Actor.Actor):
         actorState.queues[MASTER] = Queue.PriorityQueue(0)
         actorState.queues[GCAMERA] = Queue.PriorityQueue(0)
         
-        actorState.threads[GCAMERA] = threading.Thread(target=gcamera.daemon, args=[self, actorState.queues])
+        actorState.threads[GCAMERA] = threading.Thread(target=gcameraThread.daemon, args=[self, actorState.queues])
         actorState.threads[GCAMERA].start()
         
         actorState.threads[MASTER] = threading.Thread(target=master.daemon, args=[self, actorState.queues])
@@ -84,9 +84,14 @@ class Guider(actorcore.Actor.Actor):
         #
         # Handle the hated ini file
         #
-        if self.config.has_option("gcamera", "exposureTime"):
-            time = self.config.get('gcamera', "exposureTime")
-            actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, (None, float(time))))
+        import ConfigParser
+        
+        try:
+            expTime = self.config.get('gcamera', "exposureTime")
+        except ConfigParser.NoOptionError:
+            expTime = 10
+
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, (None, float(expTime))))
         #
         # Finally start the reactor
         #

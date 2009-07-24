@@ -56,11 +56,16 @@ def daemon(actor, queues):
             msg = queues[MASTER].get(timeout=timeout)
 
             if msg.type == Msg.START_GUIDING:
+                #import pdb; pdb.set_trace()
                 cmd, start, expTime = msg.data
-                if expTime:
+                if expTime >= 0:
                     gState.time = expTime
 
                 if start:
+                    if gState.plate < 0:
+                        cmd.fail("text=\"Please tell me about your cartridge and try again\"")
+                        continue
+
                     guideCmd = cmd
 
                     guideCmd.respond("guideState=starting")
@@ -80,15 +85,43 @@ def daemon(actor, queues):
 
                 if not aborted:
                     guideCmd.respond("text=\"Processing %s\"" % filename)
-                    time.sleep(1)
 
-                    dAz, dAlt, dRot = 1e-4, 2e-4, 1e-5
+                    import gcamera.pyGuide_test as pg
+                    # plate == 3210
+                    obj = pg.GuideTest(flatname="/data/gcam/55034/gimg-0331.fits",
+                                       darkname="/data/gcam/55034/gimg-0205.fits",
+                                       dataname=filename, cartridgeId=7)
+                    fibers, stars = obj.runAllSteps()
+
+                    dx, dy, n = 0, 0, 0
+
+                    for i in range(len(fibers)):
+                        fiber, star = fibers[i], stars[i]
+                        assert fiber.fiberid == star.fiberid
+                        
+                        try:
+                            if gState.fibers[fiber.fiberid] and not gState.fibers[fiber.fiberid].enabled:
+                                continue
+                        except IndexError, e:
+                            guideCmd.warn("Fiber %d was not listed in plugmap info" % fiber.fiberid)
+                            
+                        dx = fiber.xcen - star.xs
+                        dy = fiber.ycen - star.ys
+                        n += 1
+
+                    if n == 0:
+                        guideCmd.fail("No fibers are available for guiding")
+                        continue
+
+                    dAz = dx/float(n)
+                    dAlt = dy/float(n)
+                    dRot = 1e-5
                     dFocus = -1e-3
                     dScale = 1e-5
                     guideCmd.respond("offsets=%g, %g, %g, %s" % (dAz, dAlt, dRot,
-                                                             "enabled" if gState.guideAxes else "disabled"))
+                                                                 "enabled" if gState.guideAxes else "disabled"))
                     guideCmd.respond("focusChange=%g, %s" % (dFocus,
-                                                         "enabled" if gState.guideFocus else "disabled"))
+                                                             "enabled" if gState.guideFocus else "disabled"))
                     guideCmd.respond("scaleChange=%g, %s" % (dScale,
                                                              "enabled" if gState.guideScale else "disabled"))
 
