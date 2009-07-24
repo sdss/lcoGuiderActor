@@ -124,23 +124,23 @@ def main(actor, queues):
                     offsetAlt = posPID["P"]*dAlt
                     offsetRot = posPID["P"]*dRot
 
-                    guideCmd.respond("axisErr=%g, %g, %g" % (dAz, dAlt, dRot))
+                    guideCmd.respond("axisError=%g, %g, %g" % (dAz, dAlt, dRot))
                     guideCmd.respond("axisChange=%g, %g, %g, %s" % (offsetAz, offsetAlt, offsetRot,
                                                                     "enabled" if gState.guideAxes else "disabled"))
 
                     dFocus = -1e-3
                     focusPID = {"P" : 0.5, "I" : 0, "D" : 0}
-                    offsetFocus = posScale["P"]*scalePID
+                    offsetFocus = focusPID["P"]*dFocus
 
-                    guideCmd.respond("focusErr=%g" % (dFocus))
+                    guideCmd.respond("focusError=%g" % (dFocus))
                     guideCmd.respond("focusChange=%g, %s" % (offsetFocus,
                                                              "enabled" if gState.guideFocus else "disabled"))
 
                     dScale = 1e-5
                     scalePID = {"P" : 0.5, "I" : 0, "D" : 0}
-                    offsetScale = posScale["P"]*scalePID
+                    offsetScale = scalePID["P"]*dScale
 
-                    guideCmd.respond("scaleErr=%g" % (dScale))
+                    guideCmd.respond("scaleError=%g" % (dScale))
                     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                                              "enabled" if gState.guideScale else "disabled"))
 
