@@ -111,7 +111,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         # Fake reading the plugmap file
         #
         fiberList = []
-        for f in range(1, 11):
+        for f in range(1, 12):
             fiberList.append((f, True))
         
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE,

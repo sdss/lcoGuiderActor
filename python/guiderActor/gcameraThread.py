@@ -31,7 +31,7 @@ def daemon(actor, queues):
                     cmd.fail("Failed to take exposure")
                     continue
 
-                filename = cmdVar.getLastKeyVarData(filenameKey)
+                filename = cmdVar.getLastKeyVarData(filenameKey)[0]
 
                 queues[MASTER].put(Msg(Msg.EXPOSURE_FINISHED, (filename, aborted)))
                 #
