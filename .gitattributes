@@ -1,0 +1,14 @@
+* text=auto !eol
+etc/guider.cfg -text
+python/guiderActor/.fuse_hidden00000f6100000002 -text
+python/guiderActor/Commands/.fuse_hidden00000fa800000003 -text
+python/guiderActor/Commands/CmdSet.py -text
+python/guiderActor/Commands/GuiderCmd.py -text
+python/guiderActor/Commands/SupportCmd.py -text
+python/guiderActor/Commands/__init__.py -text
+python/guiderActor/__init__.py -text
+python/guiderActor/gcamera.py -text
+python/guiderActor/main.py -text
+python/guiderActor/master.py -text
+python/guiderActor/myGlobals.py -text
+ups/guiderActor.table -text

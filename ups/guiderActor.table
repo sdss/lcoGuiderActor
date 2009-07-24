@@ -1,0 +1,5 @@
+setupRequired(actorcore cpl-tron-refactor-1.4)
+setupRequired(gcamera)
+
+pathPrepend(PATH, ${PRODUCT_DIR}/bin)
+pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
