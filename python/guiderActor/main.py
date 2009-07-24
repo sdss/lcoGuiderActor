@@ -13,7 +13,7 @@ import actorcore.CmdrConnection
 import actorkeys
 
 import gcameraThread
-import master
+import masterThread
         
 from guiderActor import *
 import guiderActor.myGlobals
@@ -76,10 +76,10 @@ class Guider(actorcore.Actor.Actor):
         actorState.queues[MASTER] = Queue.PriorityQueue(0)
         actorState.queues[GCAMERA] = Queue.PriorityQueue(0)
         
-        actorState.threads[GCAMERA] = threading.Thread(target=gcameraThread.daemon, args=[self, actorState.queues])
+        actorState.threads[GCAMERA] = threading.Thread(target=gcameraThread.main, args=[self, actorState.queues])
         actorState.threads[GCAMERA].start()
         
-        actorState.threads[MASTER] = threading.Thread(target=master.daemon, args=[self, actorState.queues])
+        actorState.threads[MASTER] = threading.Thread(target=masterThread.main, args=[self, actorState.queues])
         actorState.threads[MASTER].start()
         #
         # Handle the hated ini file
