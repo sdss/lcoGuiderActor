@@ -21,22 +21,32 @@ class Msg(object):
     class EXPOSE(): pass
     class EXPOSURE_FINISHED(): pass
     class ENABLE_FIBER(): pass
+    class FAIL(): pass
     class LOAD_CARTRIDGE(): pass
     class SET_GUIDE_MODE(): pass
     class STATUS(): pass
     class ABORT_EXPOSURE(): pass
     class SET_TIME(): pass
 
-    def __init__(self, type, cmd=None, priority=NORMAL, **data):
+    def __init__(self, type, cmd, **data):
         self.type = type
         self.cmd = cmd
-        self.data = data
-        self.priority = priority
+        self.priority = Msg.NORMAL      # may be overridden by **data
+        #
+        # convert data[] into attributes
+        #
+        for k, v in data.items():
+            self.__setattr__(k, v)
+        self.__data = data.keys()
 
-    def __str__(self):
-        return "%s : [%s]" % (self.type, self.data)
+    def __repr__(self):
+        values = []
+        for k in self.__data:
+            values.append("%s : %s" % (k, self.__getattribute__(k)))
 
-    def __repr__(self, rhs):
+        return "%s, %s: {%s}" % (self.type.__name__, self.cmd, ", ".join(values))
+
+    def __cmp__(self, rhs):
         """Used when sorting the messages in a priority queue"""
         return self.priority - rhs.priority
 

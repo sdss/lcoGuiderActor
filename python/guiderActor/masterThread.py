@@ -1,4 +1,4 @@
-import Queue, time
+import Queue
 
 from guiderActor import *
 import guiderActor.myGlobals
@@ -15,7 +15,7 @@ class GuiderState(object):
         self.cartridge = -1
         self.plate = -1
         self.pointing = "?"
-        self.time = 0
+        self.expTime = 0
 
         self.deleteAllFibers()
 
@@ -58,41 +58,44 @@ def main(actor, queues):
             msg = queues[MASTER].get(timeout=timeout)
 
             if msg.type == Msg.START_GUIDING:
-                #import pdb; pdb.set_trace()
-                cmd, start, expTime = msg.cmd, msg.data["start"], msg.data.get("time")
-                if expTime >= 0:
-                    gState.time = expTime
+                try:
+                    expTime = msg.expTime
+                    
+                    if expTime >= 0 and gState.expTime != expTime:
+                        gState.expTime = expTime
+                        queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=False))
+                except AttributeError:
+                    pass
 
-                if start:
+                if msg.start:
                     if gState.plate < 0:
-                        cmd.fail("text=\"Please tell me about your cartridge and try again\"")
+                        queues[MASTER].put(Msg(Msg.FAIL, msg.cmd,
+                                                text="Please tell me about your cartridge and try again"))
                         continue
 
-                    guideCmd = cmd
+                    guideCmd = msg.cmd
 
                     guideCmd.respond("guideState=starting")
-                    queues[GCAMERA].put(Msg(Msg.EXPOSE, cmd, time=gState.time))
+                    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, expTime=gState.expTime))
                 else:
                     if not guideCmd:
-                        cmd.fail("text=\"The guider is already off\"")
+                        msg.cmd.fail("text=\"The guider is already off\"")
                         continue
 
-                    cmd.respond("guideState=stopping")
+                    msg.cmd.respond("guideState=stopping")
                     quiet = True
-                    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, cmd, quiet=quiet, priority=msg.MEDIUM))
+                    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=quiet, priority=Msg.MEDIUM))
                     guideCmd.finish("guideState=off")
                     guideCmd = None
             elif msg.type == Msg.EXPOSURE_FINISHED:
-                filename, aborted = msg.data["filename"], msg.data["aborted"]
-
-                if not aborted:
-                    guideCmd.respond("processing=%s" % filename)
+                if not msg.aborted:
+                    guideCmd.respond("processing=%s" % msg.filename)
 
                     import gcamera.pyGuide_test as pg
                     # plate == 3210
                     obj = pg.GuideTest(flatname="/data/gcam/55034/gimg-0331.fits",
                                        darkname="/data/gcam/55034/gimg-0205.fits",
-                                       dataname=filename, cartridgeId=7)
+                                       dataname=msg.filename, cartridgeId=7)
                     fibers, stars = obj.runAllSteps()
 
                     dx, dy, n = 0, 0, 0
@@ -144,21 +147,20 @@ def main(actor, queues):
                     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                                              "enabled" if gState.guideScale else "disabled"))
 
-                    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, time=gState.time))
+                    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, expTime=gState.expTime))
+            elif msg.type == Msg.FAIL:
+                msg.cmd.fail("text=\"%s\"" % msg.text);
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.deleteAllFibers()
 
-                cmd = msg.cmd
-                gState.cartridge, gState.plate, gState.pointing = \
-                                  msg.data["cartridge"], msg.data["plate"], msg.data["pointing"]
-                fiberList = msg.data["fiberList"]
+                gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
                 #
                 # Set the gState.fibers array; note that the fiber IDs may not be 0-indexed
                 #
-                # find the min and max fibre listed in fiberList
+                # find the min and max fibre listed in msg.fiberList
                 #
                 min, max = None, None
-                for id, enabled in fiberList:
+                for id, enabled in msg.fiberList:
                     if min is None or id < min:
                         min = id
                     if max is None or id > max:
@@ -166,52 +168,46 @@ def main(actor, queues):
 
                 if max is not None:
                     gState.fibers = (max + 1)*[None]
-                    for id, enabled in fiberList:
+                    for id, enabled in msg.fiberList:
                         gState.setFiberState(id, enabled, create=True)
                 #
                 # Report the cartridge status
                 #
-                queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
+                queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
             elif msg.type == Msg.SET_GUIDE_MODE:
-                cmd, what, enabled = msg.cmd, msg.data["what"], msg.data["enabled"]
-                
-                gState.setGuideMode(what, enabled)
+                gState.setGuideMode(msg.what, msg.enabled)
                 #
                 # Report the cartridge status
                 #
-                queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
+                queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
             elif msg.type == Msg.ENABLE_FIBER:
-                cmd, fiber, enabled = msg.cmd, msg.data["fiber"], msg.data["enable"]
-
                 if gState.plate < 0:
-                    cmd.error("test=\"no plate is loaded\"")
+                    msg.cmd.error("test=\"no plate is loaded\"")
                     continue
                 
-                gState.setFiberState(fiber, enabled)
+                gState.setFiberState(msg.fiber, msg.enable)
             elif msg.type == Msg.SET_TIME:
-                cmd, gState.time = msg.cmd, msg.data["time"]
+                gState.expTime = msg.expTime
 
-                if cmd:
-                    queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
+                if msg.cmd:
+                    queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
             elif msg.type == Msg.STATUS:
-                cmd, finish = msg.cmd, msg.data["finish"]
-
-                cmd.respond("cartridgeLoaded=%d, %d, %s" % (gState.cartridge, gState.plate, gState.pointing))
+                msg.cmd.respond("cartridgeLoaded=%d, %d, %s" % (gState.cartridge, gState.plate, gState.pointing))
 
                 fiberState = []
                 for f in gState.fibers:
                     if f:
                         fiberState.append("\"(%d=%s)\"" % (f.id, f.enabled))
 
-                cmd.respond("fibers=%s" % ", ".join(fiberState))
-                cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
-                cmd.respond("time=%g" % (gState.time))
+                msg.cmd.respond("fibers=%s" % ", ".join(fiberState))
+                msg.cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
+                msg.cmd.respond("expTime=%g" % (gState.expTime))
 
-                if finish:
-                    cmd.finish()
+                if msg.finish:
+                    msg.cmd.finish()
             else:
-                raise ValueError, ("Unknown message type %d" % msg.type)
+                raise ValueError, ("Unknown message type %s" % msg.type)
         except Queue.Empty:
             actor.bcast.diag("text=\"master alive\"")
