@@ -35,7 +35,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
                                         keys.Key("plate", types.Int(), help="A plugplate ID"),
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
-                                        keys.Key("time", types.Float(), help="Exposure time for guider"),
+                                        keys.Key("expTime", types.Float(), help="Exposure time for guider"),
                                         )
 
         keys.CmdKey.setKeys(self.keys)
@@ -43,10 +43,10 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         # Declare commands
         #
         self.vocab = [
-            #("guide", "(on) <time>", self.guideOn),
+            #("guide", "(on) <expTime>", self.guideOn),
             #("guide", "(off)", self.guideOff),
-            ("guide", "(on|off) [<time>]", self.guide),
-            ("setTime", "<time>", self.setTime),
+            ("guide", "(on|off) [<expTime>]", self.guide),
+            ("setExpTime", "<expTime>", self.setExpTime),
             ("disableFibers", "<fibers>", self.disableFibers),
             ("enableFibers", "<fibers>", self.enableFibers),
             ("loadCartridge", "<cartridge> <plate> [<pointing>]", self.loadCartridge),
@@ -63,7 +63,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         """Disable a set of fibers"""
 
         for f in cmd.cmd.keywords["fibers"].values:
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.ENABLE_FIBER, cmd, fiber=f, enable=enable))
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.ENABLE_FIBER, cmd=cmd, fiber=f, enable=enable))
 
         self.status(cmd)                # finishes this command
 
@@ -77,30 +77,32 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
 
         self.disableFibersImpl(cmd, enable=True)
 
-    def setTime(self, cmd):
+    def setExpTime(self, cmd):
         """Set the exposure time"""
 
-        time = cmd.cmd.keywords["time"].values[0]
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd, time=time))
+        expTime = cmd.cmd.keywords["expTime"].values[0]
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
 
     if False:
         def guideOn(self, cmd):
             """Turn guiding on"""
 
-            expTime = cmd.cmd.keywords["time"].values[0]
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd, start=True, time=expTime))
+            expTime = cmd.cmd.keywords["expTime"].values[0]
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
+                                                                    start=True, expTime=expTime))
 
         def guideOff(self, cmd):
             """Turn guiding off"""
 
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd, start=False))
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=False))
     else:
         def guide(self, cmd):
             """Turn guiding on or off"""
 
             on = "on" in cmd.cmd.keywords
-            expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd, start=on, time=expTime))
+            expTime = cmd.cmd.keywords["expTime"].values[0] if "expTime" in cmd.cmd.keywords else None
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
+                                                                    start=on, expTime=expTime))
 
     def loadCartridge(self, cmd):
         """Load a cartridge"""
@@ -115,7 +117,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         for f in range(1, 12):
             fiberList.append((f, True))
         
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd,
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
                                                                 cartridge=cartridge, plate=plate, pointing=pointing,
                                                                 fiberList=fiberList))
 
@@ -128,7 +130,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         """Turn guiding something on or off"""
 
         on = "on" in cmd.cmd.keywords
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd, what=what, enabled=on))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enabled=on))
 
     def axes(self, cmd):
         """Turn guiding the plate axes on or off"""
@@ -148,4 +150,4 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
     def status(self, cmd):
         """Return guide status status"""
 
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd=cmd, finish=True))
