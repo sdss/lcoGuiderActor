@@ -24,12 +24,10 @@ class SupportCmd(Commands.CmdSet.CmdSet):
         #
         # Set the keyword dictionary
         #
-        self.keys = keys.KeysDictionary("alertscommands", (1, 1),
+        self.keys = keys.KeysDictionary("guider_support", (1, 1),
                                         keys.Key("cmds", types.String()*(1,None),
                                                  help="A list of command modules to reload"),
                                         )
-
-        keys.CmdKey.setKeys(self.keys)
 
         self.vocab = [
             ('reload', '[<cmds>]', self.reloadCommands),

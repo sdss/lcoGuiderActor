@@ -29,7 +29,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         #
         # Set the keyword dictionary
         #
-        self.keys = keys.KeysDictionary("guidercommands", (1, 1),
+        self.keys = keys.KeysDictionary("guider_guider", (1, 1),
                                         keys.Key("cartridge", types.Int(), help="A cartridge ID"),
                                         keys.Key("fibers", types.Int()*(1,None), help="A list of fibers"),
                                         keys.Key("plate", types.Int(), help="A plugplate ID"),
@@ -37,15 +37,13 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
                                                  help="A pointing for the given plugplate"),
                                         keys.Key("expTime", types.Float(), help="Exposure time for guider"),
                                         )
-
-        keys.CmdKey.setKeys(self.keys)
         #
         # Declare commands
         #
         self.vocab = [
-            #("guide", "(on) <expTime>", self.guideOn),
-            #("guide", "(off)", self.guideOff),
-            ("guide", "(on|off) [<expTime>]", self.guide),
+            ("guide", "(on) <expTime>", self.guideOn),
+            ("guide", "(off)", self.guideOff),
+            #("guide", "(on|off) [<expTime>]", self.guide),
             ("setExpTime", "<expTime>", self.setExpTime),
             ("disableFibers", "<fibers>", self.disableFibers),
             ("enableFibers", "<fibers>", self.enableFibers),
@@ -83,7 +81,7 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         expTime = cmd.cmd.keywords["expTime"].values[0]
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
 
-    if False:
+    if True:
         def guideOn(self, cmd):
             """Turn guiding on"""
 
