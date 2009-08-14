@@ -8,10 +8,12 @@ class GuiderState(object):
     """Save the state of the guider"""
 
     class Gprobe(object):
-        def __init__(self, id, rotation=None, focusOffset=None, enable=True):
+        def __init__(self, id, rotation=None, focusOffset=None, ra=None, dec=None, enable=True):
             self.id = id
             self.rotation = rotation
             self.focusOffset = focusOffset
+            self.ra = ra
+            self.dec = dec
             self.enabled = enable
 
     def __init__(self):
@@ -30,11 +32,11 @@ class GuiderState(object):
         """Delete all fibers """
         self.gprobes = {}
 
-    def setGprobeState(self, fiber, rotation=None, focusOffset=None, enable=True, create=False):
+    def setGprobeState(self, fiber, rotation=None, focusOffset=None, ra=None, dec=None, enable=True, create=False):
         """Set a fiber's state"""
 
         if not self.gprobes.has_key(fiber) and create:
-            self.gprobes[fiber] = GuiderState.Gprobe(fiber, rotation, focusOffset, enable)
+            self.gprobes[fiber] = GuiderState.Gprobe(fiber, rotation, focusOffset, ra, dec, enable)
         else:
             self.gprobes[fiber].enabled = enable
 
@@ -166,9 +168,11 @@ def main(actor, queues):
                 # Set the gState.gprobes array (actually a dictionary as we're not sure which fibre IDs are present)
                 #
                 gState.gprobes = {}
-                for id, exists, enabled, rotation, focusOffset in msg.gprobes:
-                    if exists:
-                        gState.setGprobeState(id, rotation, focusOffset, enable=enabled, create=True)
+                for id, info in msg.gprobes.items():
+                    if info.exists:
+                        gState.setGprobeState(id, info.rotation, info.focusOffset,
+                                              info.ra, info.dec,
+                                              enable=info.enabled, create=True)
                 #
                 # Report the cartridge status
                 #
