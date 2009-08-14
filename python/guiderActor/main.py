@@ -60,9 +60,9 @@ class Guider(actorcore.Actor.Actor):
         guiderActor.myGlobals.actorState = State(self)
         actorState = guiderActor.myGlobals.actorState
         #
-        # Load the gcamera's model so we can send it commands
+        # Load other actor's models so we can send it commands
         #
-        for actor in ["gcamera",]:
+        for actor in ["gcamera", "platedb", "tcc"]:
             actorState.models[actor] = opscore.actor.model.Model(actor)
         #
         # spawn off the threads that sequence actions (e.g. take an exposure; move telescope)

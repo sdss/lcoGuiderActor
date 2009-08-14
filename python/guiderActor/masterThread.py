@@ -2,14 +2,17 @@ import Queue
 
 from guiderActor import *
 import guiderActor.myGlobals
+from opscore.utility.qstr import qstr
 
 class GuiderState(object):
     """Save the state of the guider"""
 
-    class Fiber(object):
-        def __init__(self, id, enabled=True):
+    class Gprobe(object):
+        def __init__(self, id, rotation=None, focusOffset=None, enable=True):
             self.id = id
-            self.enabled = True
+            self.rotation = rotation
+            self.focusOffset = focusOffset
+            self.enabled = enable
 
     def __init__(self):
         self.cartridge = -1
@@ -17,24 +20,23 @@ class GuiderState(object):
         self.pointing = "?"
         self.expTime = 0
 
-        self.deleteAllFibers()
+        self.deleteAllGprobes()
 
         self.setGuideMode("axes")
         self.setGuideMode("focus")
         self.setGuideMode("scale")
 
-    def deleteAllFibers(self):
+    def deleteAllGprobes(self):
         """Delete all fibers """
-        self.fibers = {}
+        self.gprobes = {}
 
-    def setFiberState(self, fiber, enabled=True, create=False):
+    def setGprobeState(self, fiber, rotation=None, focusOffset=None, enable=True, create=False):
         """Set a fiber's state"""
 
-        #import pdb; pdb.set_trace()
-        if self.fibers[fiber] == None and create:
-            self.fibers[fiber] = GuiderState.Fiber(fiber, enabled)
+        if not self.gprobes.has_key(fiber) and create:
+            self.gprobes[fiber] = GuiderState.Gprobe(fiber, rotation, focusOffset, enable)
         else:
-            self.fibers[fiber].enabled = enabled
+            self.gprobes[fiber].enabled = enable
 
     def setGuideMode(self, what, enabled=True):
         if what == "axes":
@@ -95,7 +97,7 @@ def main(actor, queues):
                     # plate == 3210
                     obj = pg.GuideTest(flatname="/data/gcam/55034/gimg-0331.fits",
                                        darkname="/data/gcam/55034/gimg-0205.fits",
-                                       dataname=msg.filename, cartridgeId=7)
+                                       dataname=msg.filename, cartridgeId=gState.cartridge)
                     fibers, stars = obj.runAllSteps()
 
                     dx, dy, n = 0, 0, 0
@@ -103,23 +105,29 @@ def main(actor, queues):
                     for i in range(len(fibers)):
                         fiber, star = fibers[i], stars[i]
                         assert fiber.fiberid == star.fiberid
-                        
+
                         try:
-                            if gState.fibers[fiber.fiberid] and not gState.fibers[fiber.fiberid].enabled:
+                            if gState.gprobes[fiber.fiberid] and not gState.gprobes[fiber.fiberid].enabled:
                                 continue
                         except IndexError, e:
-                            guideCmd.warn("Fiber %d was not listed in plugmap info" % fiber.fiberid)
+                            guideCmd.warn("Gprobe %d was not listed in plugmap info" % fiber.fiberid)
                             
+                        theta = fiber.rotation*math.pi/180
+                        
                         dx = fiber.xcen - star.xs
                         dy = fiber.ycen - star.ys
+
+                        dAz =   dx*math.cos(theta) + dy*math.sin(theta)
+                        dAlt = -dx*math.sin(theta) + dy*math.cos(theta)
+
                         n += 1
 
                     if n == 0:
                         guideCmd.fail("No fibers are available for guiding")
                         continue
 
-                    dAz = dx/float(n)
-                    dAlt = dy/float(n)
+                    dAz = dAz/float(n)
+                    dAlt = dAlt/float(n)
                     dRot = 1e-5
 
                     posPID = {"P" : 0.5, "I" : 0, "D" : 0}
@@ -151,32 +159,23 @@ def main(actor, queues):
             elif msg.type == Msg.FAIL:
                 msg.cmd.fail("text=\"%s\"" % msg.text);
             elif msg.type == Msg.LOAD_CARTRIDGE:
-                gState.deleteAllFibers()
+                gState.deleteAllGprobes()
 
                 gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
                 #
-                # Set the gState.fibers array; note that the fiber IDs may not be 0-indexed
+                # Set the gState.gprobes array (actually a dictionary as we're not sure which fibre IDs are present)
                 #
-                # find the min and max fibre listed in msg.fiberList
-                #
-                min, max = None, None
-                for id, enabled in msg.fiberList:
-                    if min is None or id < min:
-                        min = id
-                    if max is None or id > max:
-                        max = id
-
-                if max is not None:
-                    gState.fibers = (max + 1)*[None]
-                    for id, enabled in msg.fiberList:
-                        gState.setFiberState(id, enabled, create=True)
+                gState.gprobes = {}
+                for id, exists, enabled, rotation, focusOffset in msg.gprobes:
+                    if exists:
+                        gState.setGprobeState(id, rotation, focusOffset, enable=enabled, create=True)
                 #
                 # Report the cartridge status
                 #
                 queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
             elif msg.type == Msg.SET_GUIDE_MODE:
-                gState.setGuideMode(msg.what, msg.enabled)
+                gState.setGuideMode(msg.what, msg.exists)
                 #
                 # Report the cartridge status
                 #
@@ -187,7 +186,7 @@ def main(actor, queues):
                     msg.cmd.error("test=\"no plate is loaded\"")
                     continue
                 
-                gState.setFiberState(msg.fiber, msg.enable)
+                gState.setGprobeState(msg.fiber, enable=msg.enable)
             elif msg.type == Msg.SET_TIME:
                 gState.expTime = msg.expTime
 
@@ -196,12 +195,14 @@ def main(actor, queues):
             elif msg.type == Msg.STATUS:
                 msg.cmd.respond("cartridgeLoaded=%d, %d, %s" % (gState.cartridge, gState.plate, gState.pointing))
 
+                #import pdb; pdb.set_trace()
                 fiberState = []
-                for f in gState.fibers:
+                for f in gState.gprobes.values():
                     if f:
                         fiberState.append("\"(%d=%s)\"" % (f.id, f.enabled))
 
-                msg.cmd.respond("fibers=%s" % ", ".join(fiberState))
+                if len(fiberState) > 0:
+                    msg.cmd.respond("gprobes=%s" % ", ".join(fiberState))
                 msg.cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 msg.cmd.respond("expTime=%g" % (gState.expTime))
 

@@ -4,8 +4,7 @@
 
 import pdb
 import logging
-import pprint
-import sys
+import re, sys
 import ConfigParser
 
 import opscore.protocols.validation as validation
@@ -32,7 +31,6 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         self.keys = keys.KeysDictionary("guider_guider", (1, 1),
                                         keys.Key("cartridge", types.Int(), help="A cartridge ID"),
                                         keys.Key("fibers", types.Int()*(1,None), help="A list of fibers"),
-                                        keys.Key("plate", types.Int(), help="A plugplate ID"),
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
                                         keys.Key("expTime", types.Float(), help="Exposure time for guider"),
@@ -41,13 +39,11 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         # Declare commands
         #
         self.vocab = [
-            ("guide", "(on) <expTime>", self.guideOn),
-            ("guide", "(off)", self.guideOff),
-            #("guide", "(on|off) [<expTime>]", self.guide),
+            ("guide", "(on|off) [<expTime>]", self.guide),
             ("setExpTime", "<expTime>", self.setExpTime),
             ("disableFibers", "<fibers>", self.disableFibers),
             ("enableFibers", "<fibers>", self.enableFibers),
-            ("loadCartridge", "<cartridge> <plate> [<pointing>]", self.loadCartridge),
+            ("loadCartridge", "<cartridge> [<pointing>]", self.loadCartridge),
             ('ping', '', self.ping),
             ('axes', '(on|off)', self.axes),
             ('focus', '(on|off)', self.focus),
@@ -81,43 +77,62 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         expTime = cmd.cmd.keywords["expTime"].values[0]
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
 
-    if True:
-        def guideOn(self, cmd):
-            """Turn guiding on"""
+    def guide(self, cmd):
+        """Turn guiding on or off"""
 
-            expTime = cmd.cmd.keywords["expTime"].values[0]
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
-                                                                    start=True, expTime=expTime))
-
-        def guideOff(self, cmd):
-            """Turn guiding off"""
-
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=False))
-    else:
-        def guide(self, cmd):
-            """Turn guiding on or off"""
-
-            on = "on" in cmd.cmd.keywords
-            expTime = cmd.cmd.keywords["expTime"].values[0] if "expTime" in cmd.cmd.keywords else None
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
-                                                                    start=on, expTime=expTime))
+        on = "on" in cmd.cmd.keywords
+        expTime = cmd.cmd.keywords["expTime"].values[0] if "expTime" in cmd.cmd.keywords else None
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
+                                                                start=on, expTime=expTime))
 
     def loadCartridge(self, cmd):
         """Load a cartridge"""
 
         cartridge = cmd.cmd.keywords["cartridge"].values[0]
-        plate = cmd.cmd.keywords["plate"].values[0]
         pointing = cmd.cmd.keywords["pointing"].values[0] if "pointing" in cmd.cmd.keywords else "A"
         #
-        # Fake reading the plugmap file
+        # Get the plate from the plateDB
         #
-        fiberList = []
-        for f in range(1, 12):
-            fiberList.append((f, True))
-        
+        actorState = guiderActor.myGlobals.actorState
+
+        plateKey = actorState.models["platedb"].keyVarDict["pointingInfo"]
+        cmdVar = actorState.actor.cmdr.call(actor="platedb",
+                                            cmdStr="loadCartridge cartridge=%d pointing=%s" % (cartridge, pointing),
+                                            keyVars=[plateKey])
+        if cmdVar.didFail:
+            cmd.fail("text=\"Failed to lookup plate corresponding to %d/%s\"" % (cartridge, pointing))
+            return
+
+        plate = cmdVar.getLastKeyVarData(plateKey)[0]
+        #
+        # Lookup the valid gprobes
+        #
+        gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
+        gprobesInUseKey = actorState.models["platedb"].keyVarDict["gprobesInUse"]
+        cmdVar = actorState.actor.cmdr.call(actor="platedb",
+                                            cmdStr="getGprobes cartridge=%d" % (cartridge),
+                                            keyVars=[gprobeKey, gprobesInUseKey])
+        if cmdVar.didFail:
+            cmd.fail("text=\"Failed to lookup gprobes for cartridge %d\"" % (cartridge))
+            return
+
+        enabled = {}
+        for el in cmdVar.getLastKeyVarData(gprobesInUseKey):
+            mat = re.search(r"^\((\d+)\s*=\s*(True|False)\s*\)$", el)
+            id, isEnabled = int(mat.group(1)), (mat.group(2) == 'True')
+
+            enabled[id] = isEnabled
+
+        gprobes = []
+        for cartridgeID, gpID, exists, rotation, focusOffset in cmdVar.getKeyVarData(gprobeKey):
+            gprobes.append((gpID, exists, enabled.get(gpID, False), rotation, focusOffset))
+
+        spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
+        print "RHL", spiderInstAngKey[0].getPos()
+
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
                                                                 cartridge=cartridge, plate=plate, pointing=pointing,
-                                                                fiberList=fiberList))
+                                                                gprobes=gprobes))
 
     def ping(self, cmd):
         """ Top-level "ping" command handler. Query the actor for liveness/happiness. """
