@@ -22,6 +22,14 @@ import guiderActor.myGlobals as myGlobals
 class GuiderCmd(Commands.CmdSet.CmdSet):
     """ Wrap commands to the guider actor"""
 
+    class GprobeInfo(object):
+        """Capture information about a guider probe"""
+        def __init__(self, exists, enabled, rotation, focusOffset):
+            self.exists = exists
+            self.enabled = enabled
+            self.rotation = rotation
+            self.focusOffset = focusOffset
+
     def __init__(self, actor):
         Commands.CmdSet.CmdSet.__init__(self, actor)
         
@@ -123,16 +131,40 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
 
             enabled[id] = isEnabled
 
-        gprobes = []
+        gprobes = {}
         for cartridgeID, gpID, exists, rotation, focusOffset in cmdVar.getKeyVarData(gprobeKey):
-            gprobes.append((gpID, exists, enabled.get(gpID, False), rotation, focusOffset))
+            gprobes[gpID] = GuiderCmd.GprobeInfo(exists, enabled.get(gpID, False), rotation, focusOffset)
 
-        spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
-        print "RHL", spiderInstAngKey[0].getPos()
+        #
+        # Add in the plate/fibre geometry from plPlugMapM
+        #
+        gprobePlateGeomKey = actorState.models["platedb"].keyVarDict["gprobePlateGeom"]
+        cmdVar = actorState.actor.cmdr.call(actor="platedb",
+                                            cmdStr="getGprobesPlateGeom cartridge=%d" % (cartridge),
+                                            keyVars=[gprobePlateGeomKey])
+        if cmdVar.didFail:
+            cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
+            return
 
+        for el in cmdVar.getKeyVarData(gprobePlateGeomKey):
+            id, ra, dec = int(el[0]), float(el[1]), float(el[2])
+
+            try:
+                gprobes[id].ra = ra
+                gprobes[id].dec = dec
+            except KeyError:
+                cmd.warn("text=\"Unknown fiberId %d from plugmap file at ra,dec = %f %f\"" % (id, ra, dec))
+                continue
+        #
+        # Send that information off to the master thread
+        #
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
                                                                 cartridge=cartridge, plate=plate, pointing=pointing,
                                                                 gprobes=gprobes))
+
+        # This really goes in the guide loop
+        spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
+        print "RHL spiderInstAngKey =", spiderInstAngKey[0].getPos()
 
     def ping(self, cmd):
         """ Top-level "ping" command handler. Query the actor for liveness/happiness. """
