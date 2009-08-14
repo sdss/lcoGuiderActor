@@ -6,7 +6,7 @@ python/guiderActor/Commands/SupportCmd.py -text
 python/guiderActor/Commands/__init__.py -text
 python/guiderActor/__init__.py -text
 python/guiderActor/gcameraThread.py -text
-python/guiderActor/guider_main.py -text
+python/guiderActor/guider.py -text
 python/guiderActor/masterThread.py -text
 python/guiderActor/myGlobals.py -text
 ups/guiderActor.table -text
