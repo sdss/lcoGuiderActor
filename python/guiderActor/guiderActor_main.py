@@ -87,11 +87,19 @@ class Guider(actorcore.Actor.Actor):
         import ConfigParser
         
         try:
-            expTime = self.config.get('gcamera', "exposureTime")
+            expTime = float(self.config.get('gcamera', "exposureTime"))
         except ConfigParser.NoOptionError:
-            expTime = 10
+            expTime = 10.0
 
-        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, None, expTime=float(expTime)))
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, None, expTime=expTime))
+ 
+        plugPlateScale = float(self.config.get('plugPlate', "scale"))
+        gcameraPixelSize = float(self.config.get('gcamera', "pixelSize"))
+        gcameraMagnification = float(self.config.get('gcamera', "magnification"))
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_SCALE, None, 
+                                                      plugPlateScale=plugPlateScale,
+                                                      gcameraMagnification=gcameraMagnification,
+                                                      gcameraPixelSize=gcameraPixelSize))
         #
         # Finally start the reactor
         #

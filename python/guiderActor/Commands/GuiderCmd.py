@@ -24,9 +24,15 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
 
     class GprobeInfo(object):
         """Capture information about a guider probe"""
-        def __init__(self, exists, enabled, rotation, focusOffset):
+        def __init__(self, exists, enabled, xCenter, yCenter, radius, rotation,
+                     xFerruleOffset, yFerruleOffset, focusOffset):
             self.exists = exists
             self.enabled = enabled
+            self.xCenter = xCenter
+            self.yCenter = yCenter
+            self.radius = radius
+            self.xFerruleOffset = xFerruleOffset
+            self.yFerruleOffset = yFerruleOffset
             self.rotation = rotation
             self.focusOffset = focusOffset
 
@@ -132,28 +138,35 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
             enabled[id] = isEnabled
 
         gprobes = {}
-        for cartridgeID, gpID, exists, rotation, focusOffset in cmdVar.getKeyVarData(gprobeKey):
-            gprobes[gpID] = GuiderCmd.GprobeInfo(exists, enabled.get(gpID, False), rotation, focusOffset)
+        for cartridgeID, gpID, exists, xCenter, yCenter, radius, rotation, \
+                xFerruleOffset, yFerruleOffset, focusOffset in cmdVar.getKeyVarData(gprobeKey):
+            gprobes[gpID] = GuiderCmd.GprobeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius, rotation,
+                                                 xFerruleOffset, yFerruleOffset, focusOffset)
 
         #
         # Add in the plate/fibre geometry from plPlugMapM
         #
-        gprobePlateGeomKey = actorState.models["platedb"].keyVarDict["gprobePlateGeom"]
+        guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb",
                                             cmdStr="getGprobesPlateGeom cartridge=%d" % (cartridge),
-                                            keyVars=[gprobePlateGeomKey])
+                                            keyVars=[guideInfoKey])
         if cmdVar.didFail:
             cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
             return
 
-        for el in cmdVar.getKeyVarData(gprobePlateGeomKey):
-            id, ra, dec = int(el[0]), float(el[1]), float(el[2])
-
+        for el in cmdVar.getKeyVarData(guideInfoKey):
+            i = 0
+            id = int(el[0]); i += 1
+            
             try:
-                gprobes[id].ra = ra
-                gprobes[id].dec = dec
+                gprobes[id].ra = float(el[i]); i += 1
+                gprobes[id].dec = float(el[i]); i += 1
+                gprobes[id].xFocal = float(el[i]); i += 1
+                gprobes[id].yFocal = float(el[i]); i += 1
+                gprobes[id].throughput = float(el[i]); i += 1
+                
             except KeyError:
-                cmd.warn("text=\"Unknown fiberId %d from plugmap file at ra,dec = %f %f\"" % (id, ra, dec))
+                cmd.warn("text=\"Unknown fiberId %d from plugmap file (%s)\"" % (id, ", ".join(el[1:])))
                 continue
         #
         # Send that information off to the master thread
@@ -161,10 +174,6 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
                                                                 cartridge=cartridge, plate=plate, pointing=pointing,
                                                                 gprobes=gprobes))
-
-        # This really goes in the guide loop
-        spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
-        print "RHL spiderInstAngKey =", spiderInstAngKey[0].getPos()
 
     def ping(self, cmd):
         """ Top-level "ping" command handler. Query the actor for liveness/happiness. """
