@@ -1,4 +1,5 @@
 import Queue
+import numpy
 
 from guiderActor import *
 import guiderActor.myGlobals
@@ -8,12 +9,9 @@ class GuiderState(object):
     """Save the state of the guider"""
 
     class Gprobe(object):
-        def __init__(self, id, rotation=None, focusOffset=None, ra=None, dec=None, enable=True):
+        def __init__(self, id, info, enable=True):
             self.id = id
-            self.rotation = rotation
-            self.focusOffset = focusOffset
-            self.ra = ra
-            self.dec = dec
+            self.info = info
             self.enabled = enable
 
     def __init__(self):
@@ -32,11 +30,11 @@ class GuiderState(object):
         """Delete all fibers """
         self.gprobes = {}
 
-    def setGprobeState(self, fiber, rotation=None, focusOffset=None, ra=None, dec=None, enable=True, create=False):
+    def setGprobeState(self, fiber, enable=True, info=None, create=False):
         """Set a fiber's state"""
 
         if not self.gprobes.has_key(fiber) and create:
-            self.gprobes[fiber] = GuiderState.Gprobe(fiber, rotation, focusOffset, ra, dec, enable)
+            self.gprobes[fiber] = GuiderState.Gprobe(fiber, info, enable)
         else:
             self.gprobes[fiber].enabled = enable
 
@@ -102,35 +100,83 @@ def main(actor, queues):
                                        dataname=msg.filename, cartridgeId=gState.cartridge)
                     fibers, stars = obj.runAllSteps()
 
-                    dx, dy, n = 0, 0, 0
+                    print "RHL; not using fibers info from GuideTest"; del fibers
+                    
+                    spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
+                    spiderInstAng = spiderInstAngKey[0].getPos()
+                    if True:
+                        print "RHL spiderInstAng =", spiderInstAng
+                        if spiderInstAng is None:
+                            spiderInstAng = 0
 
-                    for i in range(len(fibers)):
-                        fiber, star = fibers[i], stars[i]
-                        assert fiber.fiberid == star.fiberid
+                    if spiderInstAng is None:
+                        guideCmd.warn("text=%s" % qstr("spiderInstAng is None; are we tracking?"))
+                    #
+                    # Setup to solve for the axis and maybe scale offsets
+                    #
+                    # N.B. fiber.xFocal and fiber.yFocal are the offsets of the stars
+                    # wrt the center of the plate in mm; fiber.xcen/star.xs are in pixels,
+                    # so we need a scale for the guide camera.  Nominally the guide camera
+                    # has the same scale as the plug plate itself, but maybe it doesn't,
+                    # so we'll include a possible magnification
+                    #
+                    guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
+                    
+                    A = numpy.matrix(np.zeros(4*4).reshape([4,4]))
+                    b = numpy.matrix(np.zeros(4).reshape([4,1]))
 
+                    for star in stars:
                         try:
-                            if gState.gprobes[fiber.fiberid] and not gState.gprobes[fiber.fiberid].enabled:
-                                continue
+                            fiber = gState.gprobes[star.starid]
                         except IndexError, e:
-                            guideCmd.warn("Gprobe %d was not listed in plugmap info" % fiber.fiberid)
+                            guideCmd.warn("Gprobe %d was not listed in plugmap info" % star.starid)
                             
-                        theta = fiber.rotation*math.pi/180
+                        if not fiber.enabled:
+                            continue
                         
-                        dx = fiber.xcen - star.xs
-                        dy = fiber.ycen - star.ys
+                        theta = (fiber.rotation + spiderInstAngle)*math.pi/180
+                        
+                        dx = guideCameraScale*(fiber.xcen - fiber.xferruleOffset - star.xs)
+                        dy = guideCameraScale*(fiber.ycen - fiber.yferruleOffset - star.ys)
 
-                        dAz =   dx*math.cos(theta) + dy*math.sin(theta)
+                        dAz =   dx*math.cos(theta) + dy*math.sin(theta) # n.b. still in mm here
                         dAlt = -dx*math.sin(theta) + dy*math.cos(theta)
 
-                        n += 1
+                        b[0] += dAz
+                        b[1] += dAlt
+                        b[2] += fiber.x*dAlt - fiber.y*dAz
+                        b[3] += fiber.x*dAz  + fiber.y*dAlt
 
-                    if n == 0:
+                        A[0, 0] += 1
+                        A[0, 1] += 0
+                        A[0, 2] += -dAlt
+                        A[0, 3] +=  dAz
+
+                        A[1, 0] += 0
+                        A[1, 1] += 1
+                        A[1, 2] += dAz
+                        A[1, 3] += dAlt
+
+                        A[2, 0] += -dAlt
+                        A[2, 1] += dAz
+                        A[2, 2] += dAz*dAz + dAlt*dAlt
+                        A[2, 3] += 0
+
+                        A[3, 0] += dAz
+                        A[3, 1] += dAlt
+                        A[3, 2] += 0
+                        A[3, 3] += dAz*dAz + dAlt*dAlt
+                        
+                    if A[0, 0] == 0:
                         guideCmd.fail("No fibers are available for guiding")
                         continue
 
-                    dAz = dAz/float(n)
-                    dAlt = dAlt/float(n)
-                    dRot = 1e-5
+                    x = numpy.linalg.solve(M, b)
+
+                    dAz =  x[0, 0]*gState.plugPlateScale # convert from mm to degrees
+                    dAlt = x[1, 0]*gState.plugPlateScale
+                    dRot = x[2, 0]*180/math.pi # convert from radians to degrees
+                    dScale = x[3, 0]
 
                     posPID = {"P" : 0.5, "I" : 0, "D" : 0}
                     offsetAz = posPID["P"]*dAz
@@ -149,7 +195,6 @@ def main(actor, queues):
                     guideCmd.respond("focusChange=%g, %s" % (offsetFocus,
                                                              "enabled" if gState.guideFocus else "disabled"))
 
-                    dScale = 1e-5
                     scalePID = {"P" : 0.5, "I" : 0, "D" : 0}
                     offsetScale = scalePID["P"]*dScale
 
@@ -170,9 +215,8 @@ def main(actor, queues):
                 gState.gprobes = {}
                 for id, info in msg.gprobes.items():
                     if info.exists:
-                        gState.setGprobeState(id, info.rotation, info.focusOffset,
-                                              info.ra, info.dec,
-                                              enable=info.enabled, create=True)
+                        import pdb; pdb.set_trace()
+                        gState.setGprobeState(id, enable=info.enabled, info=info, create=True)
                 #
                 # Report the cartridge status
                 #
@@ -191,6 +235,14 @@ def main(actor, queues):
                     continue
                 
                 gState.setGprobeState(msg.fiber, enable=msg.enable)
+            elif msg.type == Msg.SET_SCALE:
+                gState.plugPlateScale = msg.plugPlateScale
+                gState.gcameraMagnification = msg.gcameraMagnification
+                gState.gcameraPixelSize = msg.gcameraPixelSize
+
+                if msg.cmd:
+                    queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+
             elif msg.type == Msg.SET_TIME:
                 gState.expTime = msg.expTime
 
@@ -199,7 +251,6 @@ def main(actor, queues):
             elif msg.type == Msg.STATUS:
                 msg.cmd.respond("cartridgeLoaded=%d, %d, %s" % (gState.cartridge, gState.plate, gState.pointing))
 
-                #import pdb; pdb.set_trace()
                 fiberState = []
                 for f in gState.gprobes.values():
                     if f:
@@ -209,6 +260,8 @@ def main(actor, queues):
                     msg.cmd.respond("gprobes=%s" % ", ".join(fiberState))
                 msg.cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 msg.cmd.respond("expTime=%g" % (gState.expTime))
+                msg.cmd.respond("plateScales=%g, %g, %g" % (gState.plugPlateScale, \
+                                                            gState.gcameraMagnification, gState.gcameraPixelSize))
 
                 if msg.finish:
                     msg.cmd.finish()

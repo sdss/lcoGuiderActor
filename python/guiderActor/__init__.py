@@ -26,6 +26,7 @@ class Msg(object):
     class SET_GUIDE_MODE(): pass
     class STATUS(): pass
     class ABORT_EXPOSURE(): pass
+    class SET_SCALE(): pass
     class SET_TIME(): pass
 
     def __init__(self, type, cmd, **data):
