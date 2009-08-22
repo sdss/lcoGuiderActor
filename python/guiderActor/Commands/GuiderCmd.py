@@ -12,14 +12,13 @@ import opscore.protocols.keysformat as keysformat
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 
-import Commands.CmdSet
 from opscore.utility.qstr import qstr
 
 from guiderActor import *
 import guiderActor
 import guiderActor.myGlobals as myGlobals
 
-class GuiderCmd(Commands.CmdSet.CmdSet):
+class GuiderCmd(object):
     """ Wrap commands to the guider actor"""
 
     class GprobeInfo(object):
@@ -37,10 +36,9 @@ class GuiderCmd(Commands.CmdSet.CmdSet):
             self.focusOffset = focusOffset
 
     def __init__(self, actor):
-        Commands.CmdSet.CmdSet.__init__(self, actor)
-        
+        self.actor = actor
         #
-        # Set the keyword dictionary
+        # Declare keys that we're going to use
         #
         self.keys = keys.KeysDictionary("guider_guider", (1, 1),
                                         keys.Key("cartridge", types.Int(), help="A cartridge ID"),
