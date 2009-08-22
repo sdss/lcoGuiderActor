@@ -1,8 +1,6 @@
 * text=auto !eol
 etc/guider.cfg -text
-python/guiderActor/Commands/CmdSet.py -text
 python/guiderActor/Commands/GuiderCmd.py -text
-python/guiderActor/Commands/SupportCmd.py -text
 python/guiderActor/Commands/__init__.py -text
 python/guiderActor/__init__.py -text
 python/guiderActor/gcameraThread.py -text
