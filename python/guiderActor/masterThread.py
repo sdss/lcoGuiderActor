@@ -122,8 +122,8 @@ def main(actor, queues):
                     #
                     guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
                     
-                    A = numpy.matrix(np.zeros(4*4).reshape([4,4]))
-                    b = numpy.matrix(np.zeros(4).reshape([4,1]))
+                    A = numpy.matrix(np.zeros(3*3).reshape([3,3]))
+                    b = numpy.matrix(np.zeros(3).reshape([3,1]))
 
                     for star in stars:
                         try:
@@ -145,26 +145,22 @@ def main(actor, queues):
                         b[0] += dAz
                         b[1] += dAlt
                         b[2] += fiber.x*dAlt - fiber.y*dAz
-                        b[3] += fiber.x*dAz  + fiber.y*dAlt
 
                         A[0, 0] += 1
                         A[0, 1] += 0
                         A[0, 2] += -dAlt
-                        A[0, 3] +=  dAz
 
                         A[1, 0] += 0
                         A[1, 1] += 1
                         A[1, 2] += dAz
-                        A[1, 3] += dAlt
 
                         A[2, 0] += -dAlt
                         A[2, 1] += dAz
                         A[2, 2] += dAz*dAz + dAlt*dAlt
-                        A[2, 3] += 0
-
-                        A[3, 0] += dAz
-                        A[3, 1] += dAlt
-                        A[3, 2] += 0
+                        #
+                        # Now scale
+                        #
+                        b[3] += fiber.x*dAz + fiber.y*dAlt
                         A[3, 3] += dAz*dAz + dAlt*dAlt
                         
                     if A[0, 0] == 0:
@@ -176,7 +172,6 @@ def main(actor, queues):
                     dAz =  x[0, 0]*gState.plugPlateScale # convert from mm to degrees
                     dAlt = x[1, 0]*gState.plugPlateScale
                     dRot = x[2, 0]*180/math.pi # convert from radians to degrees
-                    dScale = x[3, 0]
 
                     posPID = {"P" : 0.5, "I" : 0, "D" : 0}
                     offsetAz = posPID["P"]*dAz
@@ -187,13 +182,27 @@ def main(actor, queues):
                     guideCmd.respond("axisChange=%g, %g, %g, %s" % (offsetAz, offsetAlt, offsetRot,
                                                                     "enabled" if gState.guideAxes else "disabled"))
 
-                    dFocus = -1e-3
+                    if gState.guideAxes:
+                        cmdVar = actor.cmdr.call(actor="tcc",
+                                                 cmdStr="offset guide %f, %f, %f" % (offsetAz, offsetAlt, offsetRot))
+
+                        if cmdVar.didFail:
+                            msg.cmd.warn("text=\"Failed to issue offset\"")
+
+                    dFocus = 0.0
                     focusPID = {"P" : 0.5, "I" : 0, "D" : 0}
                     offsetFocus = focusPID["P"]*dFocus
 
                     guideCmd.respond("focusError=%g" % (dFocus))
-                    guideCmd.respond("focusChange=%g, %s" % (offsetFocus,
-                                                             "enabled" if gState.guideFocus else "disabled"))
+                    guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if gState.guideFocus else "disabled"))
+
+                    if gState.guideFocus:
+                        cmdVar = actor.cmdr.call(actor="tcc",
+                                                 cmdStr="set focus=%f/incremental" % (offsetFocus))
+
+                        if cmdVar.didFail:
+                            msg.cmd.warn("text=\"Failed to issue offset\"")
+
 
                     scalePID = {"P" : 0.5, "I" : 0, "D" : 0}
                     offsetScale = scalePID["P"]*dScale
