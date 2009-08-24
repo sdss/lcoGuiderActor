@@ -2,6 +2,7 @@
 etc/guider.cfg -text
 python/guiderActor/Commands/GuiderCmd.py -text
 python/guiderActor/Commands/__init__.py -text
+python/guiderActor/PID.py -text
 python/guiderActor/__init__.py -text
 python/guiderActor/gcameraThread.py -text
 python/guiderActor/guiderActor_main.py -text

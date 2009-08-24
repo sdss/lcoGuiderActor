@@ -5,6 +5,7 @@
 import pdb
 import logging
 import re, sys
+import threading
 import ConfigParser
 
 import opscore.protocols.validation as validation
@@ -17,6 +18,8 @@ from opscore.utility.qstr import qstr
 from guiderActor import *
 import guiderActor
 import guiderActor.myGlobals as myGlobals
+import masterThread
+import gcameraThread
 
 class GuiderCmd(object):
     """ Wrap commands to the guider actor"""
@@ -24,7 +27,7 @@ class GuiderCmd(object):
     class GprobeInfo(object):
         """Capture information about a guider probe"""
         def __init__(self, exists, enabled, xCenter, yCenter, radius, rotation,
-                     xFerruleOffset, yFerruleOffset, focusOffset):
+                     xFerruleOffset, yFerruleOffset, focusOffset, fiber_type):
             self.exists = exists
             self.enabled = enabled
             self.xCenter = xCenter
@@ -34,6 +37,7 @@ class GuiderCmd(object):
             self.yFerruleOffset = yFerruleOffset
             self.rotation = rotation
             self.focusOffset = focusOffset
+            self.fiber_type = fiber_type
 
     def __init__(self, actor):
         self.actor = actor
@@ -46,6 +50,10 @@ class GuiderCmd(object):
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
                                         keys.Key("expTime", types.Float(), help="Exposure time for guider"),
+                                        keys.Key("Kp", types.Float(), help="Proportional gain"),
+                                        keys.Key("Ti", types.Float(), help="Integral time"),
+                                        keys.Key("Td", types.Float(), help="Derivative time"),
+                                        keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
                                         )
         #
         # Declare commands
@@ -53,10 +61,12 @@ class GuiderCmd(object):
         self.vocab = [
             ("guide", "(on|off) [<expTime>]", self.guide),
             ("setExpTime", "<expTime>", self.setExpTime),
+            ("setPID", "(altAz|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
             ("disableFibers", "<fibers>", self.disableFibers),
             ("enableFibers", "<fibers>", self.enableFibers),
             ("loadCartridge", "<cartridge> [<pointing>]", self.loadCartridge),
             ('ping', '', self.ping),
+            ('restart', '', self.restart),
             ('axes', '(on|off)', self.axes),
             ('focus', '(on|off)', self.focus),
             ('scale', '(on|off)', self.scale),
@@ -89,6 +99,26 @@ class GuiderCmd(object):
         expTime = cmd.cmd.keywords["expTime"].values[0]
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
 
+    def setPID(self, cmd):
+        """Set something's PID coefficients"""
+
+        what = None
+        for k in ["altAz", "rot", "focus", "scale"]:
+            if k in cmd.cmd.keywords:
+                what = k
+                break
+
+        if not what:
+            cmd.fail("text=\"Impossible condition in setPID\"")
+
+        Kp = cmd.cmd.keywords["Kp"].values[0]
+        Ti = cmd.cmd.keywords["Ti"].values[0] if "Ti" in cmd.cmd.keywords else 0
+        Td = cmd.cmd.keywords["Td"].values[0] if "Td" in cmd.cmd.keywords else 0
+        Imax = cmd.cmd.keywords["Imax"].values[0] if "Imax" in cmd.cmd.keywords else 0
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, cmd=cmd, what=what,
+                                                                Kp=Kp, Ti=Ti, Td=Td, Imax=Imax))
+
     def guide(self, cmd):
         """Turn guiding on or off"""
 
@@ -107,15 +137,17 @@ class GuiderCmd(object):
         #
         actorState = guiderActor.myGlobals.actorState
 
-        plateKey = actorState.models["platedb"].keyVarDict["pointingInfo"]
+        pointingInfoKey = actorState.models["platedb"].keyVarDict["pointingInfo"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb",
                                             cmdStr="loadCartridge cartridge=%d pointing=%s" % (cartridge, pointing),
-                                            keyVars=[plateKey])
+                                            keyVars=[pointingInfoKey])
         if cmdVar.didFail:
             cmd.fail("text=\"Failed to lookup plate corresponding to %d/%s\"" % (cartridge, pointing))
             return
 
-        plate = cmdVar.getLastKeyVarData(plateKey)[0]
+        plate = cmdVar.getLastKeyVarData(pointingInfoKey)[0]
+        boresight_ra = cmdVar.getLastKeyVarData(pointingInfoKey)[3]
+        boresight_dec = cmdVar.getLastKeyVarData(pointingInfoKey)[4]
         #
         # Lookup the valid gprobes
         #
@@ -137,9 +169,9 @@ class GuiderCmd(object):
 
         gprobes = {}
         for cartridgeID, gpID, exists, xCenter, yCenter, radius, rotation, \
-                xFerruleOffset, yFerruleOffset, focusOffset in cmdVar.getKeyVarData(gprobeKey):
+                xFerruleOffset, yFerruleOffset, focusOffset, fiber_type in cmdVar.getKeyVarData(gprobeKey):
             gprobes[gpID] = GuiderCmd.GprobeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius, rotation,
-                                                 xFerruleOffset, yFerruleOffset, focusOffset)
+                                                 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type)
 
         #
         # Add in the plate/fibre geometry from plPlugMapM
@@ -161,6 +193,7 @@ class GuiderCmd(object):
                 gprobes[id].dec = float(el[i]); i += 1
                 gprobes[id].xFocal = float(el[i]); i += 1
                 gprobes[id].yFocal = float(el[i]); i += 1
+                gprobes[id].phi = float(el[i]); i += 1
                 gprobes[id].throughput = float(el[i]); i += 1
                 
             except KeyError:
@@ -171,18 +204,40 @@ class GuiderCmd(object):
         #
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
                                                                 cartridge=cartridge, plate=plate, pointing=pointing,
+                                                                boresight_ra=boresight_ra, boresight_dec=boresight_dec,
                                                                 gprobes=gprobes))
 
     def ping(self, cmd):
         """ Top-level "ping" command handler. Query the actor for liveness/happiness. """
 
+        for t in threading.enumerate():
+            print "thread = ", t
+        print
+
         cmd.finish('text="pong"')
+
+    def restart(self, cmd):
+        """Restart the worker threads"""
+
+        actorState = myGlobals.actorState
+
+        if actorState.restartCmd:
+            actorState.restartCmd.finish("text=\"Nunc dimittis servum tuum Domine\"")
+            actorState.restartCmd = None
+
+        actorState.actor.startThreads(actorState, cmd, restart=True)
+        #
+        # We can't finish this command now as the threads may not have died yet,
+        # but we can remember to clean up _next_ time we restart
+        #
+        cmd.inform("text=\"Restarting threads\"")
+        actorState.restartCmd = cmd
 
     def correctionImpl(self, cmd, what):
         """Turn guiding something on or off"""
 
         on = "on" in cmd.cmd.keywords
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enabled=on))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enable=on))
 
     def axes(self, cmd):
         """Turn guiding the plate axes on or off"""

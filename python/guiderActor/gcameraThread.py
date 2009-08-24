@@ -1,4 +1,4 @@
-import Queue
+import Queue, threading
 
 from guiderActor import *
 import guiderActor.myGlobals
@@ -8,13 +8,17 @@ def main(actor, queues):
 
     timeout = guiderActor.myGlobals.actorState.timeout
 
-    expNum = 0
-    
     while True:
         try:
             msg = queues[GCAMERA].get(timeout=timeout)
             
-            if msg.type == Msg.EXPOSE:
+            if msg.type == Msg.EXIT:
+                if msg.cmd:
+                    msg.cmd.inform("text=\"Exiting thread %s\"" % (threading.current_thread().name))
+
+                return
+            
+            elif msg.type == Msg.EXPOSE:
                 msg.cmd.respond("text=\"starting exposure\"")
                 #
                 # Take exposure
@@ -25,7 +29,7 @@ def main(actor, queues):
 
                 filenameKey = guiderActor.myGlobals.actorState.models["gcamera"].keyVarDict["filename"]
 
-                cmdVar = actor.cmdr.call(actor="gcamera", cmdStr="expose expTime=%f" % (msg.expTime),
+                cmdVar = actor.cmdr.call(actor="gcamera", cmdStr="expose time=%f" % (msg.expTime),
                                          keyVars=[filenameKey], timeLim=timeLim)
                 if cmdVar.didFail:
                     msg.cmd.warn("text=\"Failed to take exposure\"")
