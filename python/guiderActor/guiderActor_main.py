@@ -168,7 +168,7 @@ class Guider(actorcore.Actor.Actor):
         self.logger.setLevel(debugLevel)
         #self.logger.propagate = True
 
-        self.cmdr = actorcore.CmdrConnection.Cmdr('%s.%s' % (name, name), self)
+        self.cmdr = actorcore.CmdrConnection.Cmdr(name, self)
         self.cmdr.connectionMade = self.connectionMade
         self.cmdr.connect()
 
