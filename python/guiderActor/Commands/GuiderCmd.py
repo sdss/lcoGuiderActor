@@ -6,10 +6,7 @@ import pdb
 import logging
 import re, sys
 import threading
-import ConfigParser
 
-import opscore.protocols.validation as validation
-import opscore.protocols.keysformat as keysformat
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 
@@ -133,6 +130,22 @@ class GuiderCmd(object):
         cartridge = cmd.cmd.keywords["cartridge"].values[0]
         pointing = cmd.cmd.keywords["pointing"].values[0] if "pointing" in cmd.cmd.keywords else "A"
         #
+        # Cartridge ID of 0 means that no cartridge is loaded
+        #
+        if cartridge == 0:
+            gprobes = {}
+            plate = 0
+            boresight_ra = float("NaN")
+            boresight_dec = float("NaN")
+            #
+            # Send that information off to the master thread
+            #
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
+                                                                cartridge=cartridge, plate=plate, pointing=pointing,
+                                                                boresight_ra=boresight_ra, boresight_dec=boresight_dec,
+                                                                gprobes=gprobes))
+            return
+        #
         # Get the plate from the plateDB
         #
         actorState = guiderActor.myGlobals.actorState
@@ -208,7 +221,7 @@ class GuiderCmd(object):
                                                                 gprobes=gprobes))
 
     def ping(self, cmd):
-        """ Top-level "ping" command handler. Query the actor for liveness/happiness. """
+        """ Top-level 'ping' command handler. Query the actor for liveness/happiness. """
 
         for t in threading.enumerate():
             print "thread = ", t
