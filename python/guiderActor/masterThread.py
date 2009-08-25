@@ -229,15 +229,9 @@ def main(actor, queues):
                                                                         "enabled" if gState.guideAxes else "disabled"))
 
                         if gState.guideAxes:
-                            # Need "perms hackOn" sent to hub...
-                            if True:
-                                cmdVar = actor.cmdr.call(actor="tcc", # forUserCmd=guideCmd,
-                                                         cmdStr="offset guide %f, %f, %f" % (offsetAz, offsetAlt, offsetRot))
-                            else:
-                                cmdVar = actor.cmdr.call(actor="tcc", # forUserCmd=guideCmd,
-                                                         cmdStr="show time")
+                            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                                     cmdStr="offset guide %f, %f, %f" % (offsetAz, offsetAlt, offsetRot))
 
-                            print "RHL offset completed"
                             if cmdVar.didFail:
                                 guideCmd.warn("text=\"Failed to issue offset\"")
                     except numpy.linalg.LinAlgError:
@@ -304,14 +298,21 @@ def main(actor, queues):
                         guideCmd.respond("focusError=%g" % (dFocus))
                         guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if gState.guideFocus else "disabled"))
                         if gState.guideFocus:
-                            cmdVar = actor.cmdr.call(actor="tcc",
+                            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                                      cmdStr="set focus=%f/incremental" % (offsetFocus))
 
                             if cmdVar.didFail:
                                 guideCmd.warn("text=\"Failed to issue focus offset\"")
                     except numpy.linalg.LinAlgError:
                         guideCmd.warn("text=%s" % qstr("Unable to solve for focus offset"))
+                #
+                # Write output fits file for TUI
+                #
+                
 
+                #
+                # Has the TCC done something to indicate that we should stop guiding?
+                #
                 tccState = guiderActor.myGlobals.actorState.tccState
                 if tccState.halted or tccState.slewing:
                     guideCmd.warn("text=\"TCC motion aborted guiding\"")
