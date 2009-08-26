@@ -99,7 +99,7 @@ def main(actor, queues):
                     #
                     # Reset any PID I terms
                     #
-                    for key in gstate.pid.keys():
+                    for key in gState.pid.keys():
                         gState.pid[k].reset()
 
                     guideCmd.respond("guideState=starting")
