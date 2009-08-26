@@ -151,7 +151,7 @@ class GuiderCmd(object):
         actorState = guiderActor.myGlobals.actorState
 
         pointingInfoKey = actorState.models["platedb"].keyVarDict["pointingInfo"]
-        cmdVar = actorState.actor.cmdr.call(actor="platedb",
+        cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
                                             cmdStr="loadCartridge cartridge=%d pointing=%s" % (cartridge, pointing),
                                             keyVars=[pointingInfoKey])
         if cmdVar.didFail:
@@ -166,7 +166,7 @@ class GuiderCmd(object):
         #
         gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
         gprobesInUseKey = actorState.models["platedb"].keyVarDict["gprobesInUse"]
-        cmdVar = actorState.actor.cmdr.call(actor="platedb",
+        cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
                                             cmdStr="getGprobes cartridge=%d" % (cartridge),
                                             keyVars=[gprobeKey, gprobesInUseKey])
         if cmdVar.didFail:
@@ -190,7 +190,7 @@ class GuiderCmd(object):
         # Add in the plate/fibre geometry from plPlugMapM
         #
         guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
-        cmdVar = actorState.actor.cmdr.call(actor="platedb",
+        cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
                                             cmdStr="getGprobesPlateGeom cartridge=%d" % (cartridge),
                                             keyVars=[guideInfoKey])
         if cmdVar.didFail:
