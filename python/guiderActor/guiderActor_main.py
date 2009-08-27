@@ -48,6 +48,7 @@ class TCCState(object):
 
     instName = None
     slewing = False
+    halted = False
 
     def __init__(self, tccModel):
         """Register keywords that we need to pay attention to"""
@@ -109,7 +110,6 @@ class TCCState(object):
             #    mi[0] - Object name
             #    mi[2] - Object magnitude
             #    mi[7] - Guide offset
-            print "RHL return"
             return
         #
         # respond to what's been ordered
@@ -177,7 +177,7 @@ class Guider(actorcore.Actor.Actor):
         #
         # Load other actor's models so we can send it commands
         #
-        for actor in ["gcamera", "platedb", "tcc"]:
+        for actor in ["gcamera", "mcp", "platedb", "tcc"]:
             actorState.models[actor] = opscore.actor.model.Model(actor)
         #
         # spawn off the threads that sequence actions (e.g. take an exposure; move telescope)
