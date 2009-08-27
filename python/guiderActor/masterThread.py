@@ -65,7 +65,8 @@ def main(actor, queues):
 
     #import pdb; pdb.set_trace()
 
-    timeout = guiderActor.myGlobals.actorState.timeout
+    actorState = guiderActor.myGlobals.actorState
+    timeout = actorState.timeout
 
     guideCmd = None                     # the Cmd that started the guide loop
     
@@ -95,15 +96,19 @@ def main(actor, queues):
                                                 text="Please tell me about your cartridge and try again"))
                         continue
 
+                    if not guidingIsOK(msg.cmd, actorState):
+                        queues[MASTER].put(Msg(Msg.FAIL, msg.cmd, text=""))
+                        continue
+
                     guideCmd = msg.cmd
                     #
                     # Reset any PID I terms
                     #
                     for key in gState.pid.keys():
-                        gState.pid[k].reset()
+                        gState.pid[key].reset()
 
                     guideCmd.respond("guideState=starting")
-                    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, expTime=gState.expTime))
+                    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
                 else:
                     if not guideCmd:
                         msg.cmd.fail("text=\"The guider is already off\"")
@@ -115,7 +120,7 @@ def main(actor, queues):
                     guideCmd.finish("guideState=off")
                     guideCmd = None
             elif msg.type == Msg.EXPOSURE_FINISHED:
-                if not msg.aborted:
+                if True:
                     if not guideCmd:    # exposure already finished
                         continue
                     
@@ -148,7 +153,7 @@ def main(actor, queues):
                         guideCmd.fail("text=%s" % qstr("Error in processing guide images: %s" % e))
                         continue
 
-                    spiderInstAngKey = guiderActor.myGlobals.actorState.models["tcc"].keyVarDict["spiderInstAng"]
+                    spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
                     spiderInstAng = spiderInstAngKey[0].getPos()
 
                     if spiderInstAng is None:
@@ -284,7 +289,10 @@ def main(actor, queues):
                             rms = star.fwhm/2.35
                         sigma = 1
 
-                        ivar = 1/(2*math.pow(rms*sigma, 2)) # x's inverse variance
+                        try:
+                            ivar = 1/(2*math.pow(rms*sigma, 2)) # x's inverse variance
+                        except ZeroDivisionError:
+                            ivar = 1e-5
 
                         d = fiber.info.focusOffset
                         x = rms*rms - d*d
@@ -324,18 +332,15 @@ def main(actor, queues):
                 
 
                 #
-                # Has the TCC done something to indicate that we should stop guiding?
+                # Is there anything to indicate that we shouldn't be guiding?
                 #
-                tccState = guiderActor.myGlobals.actorState.tccState
-                if tccState.halted or tccState.slewing:
-                    guideCmd.warn("text=\"TCC motion aborted guiding\"")
-                    print "TCC aborting", tccState.halted, tccState.slewing
+                if not guidingIsOK(cmd, actorState):
                     queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
                     continue
                 #
                 # Start the next exposure
                 #
-                queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, expTime=gState.expTime))
+                queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
 
             elif msg.type == Msg.FAIL:
                 msg.cmd.fail("text=\"%s\"" % msg.text);
@@ -418,3 +423,29 @@ def main(actor, queues):
                 raise ValueError, ("Unknown message type %s" % msg.type)
         except Queue.Empty:
             actor.bcast.diag("text=\"master alive\"")
+
+def guidingIsOK(cmd, actorState):
+    """Is it OK to be guiding?"""
+    
+    ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
+
+    open, closed = 0, 0
+    for s in ffsStatus:
+        if s == None:
+            cmd.warn('text="Failed to get state of flat field screen from MCP"')
+            break
+
+        open += int(s[0])
+        closed += int(s[1])
+
+    if open != 8:
+        cmd.warn("text=\"FF petals aren't open; aborting guiding\"")
+        return False
+
+    tccState = actorState.tccState
+    if tccState.halted or tccState.slewing:
+        cmd.warn("text=\"TCC motion aborted guiding\"")
+        print "TCC aborting", tccState.halted, tccState.slewing
+        return False
+
+    return True
