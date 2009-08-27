@@ -122,13 +122,26 @@ def main(actor, queues):
                     guideCmd.respond("processing=%s" % msg.filename)
 
                     import gcamera.pyGuide_test as pg
+                    import pyfits
+
+                    h = pyfits.getheader(msg.filename)
+                    flatfile = h.get('FLATFILE', None)
+                    flatcart = h.get('FLATCART', None)
+                    darkfile = h.get('DARKFILE', None)
+                    if not flatfile:
+                        guideCmd.fail("text=%s" % qstr("No flat image available"))
+                        continue
+                    if not darkfile:
+                        guideCmd.fail("text=%s" % qstr("No dark image available"))
+                        continue
+                    if flatcart != gState.cartridge:
+                        guideCmd.fail("text=%s" % qstr("No flat file for this cartridge"))
+                        continue 
+                       
                     obj = pg.GuideTest(dataname=msg.filename, cartridgeId=gState.cartridge, gprobes=gState.gprobes,
-                                       flatname="/data/gcam/55034/gimg-0331.fits",
-                                       darkname="/data/gcam/55034/gimg-0205.fits"
-                                       )
+                                       flatname=flatfile, darkname=darkfile, mode=0)
 
                     try:
-                        #import pdb; pdb.set_trace()
                         stars = obj.runAllSteps()[1]
                     except Exception, e:
                         tback("GuideTest", e)
