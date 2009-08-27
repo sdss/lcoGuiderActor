@@ -7,6 +7,11 @@ from opscore.utility.qstr import qstr
 from opscore.utility.tback import tback
 import PID
 
+import gcamera.pyGuide_test as pg
+reload(pg)
+import pyfits
+
+
 class GuiderState(object):
     """Save the state of the guider"""
 
@@ -126,9 +131,6 @@ def main(actor, queues):
                     
                     guideCmd.respond("processing=%s" % msg.filename)
 
-                    import gcamera.pyGuide_test as pg
-                    import pyfits
-
                     h = pyfits.getheader(msg.filename)
                     flatfile = h.get('FLATFILE', None)
                     flatcart = h.get('FLATCART', None)
@@ -143,11 +145,11 @@ def main(actor, queues):
                         guideCmd.fail("text=%s" % qstr("No flat file for this cartridge"))
                         continue 
                        
-                    obj = pg.GuideTest(dataname=msg.filename, cartridgeId=gState.cartridge, gprobes=gState.gprobes,
-                                       flatname=flatfile, darkname=darkfile, mode=0)
+                    imageObj = pg.GuideTest(dataname=msg.filename, cartridgeId=gState.cartridge, gprobes=gState.gprobes,
+                                            flatname=flatfile, darkname=darkfile, mode=0)
 
                     try:
-                        stars = obj.runAllSteps()[1]
+                        stars = imageObj.runAllSteps()[1]
                     except Exception, e:
                         tback("GuideTest", e)
                         guideCmd.fail("text=%s" % qstr("Error in processing guide images: %s" % e))
@@ -157,14 +159,14 @@ def main(actor, queues):
                     spiderInstAng = spiderInstAngKey[0].getPos()
 
                     if spiderInstAng is None:
-                        msg = qstr("spiderInstAng is None; are we tracking?")
+                        txt = qstr("spiderInstAng is None; are we tracking?")
 
                         if True:
-                            guideCmd.warn("text=%s" % msg)
+                            guideCmd.warn("text=%s" % txt)
                             print "RHL Setting spiderInstAng to 0.0"
                             spiderInstAng = 0.0
                         else:
-                            guideCmd.fail("text=%s" % msg)
+                            guideCmd.fail("text=%s" % txt)
                             continue
                     #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
@@ -224,7 +226,7 @@ def main(actor, queues):
                         b3 += fiber.info.xCenter*dAz + fiber.info.yCenter*dAlt
                         
                     if A[0, 0] == 0:
-                        guideCmd.fail("No fibers are available for guiding")
+                        guideCmd.warn('text="No fibers are available for guiding"')
                         continue
 
                     A[1, 0] = A[0, 1]
@@ -310,7 +312,10 @@ def main(actor, queues):
                         x = numpy.linalg.solve(A, b)
                     
                         Delta = x[1, 0]/2
-                        rms0 = math.sqrt(A[0, 0] - Delta*Delta)
+                        try:
+                            rms0 = math.sqrt(A[0, 0] - Delta*Delta)
+                        except ValueError, e:
+                            rms0 = float("NaN")
 
                         dFocus = Delta*guideCameraScale*gState.dSecondary_dmm # mm to move the secondary
                         offsetFocus = gState.pid["focus"].update(dFocus)
@@ -329,12 +334,12 @@ def main(actor, queues):
                 #
                 # Write output fits file for TUI
                 #
-                
+                imageObj.writeFITS(guideCmd)
 
                 #
                 # Is there anything to indicate that we shouldn't be guiding?
                 #
-                if not guidingIsOK(cmd, actorState):
+                if not guidingIsOK(msg.cmd, actorState):
                     queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
                     continue
                 #
