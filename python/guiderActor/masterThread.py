@@ -145,7 +145,9 @@ def main(actor, queues):
                         guideCmd.fail("text=%s" % qstr("No flat file for this cartridge"))
                         continue 
                        
-                    imageObj = pg.GuideTest(dataname=msg.filename, cartridgeId=gState.cartridge, gprobes=gState.gprobes,
+
+                    imageObj = pg.GuideTest(dataname=msg.filename, cartridgeId=gState.cartridge, 
+                                            gprobes=gState.gprobes,
                                             flatname=flatfile, darkname=darkfile, mode=0)
 
                     try:
@@ -431,7 +433,9 @@ def main(actor, queues):
 
 def guidingIsOK(cmd, actorState):
     """Is it OK to be guiding?"""
-    
+
+    return True
+
     ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
 
     open, closed = 0, 0
