@@ -31,7 +31,7 @@ def main(actor, queues):
                                          keyVars=[filenameKey], timeLim=timeLim)
                 if cmdVar.didFail:
                     msg.cmd.warn('text="Failed to take exposure"')
-                    msg.replyQueue.put(Msg.EXPOSURE_FINISHED, cmd=msg.cmd, success=True)
+                    msg.replyQueue.put(Msg(Msg.EXPOSURE_FINISHED, cmd=msg.cmd, success=True))
                     continue
 
                 filename = cmdVar.getLastKeyVarData(filenameKey)[0]
