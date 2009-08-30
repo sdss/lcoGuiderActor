@@ -47,6 +47,8 @@ class GuiderCmd(object):
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
                                         keys.Key("expTime", types.Float(), help="Exposure time for guider"),
+                                        keys.Key("force", help="Force requested action to happen"),
+                                        keys.Key("oneExposure", help="Take just one exposure"),
                                         keys.Key("Kp", types.Float(), help="Proportional gain"),
                                         keys.Key("Ti", types.Float(), help="Integral time"),
                                         keys.Key("Td", types.Float(), help="Derivative time"),
@@ -56,9 +58,10 @@ class GuiderCmd(object):
         # Declare commands
         #
         self.vocab = [
-            ("guide", "(on|off) [<expTime>]", self.guide),
+            ("on", "[<expTime>] [force] [oneExposure]", self.guideOn),
+            ("off", "", self.guideOff),
             ("setExpTime", "<expTime>", self.setExpTime),
-            ("setPID", "(altAz|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
+            ("setPID", "(azAlt|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
             ("disableFibers", "<fibers>", self.disableFibers),
             ("enableFibers", "<fibers>", self.enableFibers),
             ("loadCartridge", "<cartridge> [<pointing>]", self.loadCartridge),
@@ -100,7 +103,7 @@ class GuiderCmd(object):
         """Set something's PID coefficients"""
 
         what = None
-        for k in ["altAz", "rot", "focus", "scale"]:
+        for k in ["azAlt", "rot", "focus", "scale"]:
             if k in cmd.cmd.keywords:
                 what = k
                 break
@@ -116,13 +119,19 @@ class GuiderCmd(object):
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, cmd=cmd, what=what,
                                                                 Kp=Kp, Ti=Ti, Td=Td, Imax=Imax))
 
-    def guide(self, cmd):
-        """Turn guiding on or off"""
+    def guideOn(self, cmd):
+        """Turn guiding on"""
 
-        on = "on" in cmd.cmd.keywords
+        force = "force" in cmd.cmd.keywords
+        oneExposure = "oneExposure" in cmd.cmd.keywords
         expTime = cmd.cmd.keywords["expTime"].values[0] if "expTime" in cmd.cmd.keywords else None
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
-                                                                start=on, expTime=expTime))
+                                                                start=True, expTime=expTime,
+                                                                force=force, oneExposure=oneExposure))
+    def guideOff(self, cmd):
+        """Turn guiding off"""
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=False))
 
     def loadCartridge(self, cmd):
         """Load a cartridge"""
@@ -208,7 +217,7 @@ class GuiderCmd(object):
                 gprobes[id].yFocal = float(el[i]); i += 1
                 gprobes[id].phi = float(el[i]); i += 1
                 gprobes[id].throughput = float(el[i]); i += 1
-                
+
             except KeyError:
                 cmd.warn("text=\"Unknown fiberId %d from plugmap file (%s)\"" % (id, ", ".join(el[1:])))
                 continue
