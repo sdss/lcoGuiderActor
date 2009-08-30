@@ -16,11 +16,10 @@ class GuiderState(object):
     """Save the state of the guider"""
 
     class Gprobe(object):
-        def __init__(self, id, info, enable=True, probeType="guide"):
+        def __init__(self, id, info, enable=True):
             self.id = id
             self.info = info
             self.enabled = enable
-            self.probeType = probeType
 
     def __init__(self):
         self.cartridge = -1
@@ -45,10 +44,16 @@ class GuiderState(object):
     def setGprobeState(self, fiber, enable=True, info=None, create=False):
         """Set a fiber's state"""
 
-        if not self.gprobes.has_key(fiber) and create:
-            self.gprobes[fiber] = GuiderState.Gprobe(fiber, info, enable)
+        if fiber in ("ACQUIRE", "GUIDE"):
+            fiber_type = fiber
+            for gp in self.gprobes.values():
+                if gp.info.fiber_type == fiber_type:
+                    gp.enabled = enable
         else:
-            self.gprobes[fiber].enabled = enable
+            if not self.gprobes.has_key(fiber) and create:
+                self.gprobes[fiber] = GuiderState.Gprobe(fiber, info, enable)
+            else:
+                self.gprobes[fiber].enabled = enable
 
     def setGuideMode(self, what, enabled=True):
         if what == "axes":

@@ -48,6 +48,7 @@ class GuiderCmd(object):
                                                  help="A pointing for the given plugplate"),
                                         keys.Key("expTime", types.Float(), help="Exposure time for guider"),
                                         keys.Key("force", help="Force requested action to happen"),
+                                        keys.Key("gprobes", types.Enum("acquire", "guide"), help="Type of gprobe"),
                                         keys.Key("oneExposure", help="Take just one exposure"),
                                         keys.Key("Kp", types.Float(), help="Proportional gain"),
                                         keys.Key("Ti", types.Float(), help="Integral time"),
@@ -62,8 +63,8 @@ class GuiderCmd(object):
             ("off", "", self.guideOff),
             ("setExpTime", "<expTime>", self.setExpTime),
             ("setPID", "(azAlt|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
-            ("disableFibers", "<fibers>", self.disableFibers),
-            ("enableFibers", "<fibers>", self.enableFibers),
+            ("disable", "<fibers>|<gprobes>", self.disableFibers),
+            ("enable", "<fibers>|<gprobes>", self.enableFibers),
             ("loadCartridge", "<cartridge> [<pointing>]", self.loadCartridge),
             ('ping', '', self.ping),
             ('restart', '', self.restart),
@@ -78,8 +79,14 @@ class GuiderCmd(object):
     def disableFibersImpl(self, cmd, enable=True):
         """Disable a set of fibers"""
 
-        for f in cmd.cmd.keywords["fibers"].values:
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.ENABLE_FIBER, cmd=cmd, fiber=f, enable=enable))
+        if "fibers" in cmd.cmd.keywords:
+            for f in cmd.cmd.keywords["fibers"].values:
+                myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.ENABLE_FIBER,
+                                                                        cmd=cmd, fiber=f, enable=enable))
+        elif "gprobes" in cmd.cmd.keywords:
+            gprobeType = cmd.cmd.keywords["gprobes"].values[0].upper()
+            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.ENABLE_FIBER, cmd=cmd,
+                                                                    fiber=gprobeType, enable=enable))
 
         self.status(cmd)                # finishes this command
 
