@@ -54,6 +54,7 @@ class GuiderCmd(object):
                                         keys.Key("Ti", types.Float(), help="Integral time"),
                                         keys.Key("Td", types.Float(), help="Derivative time"),
                                         keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
+                                        keys.Key("geek", help="Show things that only some of us love"),
                                         )
         #
         # Declare commands
@@ -71,7 +72,7 @@ class GuiderCmd(object):
             ('axes', '(on|off)', self.axes),
             ('focus', '(on|off)', self.focus),
             ('scale', '(on|off)', self.scale),
-            ('status', '', self.status),
+            ('status', "[geek]", self.status),
             ]
     #
     # Define commands' callbacks
@@ -239,10 +240,6 @@ class GuiderCmd(object):
     def ping(self, cmd):
         """ Top-level 'ping' command handler. Query the actor for liveness/happiness. """
 
-        for t in threading.enumerate():
-            print "thread = ", t
-        print
-
         cmd.finish('text="pong"')
 
     def restart(self, cmd):
@@ -285,5 +282,9 @@ class GuiderCmd(object):
 
     def status(self, cmd):
         """Return guide status status"""
+
+        if "geek" in cmd.cmd.keywords:
+            for t in threading.enumerate():
+                cmd.inform('text="%s"' % t)
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd=cmd, finish=True))
