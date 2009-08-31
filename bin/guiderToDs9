@@ -1,0 +1,121 @@
+#!/bin/sh
+
+dataDir=/data/gcam
+
+usage() {
+    cat <<EOF
+guiderToDs9 [options] [directory]
+
+Display the latest gimg file from the specified directory (default $dataDir/MJD)
+
+options:
+    -h, --help		Print this message and exit
+    -m, --mjd VAL	Show data for MJD VAL. Useful with --seqno
+    -n, --nframe VAL	Use this many frames in ds9, cycling through 0...n-1
+    -s, --seqno VAL	Start displaying at this seqno, prompting for the next frame
+
+To display on a machine "laptop", it may be useful to say
+      ds9 &
+      xpaset -p ds9 -acl hub25m +
+there, and
+      export XPA_NSINET='laptop:14285'
+on the hub25m
+EOF
+}
+
+nframe=4
+
+while [ ! -z $1 ]; do
+    case $1 in
+	-h|--help)
+	    usage
+	    exit 1;;
+	-m|--mjd)
+	    if [ -z $2 ]; then
+		echo "You must provide a value for $1" >&2; exit 1
+	    fi
+	    mjd=$2; shift;;
+	-n|--nframe)
+	    if [ -z $2 ]; then
+		echo "You must provide a value for $1" >&2; exit 1
+	    fi
+	    nframe=$2; shift;;
+	-s|--seqno)
+	    if [ -z $2 ]; then
+		echo "You must provide a value for $1" >&2; exit 1
+	    fi
+	    seqno=$2; shift;;
+	-*)
+	    echo "Unknown option $1" >&2
+	    usage
+	    exit 1;;
+	*)
+	    break;;
+    esac
+    shift
+done
+
+if [ -z $1 ]; then
+    if [ -z $mjd ]; then
+	mjd=$(ls -t $dataDir | head -1)
+    fi
+    dataDir=$dataDir/$mjd
+else
+    dataDir=$1
+    shift
+fi
+
+if [ ! -z $1 ]; then
+    echo "Unexpected command line arguments: $*" >&2
+    exit 1
+fi
+
+ofile=;
+i=0
+default0="+"				# go forwards
+while true; do
+    if [ ! -z $seqno ]; then
+	file=$(printf $dataDir/gimg-%04d.fits $seqno)
+	seqno=$[$seqno + 1]
+    else
+	file=$(ls -t $dataDir/gimg-*.fits 2> /dev/null | head -1);
+    fi
+    
+    if [ "$file" != "$ofile" ]; then
+	i=$[$i+1]
+	i=$(perl -e "print $i%$nframe")
+	
+	echo $i $file
+	~sdss3/bin/xpaset -p ds9 frame $i
+	cat $file | ~sdss3/bin/xpaset ds9 fits
+        ofile=$file
+    fi
+    
+    if [ ! -z $seqno ]; then
+	printf "Display $seqno? (qy#+-) [$default0] "
+	read arg0 arg1 arg2
+
+	if [ -z $arg0 ]; then
+	    arg0=$default0
+	fi
+
+	case $arg0 in
+	    q|Q)
+		break;;
+	    [0-9]*)
+		seqno=$arg0;;
+	    -)
+		default0="-"
+		seqno=$[$seqno-2];;
+	    +)
+		default0="+";;
+	    \#)
+		echo "Please enter a seqno, not #"
+		seqno=$[$seqno-1];;
+	    *)
+		;;
+	esac
+    else
+	sleep 2
+    fi
+done
