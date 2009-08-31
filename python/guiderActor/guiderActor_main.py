@@ -108,6 +108,7 @@ class Guider(actorcore.Actor.Actor):
                                                           enable=enable))
 
         for what in self.config.options("PID"):
+            what = dict(AZALT = "azAlt", ROT = "rot", FOCUS = "focus", SCALE = "scale")[what.upper()]
             Kp, Ti, Td, Imax = [float(v) for v in self.config.get('PID', what).split()]
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, None, what=what,
                                                           Kp=Kp, Ti=Ti, Td=Td, Imax=Imax))

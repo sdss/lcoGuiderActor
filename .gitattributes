@@ -1,4 +1,5 @@
 * text=auto !eol
+bin/guiderToDs9 -text
 etc/guider.cfg -text
 python/guiderActor/Commands/GuiderCmd.py -text
 python/guiderActor/Commands/__init__.py -text

@@ -46,7 +46,7 @@ class GuiderCmd(object):
                                         keys.Key("fibers", types.Int()*(1,None), help="A list of fibers"),
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
-                                        keys.Key("expTime", types.Float(), help="Exposure time for guider"),
+                                        keys.Key("time", types.Float(), help="Exposure time for guider"),
                                         keys.Key("force", help="Force requested action to happen"),
                                         keys.Key("gprobes", types.Enum("acquire", "guide"), help="Type of gprobe"),
                                         keys.Key("oneExposure", help="Take just one exposure"),
@@ -55,18 +55,20 @@ class GuiderCmd(object):
                                         keys.Key("Td", types.Float(), help="Derivative time"),
                                         keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
                                         keys.Key("geek", help="Show things that only some of us love"),
+                                        keys.Key("plot", help="Plot things"),
                                         )
         #
         # Declare commands
         #
         self.vocab = [
-            ("on", "[<expTime>] [force] [oneExposure]", self.guideOn),
+            ("on", "[<time>] [force] [oneExposure] [plot]", self.guideOn),
             ("off", "", self.guideOff),
-            ("setExpTime", "<expTime>", self.setExpTime),
+            ("setExpTime", "<time>", self.setExpTime),
             ("setPID", "(azAlt|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
             ("disable", "<fibers>|<gprobes>", self.disableFibers),
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
             ("loadCartridge", "<cartridge> [<pointing>]", self.loadCartridge),
+            ("showCartridge", "", self.showCartridge),
             ('ping', '', self.ping),
             ('restart', '', self.restart),
             ('axes', '(on|off)', self.axes),
@@ -104,7 +106,7 @@ class GuiderCmd(object):
     def setExpTime(self, cmd):
         """Set the exposure time"""
 
-        expTime = cmd.cmd.keywords["expTime"].values[0]
+        expTime = cmd.cmd.keywords["time"].values[0]
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
 
     def setPID(self, cmd):
@@ -132,10 +134,12 @@ class GuiderCmd(object):
 
         force = "force" in cmd.cmd.keywords
         oneExposure = "oneExposure" in cmd.cmd.keywords
-        expTime = cmd.cmd.keywords["expTime"].values[0] if "expTime" in cmd.cmd.keywords else None
+        plot = "plot" in cmd.cmd.keywords
+        expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
                                                                 start=True, expTime=expTime,
-                                                                force=force, oneExposure=oneExposure))
+                                                                force=force, oneExposure=oneExposure,
+                                                                plot=plot))
     def guideOff(self, cmd):
         """Turn guiding off"""
 
@@ -207,12 +211,17 @@ class GuiderCmd(object):
         # Add in the plate/fibre geometry from plPlugMapM
         #
         guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
+        plPlugMapMKey = actorState.models["platedb"].keyVarDict["plPlugMapM"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
                                             cmdStr="getGprobesPlateGeom cartridge=%d" % (cartridge),
-                                            keyVars=[guideInfoKey])
+                                            keyVars=[guideInfoKey, plPlugMapMKey])
         if cmdVar.didFail:
             cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
             return
+
+        assert int(cmdVar.getLastKeyVarData(plPlugMapMKey)[0]) == plate
+        fscanMJD = cmdVar.getLastKeyVarData(plPlugMapMKey)[1]
+        fscanID = cmdVar.getLastKeyVarData(plPlugMapMKey)[2]
 
         for el in cmdVar.getKeyVarData(guideInfoKey):
             i = 0
@@ -232,10 +241,12 @@ class GuiderCmd(object):
         #
         # Send that information off to the master thread
         #
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
-                                                                cartridge=cartridge, plate=plate, pointing=pointing,
-                                                                boresight_ra=boresight_ra, boresight_dec=boresight_dec,
-                                                                gprobes=gprobes))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(
+            Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
+                cartridge=cartridge, plate=plate, pointing=pointing,
+                fscanMJD=fscanMJD, fscanID=fscanID,
+                boresight_ra=boresight_ra, boresight_dec=boresight_dec,
+                gprobes=gprobes))
 
     def ping(self, cmd):
         """ Top-level 'ping' command handler. Query the actor for liveness/happiness. """
@@ -244,6 +255,8 @@ class GuiderCmd(object):
 
     def restart(self, cmd):
         """Restart the worker threads"""
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=None))
 
         actorState = myGlobals.actorState
 
@@ -280,7 +293,12 @@ class GuiderCmd(object):
 
         self.correctionImpl(cmd, "scale")
 
-    def status(self, cmd):
+    def showCartridge(self, cmd, full=True):
+        """Reveal the identity of the current cartridge"""
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd=cmd, full=False, finish=True))
+
+    def status(self, cmd, full=True):
         """Return guide status status"""
 
         if "geek" in cmd.cmd.keywords:

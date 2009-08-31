@@ -1,5 +1,5 @@
 import Queue, threading
-import math, numpy
+import math, numpy, re
 
 from guiderActor import *
 import guiderActor.myGlobals
@@ -11,6 +11,11 @@ import gcamera.pyGuide_test as pg
 reload(pg)
 import pyfits
 
+try:
+    import sm
+except ImportError:
+    print "Failed to import SM"
+    sm = None
 
 class GuiderState(object):
     """Save the state of the guider"""
@@ -26,6 +31,8 @@ class GuiderState(object):
         self.plate = -1
         self.pointing = "?"
         self.expTime = 0
+
+        self.fscanMJD = self.fscanID = -1
 
         self.deleteAllGprobes()
 
@@ -73,13 +80,13 @@ except:
 def main(actor, queues):
     """Main loop for master thread"""
 
-    #import pdb; pdb.set_trace()
     threadName = "master"
 
     actorState = guiderActor.myGlobals.actorState
     timeout = actorState.timeout
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
+    plot = False                        # use SM to plot things
 
     guideCmd = None                     # the Cmd that started the guide loop
     
@@ -95,13 +102,16 @@ def main(actor, queues):
             
             elif msg.type == Msg.START_GUIDING:
                 if not msg.start:
+                    if msg.start is None:
+                        queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
+                        continue
+                        
                     if not guideCmd:
                         msg.cmd.fail('text="The guider is already off"')
                         continue
 
                     msg.cmd.respond("guideState=stopping")
-                    quiet = True
-                    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=quiet, priority=Msg.MEDIUM))
+                    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
                     guideCmd.finish("guideState=off")
                     guideCmd = None
                     continue
@@ -117,6 +127,7 @@ def main(actor, queues):
 
                 force = msg.force
                 oneExposure = msg.oneExposure
+                plot = msg.plot
 
                 if guideCmd:
                     errMsg = "The guider appears to already be running"
@@ -158,13 +169,21 @@ def main(actor, queues):
                     darkfile = h.get('DARKFILE', None)
                     if not flatfile:
                         guideCmd.fail("text=%s" % qstr("No flat image available"))
+                        guideCmd = None
                         continue
                     if not darkfile:
                         guideCmd.fail("text=%s" % qstr("No dark image available"))
+                        guideCmd = None
                         continue
                     if flatcart != gState.cartridge:
-                        guideCmd.fail("text=%s" % qstr("No flat file for this cartridge"))
-                        continue 
+                        if False:
+                            guideCmd.fail("text=%s" % qstr("Guider flat is for cartridge %d but %d is loaded" % (
+                                flatcart, gState.cartridge)))
+                            guideCmd = None
+                            continue
+                        else:
+                            guideCmd.warn("text=%s" % qstr("Guider flat is for cartridge %d but %d is loaded" % (
+                                flatcart, gState.cartridge)))
                        
                     imageObj = pg.GuideTest(dataname=msg.filename, cartridgeId=gState.cartridge, 
                                             gprobes=gState.gprobes,
@@ -190,6 +209,7 @@ def main(actor, queues):
                     except Exception, e:
                         tback("GuideTest", e)
                         guideCmd.fail("text=%s" % qstr("Error in processing guide images: %s" % e))
+                        guideCmd = None
                         continue
 
                     spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
@@ -197,17 +217,16 @@ def main(actor, queues):
 
                     tccPos = actorState.models["tcc"].keyVarDict["tccPos"]
                     tccAlt = tccPos[1]
-                    guideCmd.warn('text="alt=%g"' % tccAlt);
 
-                    if spiderInstAng is None:
-                        txt = qstr("spiderInstAng is None; are we tracking?")
+                    if spiderInstAng is None or tccAlt is None:
+                        txt = qstr("spiderInstAng/tccAlt is None; are we tracking?")
 
                         if True:
                             guideCmd.warn("text=%s" % txt)
-                            print "RHL Setting spiderInstAng to 0.0"
-                            spiderInstAng = 0.0
+                            tccAlt = spiderInstAng = 0.0
                         else:
                             guideCmd.fail("text=%s" % txt)
+                            guideCmd = None
                             continue
                     #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
@@ -224,29 +243,28 @@ def main(actor, queues):
                     A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
                     b = numpy.matrix(numpy.zeros(3).reshape([3,1])); b3 = 0.0
 
+                    if plot:
+                        if sm:
+                            sm.device('x11')
+                        else:
+                            guideCmd.warn('text="Unable to plot as SM is not available"')
+
+                        size = len(gState.gprobes) + 1 # fibers are 1-indexed
+                        fiberid_np = numpy.zeros(size)
+                        azCenter_np = numpy.zeros(size)
+                        altCenter_np = numpy.zeros(size)
+                        daz_np = numpy.zeros(size)
+                        dalt_np = numpy.zeros(size)
+
                     for star in stars:
                         try:
                             fiber = gState.gprobes[star.fiberid]
                         except IndexError, e:
                             guideCmd.warn("Gprobe %d was not listed in plugmap info" % star.fiberid)
                             continue
-                            
-                        if not fiber.enabled:
-                            continue
-
-                        if False:
-                            print "gprobe %d star=(%g, %g) fiber=(%g, %g)" % (
-                                star.fiberid, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter)
-                            
-                        if True:
-                            theta = math.radians(fiber.info.rotation + fiber.info.phi - (spiderInstAng + 90))
-                        else:
-                            theta = math.radians(fiber.info.rotation + fiber.info.phi - (spiderInstAng + 90))
-                            print "%2d %6.1f %6.1f %6.1f %6.1f" % \
-                                  (star.fiberid, math.degrees(theta), fiber.info.rotation, fiber.info.phi,
-                                   (fiber.info.rotation - fiber.info.phi - 0*(180 if star.fiberid <= 8 else 0))%360
-                                   )
-                        
+                        #
+                        # dx, dy are the offsets on the ALTA guider image
+                        #
                         dx = guideCameraScale*(star.xs - (fiber.info.xCenter - fiber.info.xFerruleOffset))
                         dy = guideCameraScale*(star.ys - (fiber.info.yCenter - fiber.info.yFerruleOffset))
 
@@ -255,37 +273,63 @@ def main(actor, queues):
                                           qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber=(%g, %g)" % (
                                 star.fiberid, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter)))
                             continue
-                        
+                        #
+                        # theta is the angle to rotate (x, y) on the ALTA to (az, alt)
+                        #
+                        # phi is the orientation of the alignment hole measured clockwise from N
+                        # rotation is the anticlockwise rotation from x on the ALTA to the pin
+                        #
+                        if False:
+                            theta = fiber.info.rotation + fiber.info.phi - (spiderInstAng + 90)
+                        else:
+                            print "RHL + - + 0   %d %.0f %0.f " % (star.fiberid,
+                                                                 fiber.info.rotation, fiber.info.phi)
+                            theta = 0
+                            theta += fiber.info.rotation # allow for intrinsic fibre rotation
+                            theta -= fiber.info.phi      # allow for orientation of alignment hole
+                            theta += spiderInstAng       # allow for telescope rotation
+
+                        theta = math.radians(theta)
                         ct, st = math.cos(theta), math.sin(theta)
                         dAz =   dx*ct + dy*st # error in guide star position; n.b. still in mm here
                         dAlt = -dx*st + dy*ct
 
-                        ct, st = math.cos(math.radians(spiderInstAng*math)), math.sin(math.radians(spiderInstAng))
-                        azCenter =  fiber.info.xCenter*st - fiber.info.yCenter*ct # centre of hole
-                        altCenter = fiber.info.xCenter*ct + fiber.info.yCenter*st
+                        ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
+                        azCenter =   fiber.info.xFocal*ct + fiber.info.yFocal*st # centre of hole
+                        altCenter = -fiber.info.xFocal*st + fiber.info.yFocal*ct
+
+                        if plot:
+                            try:
+                                fiberid_np[star.fiberid] = star.fiberid
+                                azCenter_np[star.fiberid] = azCenter
+                                altCenter_np[star.fiberid] = altCenter
+                                daz_np[star.fiberid] = dAz
+                                dalt_np[star.fiberid] = dAlt
+                            except IndexError, e:
+                                #import pdb; pdb.set_trace()
+                                pass
 
                         if True:
-                            import re
-                            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
+                            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
                                 int(re.search(r"([0-9]+)\.fits$", msg.filename).group(1)),
                                 star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
+                                fiber.info.xFocal, fiber.info.yFocal,
                                 star.fwhm/2.35, fiber.info.focusOffset)
+                                                        
+                        if not fiber.enabled:
+                            continue
 
                         b[0] += dAz
                         b[1] += dAlt
-                        #b[2] += fiber.info.xCenter*dAlt - fiber.info.yCenter*dAz
                         b[2] += azCenter*dAlt - altCenter*dAz
 
                         A[0, 0] += 1
                         A[0, 1] += 0
-                        #A[0, 2] += -fiber.info.yCenter
                         A[0, 2] += -altCenter
 
                         A[1, 1] += 1
-                        #A[1, 2] += fiber.info.xCenter
                         A[1, 2] += azCenter
 
-                        #A[2, 2] += fiber.info.xCenter*fiber.info.xCenter + fiber.info.yCenter*fiber.info.yCenter
                         A[2, 2] += azCenter*azCenter + altCenter*altCenter
                         #
                         # Now scale.  We don't actually solve for scale and axis updates
@@ -294,41 +338,50 @@ def main(actor, queues):
                         #
                         b3 += azCenter*dAz + altCenter*dAlt
                         
-                    if A[0, 0] == 0:
+                    nStar = A[0, 0]
+                    if nStar == 0:
                         guideCmd.warn('text="No stars are available for guiding"')
+
+                        imageObj.writeFITS(guideCmd)
+
+                        if oneExposure:
+                            queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+                            guideCmd = None
+                            continue
 
                         if guidingIsOK(msg.cmd, actorState, force=force):
                             queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
                                                     expTime=gState.expTime))
-
-                        continue
+                            continue
 
                     A[1, 0] = A[0, 1]
                     A[2, 0] = A[0, 2]
                     A[2, 1] = A[1, 2]
                     try:
-                        x = numpy.linalg.solve(A, b)
+                        if nStar == 1:
+                            guideCmd.warn('text="Only one star is usable; guiding on az/alt"')
 
-                        #print guideCameraScale, x, A, b
-                        print "x = ", x[0,0], x[1, 0], x[2, 0]
+                            x = b
+                            x[2, 0] = 0 # no rotation
+                        else:
+                            x = numpy.linalg.solve(A, b)
+
                         # convert from mm to degrees
-                        dAz = -x[0, 0]/gState.plugPlateScale/math.cos(math.radians(tccAlt))
+                        print "RHL + +"
+                        dAz = x[0, 0]/gState.plugPlateScale/math.cos(math.radians(tccAlt))
                         dAlt = x[1, 0]/gState.plugPlateScale
                         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
                         offsetAz =  -gState.pid["azAlt"].update(dAz)                    
                         offsetAlt = -gState.pid["azAlt"].update(dAlt)
-                        offsetRot = -gState.pid["rot"].update(dRot)
+                        offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
 
-                        if False:
-                            guideCmd.warn('text="Setting rot update to 0"')
-                            offsetRot = 0
-                        if False:
-                            guideCmd.warn('text="Setting az update to 0"')
-                            offsetAz = 0
+                        dAzArcsec = dAz*math.cos(math.radians(tccAlt)) # in degrees of arc
+                        offsetAzArcsec = offsetAz*math.cos(math.radians(tccAlt))
 
-                        guideCmd.respond("axisError=%g, %g, %g" % (3600*dAz, 3600*dAlt, 3600*dRot))
-                        guideCmd.respond("axisChange=%g, %g, %g, %s" % (3600*offsetAz, 3600*offsetAlt, 3600*offsetRot,
+                        guideCmd.respond("axisError=%g, %g, %g" % (3600*dAzArcsec, 3600*dAlt, 3600*dRot))
+                        guideCmd.respond("axisChange=%g, %g, %g, %s" % (3600*offsetAzArcsec,
+                                                                        3600*offsetAlt, 3600*offsetRot,
                                                                         "enabled" if gState.guideAxes else "disabled"))
 
                         if gState.guideAxes:
@@ -338,8 +391,59 @@ def main(actor, queues):
 
                             if cmdVar.didFail:
                                 guideCmd.warn('text="Failed to issue offset"')
+
+                        if plot and sm:
+                            sm.erase()
+                            sm.limits([-400, 400], [-400, 400])
+                            sm.box()
+                            sm.xlabel("Az")
+                            sm.ptype([63])
+                            sm.ylabel("Alt")
+                            sm.frelocate(0.85, 0.95)
+                            sm.putlabel(5, r"\1Frame " + re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
+
+                            vscale = 1000 # how much to multiply position error
+                            sm.relocate(-350, 350)
+                            asec = gState.plugPlateScale/3600.0
+                            sm.draw(-350 + vscale*gState.plugPlateScale/3600.0, 350)
+                            sm.label(r"  \raise-200{\1{1 arcsec}}")
+
+                            for i in range(len(fiberid_np)):
+                                if fiberid_np[i] == 0:
+                                    continue
+
+                                sm.relocate(azCenter_np[i], altCenter_np[i])
+                                sm.putlabel(6, r" %d" % fiberid_np[i])
+
+                                sm.relocate(azCenter_np[i], altCenter_np[i])
+
+                                sm.dot()
+                                
+                                if not gState.gprobes[fiberid_np[i]].enabled:
+                                    sm.ltype(1)
+                                    sm.ctype(sm.CYAN)
+                                    
+                                sm.draw(azCenter_np[i] + vscale*daz_np[i],
+                                        altCenter_np[i] + vscale*dalt_np[i])
+
+                                sm.ltype()
+                                sm.ctype()
+
+                            sm.ptype()
+                            
                     except numpy.linalg.LinAlgError:
                         guideCmd.warn("text=%s" % qstr("Unable to solve for axis offsets"))
+
+                    if nStar <= 1:      # don't bother with focus/scale!
+                        if oneExposure:
+                            queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+                            guideCmd = None
+                            continue
+
+                        if guidingIsOK(msg.cmd, actorState, force=force):
+                            queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
+                                                    expTime=gState.expTime))
+                        continue
                     #
                     # Scale
                     #
@@ -366,9 +470,11 @@ def main(actor, queues):
                             fiber = gState.gprobes[star.fiberid]
                         except IndexError, e:
                             guideCmd.warn("Gprobe %d was not listed in plugmap info" % star.fiberid)
+                            continue
                             
                         if not fiber.enabled:
                             continue
+
                         try:
                             rms = star.rms
                         except AttributeError:
@@ -435,6 +541,7 @@ def main(actor, queues):
                 #
                 if oneExposure:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+                    guideCmd = None
                 else:
                     queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
 
@@ -444,6 +551,7 @@ def main(actor, queues):
                 gState.deleteAllGprobes()
 
                 gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
+                gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
                 gState.boresight_ra, gState.boresight_dec = msg.boresight_ra, msg.boresight_dec
                 #
                 # Set the gState.gprobes array (actually a dictionary as we're not sure which fibre IDs are present)
@@ -451,7 +559,7 @@ def main(actor, queues):
                 gState.gprobes = {}
                 for id, info in msg.gprobes.items():
                     if info.exists:
-                        enabled = info.enabled if info.fiber_type == "GUIDE" else False
+                        enabled = False if info.fiber_type == "TRITIUM" else info.enabled
                         gState.setGprobeState(id, enable=enabled, info=info, create=True)
                 #
                 # Report the cartridge status
@@ -495,9 +603,18 @@ def main(actor, queues):
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
             elif msg.type == Msg.STATUS:
-                msg.cmd.inform('text="The guider is %s"' % ("running" if guideCmd else "off"))
+                msg.cmd.respond("cartridgeLoaded=%d, %d, %s, %d, %d" % (
+                    gState.cartridge, gState.plate, gState.pointing, gState.fscanMJD, gState.fscanID))
 
-                msg.cmd.respond("cartridgeLoaded=%d, %d, %s" % (gState.cartridge, gState.plate, gState.pointing))
+                try:
+                    if not msg.full:
+                        if msg.finish:
+                            msg.cmd.finish()
+                        continue
+                except AttributeError:
+                    pass
+
+                msg.cmd.inform('text="The guider is %s"' % ("running" if guideCmd else "off"))
 
                 fiberState = []
                 for f in gState.gprobes.values():
@@ -522,10 +639,14 @@ def main(actor, queues):
         except Queue.Empty:
             actor.bcast.diag('text="%s alive"' % threadName)
         except Exception, e:
-            #import pdb; pdb.set_trace()
             errMsg = "Unexpected exception %s in guider %s thread" % (e, threadName)
             actor.bcast.warn('text="%s"' % errMsg)
             tback(errMsg, e)
+
+            print "\n".join(tback(errMsg, e)[0])
+            #import pdb; pdb.set_trace()
+
+            guideCmd = False
 
             try:
                 msg.replyQueue.put(Msg.EXIT, cmd=msg.cmd, success=False)
