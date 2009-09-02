@@ -228,6 +228,8 @@ def main(actor, queues):
                             guideCmd.fail("text=%s" % txt)
                             guideCmd = None
                             continue
+
+                    spiderInstAng += 90
                     #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
                     # in mm on the focal plane, only converting to angles to command the TCC
@@ -279,9 +281,8 @@ def main(actor, queues):
                         # phi is the orientation of the alignment hole measured clockwise from N
                         # rotation is the anticlockwise rotation from x on the ALTA to the pin
                         #
-                        spiderInstAng=spiderInstAng + 0
                         if False:
-                            theta = fiber.info.rotation + fiber.info.phi - (spiderInstAng)
+                            theta = fiber.info.rotation - fiber.info.phi + spiderInstAng
                         else:
                             print "RHL + - + 0   %d %.0f %0.f " % (star.fiberid,
                                                                  fiber.info.rotation, fiber.info.phi)
@@ -661,8 +662,11 @@ def main(actor, queues):
             actor.bcast.warn('text="%s"' % errMsg)
             tback(errMsg, e)
 
-            print "\n".join(tback(errMsg, e)[0])  
-            #import pdb; pdb.set_trace()
+            import pdb; pdb.set_trace()
+            try:
+                print "\n".join(tback(errMsg, e)[0]) # old versions of tback return None
+            except:
+                pass
 
             guideCmd = False
 

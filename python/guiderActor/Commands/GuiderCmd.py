@@ -4,7 +4,7 @@
 
 import pdb
 import logging
-import re, sys
+import os, re, sys
 import threading
 
 import opscore.protocols.keys as keys
@@ -56,12 +56,13 @@ class GuiderCmd(object):
                                         keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
                                         keys.Key("geek", help="Show things that only some of us love"),
                                         keys.Key("plot", help="Plot things"),
+                                        keys.Key("display", types.String(), help="DISPLAY variable to use"),
                                         )
         #
         # Declare commands
         #
         self.vocab = [
-            ("on", "[<time>] [force] [oneExposure] [plot]", self.guideOn),
+            ("on", "[<time>] [force] [oneExposure] [plot] [<display>]", self.guideOn),
             ("off", "", self.guideOff),
             ("setExpTime", "<time>", self.setExpTime),
             ("setPID", "(azAlt|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
@@ -135,7 +136,12 @@ class GuiderCmd(object):
         force = "force" in cmd.cmd.keywords
         oneExposure = "oneExposure" in cmd.cmd.keywords
         plot = "plot" in cmd.cmd.keywords
+        display = cmd.cmd.keywords["display"].values[0] if "display" in cmd.cmd.keywords else None
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
+
+        if display:
+            os.environ["DISPLAY"] = display
+
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
                                                                 start=True, expTime=expTime,
                                                                 force=force, oneExposure=oneExposure,
