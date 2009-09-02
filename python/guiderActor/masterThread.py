@@ -279,8 +279,9 @@ def main(actor, queues):
                         # phi is the orientation of the alignment hole measured clockwise from N
                         # rotation is the anticlockwise rotation from x on the ALTA to the pin
                         #
+                        spiderInstAng=spiderInstAng + 0
                         if False:
-                            theta = fiber.info.rotation + fiber.info.phi - (spiderInstAng + 90)
+                            theta = fiber.info.rotation + fiber.info.phi - (spiderInstAng)
                         else:
                             print "RHL + - + 0   %d %.0f %0.f " % (star.fiberid,
                                                                  fiber.info.rotation, fiber.info.phi)
@@ -291,9 +292,14 @@ def main(actor, queues):
 
                         theta = math.radians(theta)
                         ct, st = math.cos(theta), math.sin(theta)
-                        dAz =   dx*ct + dy*st # error in guide star position; n.b. still in mm here
-                        dAlt = -dx*st + dy*ct
-
+                        print "theta=", theta, "st=", st, "ct=", ct
+                        dAz   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
+                        dAlt  = -dx*st + dy*ct
+                        dAz   =  dAz           # pxh allow sign flips and transpose of dAz & Alt
+                        dAlt  =  dAlt          # for guider testing
+                        print "PXH spiderInstAngle %6.1f", spiderInstAng
+                        # if simulator set spiderInstAng = ???
+                                                # pxh spiderInstAng phase 0, 90, 180, -90? 
                         ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
                         azCenter =   fiber.info.xFocal*ct + fiber.info.yFocal*st # centre of hole
                         altCenter = -fiber.info.xFocal*st + fiber.info.yFocal*ct
@@ -315,7 +321,12 @@ def main(actor, queues):
                                 star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
                                 fiber.info.xFocal, fiber.info.yFocal,
                                 star.fwhm/2.35, fiber.info.focusOffset)
-                                                        
+
+#                            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
+#                                star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
+#                                fiber.info.xFocal, fiber.info.yFocal,
+#                                star.fwhm/2.35, fiber.info.focusOffset)
+
                         if not fiber.enabled:
                             continue
 
@@ -376,6 +387,12 @@ def main(actor, queues):
                         offsetAlt = -gState.pid["azAlt"].update(dAlt)
                         offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
 
+                        #PXH corrections to make work, when can't add +-90 to spiderInstAngle 
+                        tempAz    = offsetAz 
+                        offsetAz  = -offsetAlt
+                        offsetAlt = -tempAz
+                        dRot      = -dRot
+
                         dAzArcsec = dAz*math.cos(math.radians(tccAlt)) # in degrees of arc
                         offsetAzArcsec = offsetAz*math.cos(math.radians(tccAlt))
 
@@ -401,6 +418,7 @@ def main(actor, queues):
                             sm.ylabel("Alt")
                             sm.frelocate(0.85, 0.95)
                             sm.putlabel(5, r"\1Frame " + re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
+#                            sm.toplabel("normal -90")
 
                             vscale = 1000 # how much to multiply position error
                             sm.relocate(-350, 350)
@@ -643,7 +661,7 @@ def main(actor, queues):
             actor.bcast.warn('text="%s"' % errMsg)
             tback(errMsg, e)
 
-            print "\n".join(tback(errMsg, e)[0])
+            print "\n".join(tback(errMsg, e)[0])  
             #import pdb; pdb.set_trace()
 
             guideCmd = False
