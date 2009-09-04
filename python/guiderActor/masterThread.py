@@ -229,7 +229,7 @@ def main(actor, queues):
                             guideCmd = None
                             continue
 
-                    spiderInstAng += 90
+                    spiderInstAng += -90
                     #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
                     # in mm on the focal plane, only converting to angles to command the TCC
@@ -296,11 +296,9 @@ def main(actor, queues):
                         print "theta=", theta, "st=", st, "ct=", ct
                         dAz   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
                         dAlt  = -dx*st + dy*ct
-                        dAz   =  dAz           # pxh allow sign flips and transpose of dAz & Alt
-                        dAlt  =  dAlt          # for guider testing
-                        print "PXH spiderInstAngle %6.1f", spiderInstAng
+
                         # if simulator set spiderInstAng = ???
-                                                # pxh spiderInstAng phase 0, 90, 180, -90? 
+
                         ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
                         azCenter =   fiber.info.xFocal*ct + fiber.info.yFocal*st # centre of hole
                         altCenter = -fiber.info.xFocal*st + fiber.info.yFocal*ct
@@ -323,10 +321,6 @@ def main(actor, queues):
                                 fiber.info.xFocal, fiber.info.yFocal,
                                 star.fwhm/2.35, fiber.info.focusOffset)
 
-#                            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
-#                                star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
-#                                fiber.info.xFocal, fiber.info.yFocal,
-#                                star.fwhm/2.35, fiber.info.focusOffset)
 
                         if not fiber.enabled:
                             continue
@@ -387,12 +381,6 @@ def main(actor, queues):
                         offsetAz =  -gState.pid["azAlt"].update(dAz)                    
                         offsetAlt = -gState.pid["azAlt"].update(dAlt)
                         offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
-
-                        #PXH corrections to make work, when can't add +-90 to spiderInstAngle 
-                        tempAz    = offsetAz 
-                        offsetAz  = -offsetAlt
-                        offsetAlt = -tempAz
-                        dRot      = -dRot
 
                         dAzArcsec = dAz*math.cos(math.radians(tccAlt)) # in degrees of arc
                         offsetAzArcsec = offsetAz*math.cos(math.radians(tccAlt))
