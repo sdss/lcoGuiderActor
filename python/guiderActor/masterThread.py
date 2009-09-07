@@ -229,7 +229,9 @@ def main(actor, queues):
                             guideCmd = None
                             continue
 
-                    spiderInstAng += -90
+#                    spiderInstAng += -90  #55077 worked
+                    spiderInstAng += 90    #ph 55081 worked
+      
                     #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
                     # in mm on the focal plane, only converting to angles to command the TCC
@@ -296,7 +298,7 @@ def main(actor, queues):
                         print "theta=", theta, "st=", st, "ct=", ct
                         dAz   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
                         dAlt  = -dx*st + dy*ct
-
+                        dAz = -dAz  #ph 55081 kluge
                         # if simulator set spiderInstAng = ???
 
                         ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
@@ -381,6 +383,7 @@ def main(actor, queues):
                         offsetAz =  -gState.pid["azAlt"].update(dAz)                    
                         offsetAlt = -gState.pid["azAlt"].update(dAlt)
                         offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
+                        offsetRot = -offsetRot    #ph kluge 55081q
 
                         dAzArcsec = dAz*math.cos(math.radians(tccAlt)) # in degrees of arc
                         offsetAzArcsec = offsetAz*math.cos(math.radians(tccAlt))
