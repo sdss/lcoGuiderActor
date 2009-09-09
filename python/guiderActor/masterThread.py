@@ -160,6 +160,10 @@ def main(actor, queues):
                 if True:
                     if not guideCmd:    # exposure already finished
                         continue
+
+                    if not msg.success:
+                        queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
+                        continue
                     
                     guideCmd.respond("processing=%s" % msg.filename)
 
@@ -266,6 +270,12 @@ def main(actor, queues):
                         except IndexError, e:
                             guideCmd.warn("Gprobe %d was not listed in plugmap info" % star.fiberid)
                             continue
+
+                        try:
+                            fiber.info.ra
+                        except AttributeError, e:
+                            guideCmd.warn("Gprobe %d was not listed in plPlugMapM file" % star.fiberid)
+                            continue
                         #
                         # dx, dy are the offsets on the ALTA guider image
                         #
@@ -287,7 +297,8 @@ def main(actor, queues):
                             theta = fiber.info.rotation - fiber.info.phi + spiderInstAng
                         else:
                             print "RHL + - + 0   %d %.0f %0.f " % (star.fiberid,
-                                                                 fiber.info.rotation, fiber.info.phi)
+                                                                   fiber.info.rotation, fiber.info.phi)
+
                             theta = 0
                             theta += fiber.info.rotation # allow for intrinsic fibre rotation
                             theta -= fiber.info.phi      # allow for orientation of alignment hole
@@ -402,7 +413,7 @@ def main(actor, queues):
                                 guideCmd.warn('text="Failed to issue offset"')
 
                         if plot and sm:
-                            sm.erase()
+                            sm.erase(False)
                             sm.limits([-400, 400], [-400, 400])
                             sm.box()
                             sm.xlabel("Az")
@@ -653,7 +664,7 @@ def main(actor, queues):
             actor.bcast.warn('text="%s"' % errMsg)
             tback(errMsg, e)
 
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             try:
                 print "\n".join(tback(errMsg, e)[0]) # old versions of tback return None
             except:
