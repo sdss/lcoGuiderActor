@@ -23,7 +23,17 @@ on the hub25m
 EOF
 }
 
+if [ -z "$XPA_DIR" ]; then
+    setup xpa
+fi
+if [ -z "$XPA_PORT" ]; then
+    template="ds9"
+else
+    template=localhost:$(echo $XPA_PORT | awk '{print $2}')
+fi
+
 nframe=4
+
 
 while [ ! -z $1 ]; do
     case $1 in
@@ -33,6 +43,9 @@ while [ ! -z $1 ]; do
 	-m|--mjd)
 	    if [ -z $2 ]; then
 		echo "You must provide a value for $1" >&2; exit 1
+	    fi
+	    if [ -z $seqno ]; then
+		seqno=-1
 	    fi
 	    mjd=$2; shift;;
 	-n|--nframe)
@@ -75,7 +88,12 @@ i=0
 default0="+"				# go forwards
 while true; do
     if [ ! -z $seqno ]; then
-	file=$(printf $dataDir/gimg-%04d.fits $seqno)
+	if [ X$seqno = X-1 ]; then
+	    file=$(ls -t $dataDir/gimg-*.fits 2> /dev/null | head -1);
+	    seqno=$(echo $file | perl -ne 'm/gimg-0*(\d+)\.fits/; print $1')
+	else
+	    file=$(printf $dataDir/gimg-%04d.fits $seqno)
+	fi
 	seqno=$[$seqno + 1]
     else
 	file=$(ls -t $dataDir/gimg-*.fits 2> /dev/null | head -1);
@@ -86,8 +104,8 @@ while true; do
 	i=$(perl -e "print $i%$nframe")
 	
 	echo $i $file
-	~sdss3/bin/xpaset -p ds9 frame $i
-	cat $file | ~sdss3/bin/xpaset ds9 fits
+	xpaset -p $template frame $i
+	cat $file | xpaset $template fits
         ofile=$file
     fi
     
