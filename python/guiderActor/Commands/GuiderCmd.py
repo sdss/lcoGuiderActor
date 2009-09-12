@@ -194,7 +194,7 @@ class GuiderCmd(object):
         gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
         gprobesInUseKey = actorState.models["platedb"].keyVarDict["gprobesInUse"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-                                            cmdStr="getGprobes cartridge=%d" % (cartridge),
+                                            cmdStr="getGprobes cartridge=%d pointing=%s" % (cartridge, pointing),
                                             keyVars=[gprobeKey, gprobesInUseKey])
         if cmdVar.didFail:
             cmd.fail("text=\"Failed to lookup gprobes for cartridge %d\"" % (cartridge))
@@ -232,6 +232,9 @@ class GuiderCmd(object):
         for el in cmdVar.getKeyVarData(guideInfoKey):
             i = 0
             id = int(el[0]); i += 1
+
+            if id < 0:                  # invalid; typically -9999
+                continue
             
             try:
                 gprobes[id].ra = float(el[i]); i += 1
@@ -242,7 +245,7 @@ class GuiderCmd(object):
                 gprobes[id].throughput = float(el[i]); i += 1
 
             except KeyError:
-                cmd.warn("text=\"Unknown fiberId %d from plugmap file (%s)\"" % (id, ", ".join(el[1:])))
+                cmd.warn("text=\"Unknown fiberId %d from plugmap file (%s)\"" % (id, ", ".join([str(e) for e in el[1:]])))
                 continue
         #
         # Send that information off to the master thread
