@@ -234,8 +234,11 @@ def main(actor, queues):
                             continue
 
 #                    spiderInstAng += -90  #55077 worked
-                    spiderInstAng += 90    #ph 55081 worked
-      
+#                    spiderInstAng += 90    #ph 55081 worked
+#                    spiderInstAng +=  90    #ph 55088 wrong
+#                    spiderInstAng +=  0    #ph 55088
+                    spiderInstAng = -spiderInstAng - 90 
+
                     #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
                     # in mm on the focal plane, only converting to angles to command the TCC
@@ -296,7 +299,7 @@ def main(actor, queues):
                         if False:
                             theta = fiber.info.rotation - fiber.info.phi + spiderInstAng
                         else:
-                            print "RHL + - + 0   %d %.0f %0.f " % (star.fiberid,
+                            print "RHL + - + -Sp   %d %.0f %0.f " % (star.fiberid,
                                                                    fiber.info.rotation, fiber.info.phi)
 
                             theta = 0
@@ -309,7 +312,9 @@ def main(actor, queues):
                         print "theta=", theta, "st=", st, "ct=", ct
                         dAz   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
                         dAlt  = -dx*st + dy*ct
-                        dAz = -dAz  #ph 55081 kluge
+                        dAz    = dAz  
+                        dAlt   = -dAlt
+
                         # if simulator set spiderInstAng = ???
 
                         ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
@@ -386,7 +391,7 @@ def main(actor, queues):
                             x = numpy.linalg.solve(A, b)
 
                         # convert from mm to degrees
-                        print "RHL + +"
+                        print "RHL -90 + + +"
                         dAz = x[0, 0]/gState.plugPlateScale/math.cos(math.radians(tccAlt))
                         dAlt = x[1, 0]/gState.plugPlateScale
                         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
@@ -394,7 +399,8 @@ def main(actor, queues):
                         offsetAz =  -gState.pid["azAlt"].update(dAz)                    
                         offsetAlt = -gState.pid["azAlt"].update(dAlt)
                         offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
-                        offsetRot = -offsetRot    #ph kluge 55081q
+#                        offsetRot = -offsetRot    #ph kluge 55081
+                        offsetRot = offsetRot
 
                         dAzArcsec = dAz*math.cos(math.radians(tccAlt)) # in degrees of arc
                         offsetAzArcsec = offsetAz*math.cos(math.radians(tccAlt))
@@ -421,7 +427,7 @@ def main(actor, queues):
                             sm.ylabel("Alt")
                             sm.frelocate(0.85, 0.95)
                             sm.putlabel(5, r"\1Frame " + re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
-#                            sm.toplabel("normal -90")
+#                            sm.toplabel("-SpIA-90 ")
 
                             vscale = 1000 # how much to multiply position error
                             sm.relocate(-350, 350)
