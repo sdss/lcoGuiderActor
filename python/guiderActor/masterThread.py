@@ -225,7 +225,7 @@ def main(actor, queues):
                     if spiderInstAng is None or tccAlt is None:
                         txt = qstr("spiderInstAng/tccAlt is None; are we tracking?")
 
-                        if True:
+                        if force:
                             guideCmd.warn("text=%s" % txt)
                             tccAlt = spiderInstAng = 0.0
                         else:
