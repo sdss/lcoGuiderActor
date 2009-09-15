@@ -94,7 +94,11 @@ while true; do
 	else
 	    file=$(printf $dataDir/gimg-%04d.fits $seqno)
 	fi
-	seqno=$[$seqno + 1]
+	if [ $default0 = "-" ]; then
+	    seqno=$[$seqno - 1]
+	else
+	    seqno=$[$seqno + 1]
+	fi
     else
 	file=$(ls -t $dataDir/gimg-*.fits 2> /dev/null | head -1);
     fi
@@ -121,15 +125,27 @@ while true; do
 	    q|Q)
 		break;;
 	    [0-9]*)
-		seqno=$arg0;;
+		seqno=$arg0
+		;;
 	    -)
+		if [ $default0 != "-" ]; then
+		    seqno=$[$seqno - 2]
+		fi
 		default0="-"
-		seqno=$[$seqno-2];;
+		;;
 	    +)
+		if [ $default0 != "+" ]; then
+		    seqno=$[$seqno + 2]
+		fi
 		default0="+";;
 	    \#)
 		echo "Please enter a seqno, not #"
-		seqno=$[$seqno-1];;
+		if [ $default0 = "-" ]; then
+		    seqno=$[$seqno + 1]
+		else
+		    seqno=$[$seqno - 1]
+		fi
+		;;
 	    *)
 		;;
 	esac
