@@ -84,10 +84,12 @@ def main(actor, queues):
 
     actorState = guiderActor.myGlobals.actorState
     timeout = actorState.timeout
+    guide_azAlt = False                 # guide in az/alt, not ra/dec
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
     plot = False                        # use SM to plot things
-
+    fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
+    
     guideCmd = None                     # the Cmd that started the guide loop
     
     while True:
@@ -125,10 +127,12 @@ def main(actor, queues):
                 except AttributeError:
                     pass
 
+                guide_azAlt = msg.azAlt
                 force = msg.force
                 oneExposure = msg.oneExposure
                 plot = msg.plot
-
+                fakeSpiderInstAng = msg.spiderInstAng
+                
                 if guideCmd:
                     errMsg = "The guider appears to already be running"
                     if force:
@@ -216,29 +220,37 @@ def main(actor, queues):
                         guideCmd = None
                         continue
 
-                    spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
-                    spiderInstAng = spiderInstAngKey[0].getPos()
+                    if guide_azAlt:
+                        spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
+                        spiderInstAng = spiderInstAngKey[0].getPos()
 
-                    tccPos = actorState.models["tcc"].keyVarDict["tccPos"]
-                    tccAlt = tccPos[1]
+                        tccPos = actorState.models["tcc"].keyVarDict["tccPos"]
+                        tccAlt = tccPos[1]
 
-                    if spiderInstAng is None or tccAlt is None:
-                        txt = qstr("spiderInstAng/tccAlt is None; are we tracking?")
+                        if spiderInstAng is None or tccAlt is None:
+                            txt = qstr("spiderInstAng/tccAlt is None; are we tracking?")
 
-                        if force:
-                            guideCmd.warn("text=%s" % txt)
-                            tccAlt = spiderInstAng = 0.0
-                        else:
-                            guideCmd.fail("text=%s" % txt)
-                            guideCmd = None
-                            continue
+                            if force:
+                                guideCmd.warn("text=%s" % txt)
+                                tccAlt = 0.0
 
-#                    spiderInstAng += -90  #55077 worked
-#                    spiderInstAng += 90    #ph 55081 worked
-#                    spiderInstAng +=  90    #ph 55088 wrong
-#                    spiderInstAng +=  0    #ph 55088
-                    spiderInstAng = -spiderInstAng - 90 
+                                if fakeSpiderInstAng is None:
+                                    guideCmd.fail('text=%s' %
+                                                  qstr('You must specify a spiderInstAng to "guide" in az/alt when the telescope is not tracking"'))
+                                    guideCmd = None
+                                    continue
+                                    
+                                spiderInstAng = fakeSpiderInstAng
+                            else:
+                                guideCmd.fail("text=%s" % txt)
+                                guideCmd = None
+                                continue
 
+                        #spiderInstAng += -90  #55077 worked
+                        #spiderInstAng += 90    #ph 55081 worked
+                        #spiderInstAng +=  90    #ph 55088 wrong
+                        #spiderInstAng +=  0    #ph 55088
+                        spiderInstAng = -spiderInstAng - 90 
                     #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
                     # in mm on the focal plane, only converting to angles to command the TCC
@@ -297,15 +309,16 @@ def main(actor, queues):
                         # rotation is the anticlockwise rotation from x on the ALTA to the pin
                         #
                         if False:
-                            theta = fiber.info.rotation - fiber.info.phi + spiderInstAng
+                            theta = fiber.info.rotation - fiber.info.phi + (spiderInstAng if guide_azAlt else 0.0)
                         else:
                             print "RHL + - + -Sp   %d %.0f %0.f " % (star.fiberid,
-                                                                   fiber.info.rotation, fiber.info.phi)
+                                                                 fiber.info.rotation, fiber.info.phi)
 
                             theta = 0
                             theta += fiber.info.rotation # allow for intrinsic fibre rotation
                             theta -= fiber.info.phi      # allow for orientation of alignment hole
-                            theta += spiderInstAng       # allow for telescope rotation
+                            if guide_azAlt:
+                                theta += spiderInstAng # allow for telescope rotation
 
                         theta = math.radians(theta)
                         ct, st = math.cos(theta), math.sin(theta)
@@ -315,11 +328,14 @@ def main(actor, queues):
                         dAz    = dAz  
                         dAlt   = -dAlt
 
-                        # if simulator set spiderInstAng = ???
 
-                        ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
-                        azCenter =   fiber.info.xFocal*ct + fiber.info.yFocal*st # centre of hole
-                        altCenter = -fiber.info.xFocal*st + fiber.info.yFocal*ct
+                        if guide_azAlt:
+                            ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
+                            azCenter =   fiber.info.xFocal*ct + fiber.info.yFocal*st # centre of hole
+                            altCenter = -fiber.info.xFocal*st + fiber.info.yFocal*ct
+                        else:
+                            azCenter =  fiber.info.xFocal
+                            altCenter = fiber.info.yFocal
 
                         if plot:
                             try:
@@ -392,7 +408,9 @@ def main(actor, queues):
 
                         # convert from mm to degrees
                         print "RHL -90 + + +"
-                        dAz = x[0, 0]/gState.plugPlateScale/math.cos(math.radians(tccAlt))
+                        dAz = x[0, 0]/gState.plugPlateScale
+                        if guide_azAlt:
+                            dAz /= math.cos(math.radians(tccAlt))
                         dAlt = x[1, 0]/gState.plugPlateScale
                         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
@@ -402,8 +420,12 @@ def main(actor, queues):
 #                        offsetRot = -offsetRot    #ph kluge 55081
                         offsetRot = offsetRot
 
-                        dAzArcsec = dAz*math.cos(math.radians(tccAlt)) # in degrees of arc
-                        offsetAzArcsec = offsetAz*math.cos(math.radians(tccAlt))
+                        dAzArcsec = dAz
+                        offsetAzArcsec = offsetAz
+
+                        if guide_azAlt:
+                            dAzArcsec *= math.cos(math.radians(tccAlt)) # in degrees of arc
+                            offsetAzArcsec *= math.cos(math.radians(tccAlt))
 
                         guideCmd.respond("axisError=%g, %g, %g" % (3600*dAzArcsec, 3600*dAlt, 3600*dRot))
                         guideCmd.respond("axisChange=%g, %g, %g, %s" % (3600*offsetAzArcsec,
@@ -411,20 +433,40 @@ def main(actor, queues):
                                                                         "enabled" if gState.guideAxes else "disabled"))
 
                         if gState.guideAxes:
-                            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                                     cmdStr="offset guide %f, %f, %f" % \
-                                                     (-offsetAz, -offsetAlt, -offsetRot))
+                            if guide_azAlt:
+                                guideCmd.inform('text="Guiding in az/alt"')
+                                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                                         cmdStr="offset guide %f, %f, %f" % \
+                                                         (-offsetAz, -offsetAlt, -offsetRot))
+                                if cmdVar.didFail:
+                                    guideCmd.warn('text="Failed to issue offset"')
+                            else:
+                                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                                         cmdStr="offset arc %f, %f" % \
+                                                         (-offsetAz, -offsetAlt))
 
-                            if cmdVar.didFail:
-                                guideCmd.warn('text="Failed to issue offset"')
+                                if cmdVar.didFail:
+                                    guideCmd.warn('text="Failed to issue offset"')
+
+                                if offsetRot:
+                                    cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                                             cmdStr="offset guide %f, %f, %g" % \
+                                                             (0.0, 0.0, -offsetRot))
+
+                                if cmdVar.didFail:
+                                    guideCmd.warn('text="Failed to issue offset in rotator"')
 
                         if plot and sm:
                             sm.erase(False)
                             sm.limits([-400, 400], [-400, 400])
                             sm.box()
-                            sm.xlabel("Az")
+                            if guide_azAlt:
+                                sm.xlabel(r"\2\delta Az")
+                                sm.ylabel(r"\2\delta Alt")
+                            else:
+                                sm.xlabel(r"\2\delta Ra")
+                                sm.ylabel(r"\2\delta Dec")
                             sm.ptype([63])
-                            sm.ylabel("Alt")
                             sm.frelocate(0.85, 0.95)
                             sm.putlabel(5, r"\1Frame " + re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
 #                            sm.toplabel("-SpIA-90 ")
