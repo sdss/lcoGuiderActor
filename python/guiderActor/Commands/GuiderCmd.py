@@ -54,15 +54,17 @@ class GuiderCmd(object):
                                         keys.Key("Ti", types.Float(), help="Integral time"),
                                         keys.Key("Td", types.Float(), help="Derivative time"),
                                         keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
+                                        keys.Key("azAlt", help="Guide in az/alt, not ra/dec"),
                                         keys.Key("geek", help="Show things that only some of us love"),
                                         keys.Key("plot", help="Plot things"),
                                         keys.Key("display", types.String(), help="DISPLAY variable to use"),
+                                        keys.Key("spiderInstAng", types.Float(), help="Value to use for spiderInstAng"),
                                         )
         #
         # Declare commands
         #
         self.vocab = [
-            ("on", "[<time>] [force] [oneExposure] [plot] [<display>]", self.guideOn),
+            ("on", "[<time>] [force] [oneExposure] [azAlt] [plot] [<display>] [<spiderInstAng>]", self.guideOn),
             ("off", "", self.guideOff),
             ("setExpTime", "<time>", self.setExpTime),
             ("setPID", "(azAlt|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
@@ -133,17 +135,24 @@ class GuiderCmd(object):
     def guideOn(self, cmd):
         """Turn guiding on"""
 
+        azAlt = "azAlt" in cmd.cmd.keywords
         force = "force" in cmd.cmd.keywords
         oneExposure = "oneExposure" in cmd.cmd.keywords
         plot = "plot" in cmd.cmd.keywords
         display = cmd.cmd.keywords["display"].values[0] if "display" in cmd.cmd.keywords else None
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
+        spiderInstAng = cmd.cmd.keywords["spiderInstAng"].values[0] if "spiderInstAng" in cmd.cmd.keywords else None
+
+        if spiderInstAng and not force:
+            cmd.fail('text="You may only specify a spiderInstAng with force, for debugging during the day"')
+            return
 
         if display:
             os.environ["DISPLAY"] = display
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
                                                                 start=True, expTime=expTime,
+                                                                azAlt=azAlt, spiderInstAng=spiderInstAng,
                                                                 force=force, oneExposure=oneExposure,
                                                                 plot=plot))
     def guideOff(self, cmd):
