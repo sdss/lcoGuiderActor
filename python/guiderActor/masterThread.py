@@ -209,7 +209,7 @@ def main(actor, queues):
                             try:
                                 fiber = gState.gprobes[gcamFiber.fiberid]
                             except IndexError, e:
-                                guideCmd.warn("Gprobe %d was not listed in plugmap info" % star.fiberid)
+                                guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % star.fiberid)
                                 continue
 
                             fiber.info.xCenter = gcamFiber.xcen
@@ -283,13 +283,13 @@ def main(actor, queues):
                         try:
                             fiber = gState.gprobes[star.fiberid]
                         except IndexError, e:
-                            guideCmd.warn("Gprobe %d was not listed in plugmap info" % star.fiberid)
+                            guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % star.fiberid)
                             continue
 
                         try:
                             fiber.info.ra
                         except AttributeError, e:
-                            guideCmd.warn("Gprobe %d was not listed in plPlugMapM file" % star.fiberid)
+                            guideCmd.warn('text="Gprobe %d was not listed in plPlugMapM file"' % star.fiberid)
                             continue
                         #
                         # dx, dy are the offsets on the ALTA guider image
@@ -399,7 +399,8 @@ def main(actor, queues):
                     A[2, 1] = A[1, 2]
                     try:
                         if nStar == 1:
-                            guideCmd.warn('text="Only one star is usable; guiding on az/alt"')
+                            guideCmd.warn('text="Only one star is usable; guiding on %s"' %
+                                          ("az/alt" if guide_azAlt else "ra/dec"))
 
                             x = b
                             x[2, 0] = 0 # no rotation
@@ -538,7 +539,7 @@ def main(actor, queues):
                         try:
                             fiber = gState.gprobes[star.fiberid]
                         except IndexError, e:
-                            guideCmd.warn("Gprobe %d was not listed in plugmap info" % star.fiberid)
+                            guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % star.fiberid)
                             continue
                             
                         if not fiber.enabled:
