@@ -10,6 +10,7 @@ import PID
 import gcamera.pyGuide_test as pg
 reload(pg)
 import pyfits
+import os.path
 
 try:
     import sm
@@ -81,6 +82,7 @@ def main(actor, queues):
     """Main loop for master thread"""
 
     threadName = "master"
+    psPlotDir  = "/data/gcam/scratch/"
 
     actorState = guiderActor.myGlobals.actorState
     timeout = actorState.timeout
@@ -88,10 +90,12 @@ def main(actor, queues):
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
     plot = False                        # use SM to plot things
+    psPlot = False
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
     
     guideCmd = None                     # the Cmd that started the guide loop
     
+#    import pdb; pdb.set_trace()
     while True:
         try:
             msg = queues[MASTER].get(timeout=timeout)
@@ -131,6 +135,7 @@ def main(actor, queues):
                 force = msg.force
                 oneExposure = msg.oneExposure
                 plot = msg.plot
+                psPlot = msg.psPlot
                 fakeSpiderInstAng = msg.spiderInstAng
                 
                 if guideCmd:
@@ -143,7 +148,7 @@ def main(actor, queues):
 
                 if gState.plate < 0:
                     queues[MASTER].put(Msg(Msg.FAIL, msg.cmd,
-                                            text="Please tell me about your cartridge and try again"))
+                                           text="Please tell me about your cartridge and try again"))
                     continue
 
                 if not guidingIsOK(msg.cmd, actorState, force=force):
@@ -246,11 +251,9 @@ def main(actor, queues):
                                 guideCmd = None
                                 continue
 
-                        #spiderInstAng += -90  #55077 worked
-                        #spiderInstAng += 90    #ph 55081 worked
-                        #spiderInstAng +=  90    #ph 55088 wrong
-                        #spiderInstAng +=  0    #ph 55088
-                        spiderInstAng = -spiderInstAng - 90 
+                        spiderInstAng = spiderInstAng - 0 
+                    #
+                    # end of if asAlt
                     #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
                     # in mm on the focal plane, only converting to angles to command the TCC
@@ -266,12 +269,7 @@ def main(actor, queues):
                     A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
                     b = numpy.matrix(numpy.zeros(3).reshape([3,1])); b3 = 0.0
 
-                    if plot:
-                        if sm:
-                            sm.device('x11')
-                        else:
-                            guideCmd.warn('text="Unable to plot as SM is not available"')
-
+                    if plot:                           #setup arrays for sm
                         size = len(gState.gprobes) + 1 # fibers are 1-indexed
                         fiberid_np = numpy.zeros(size)
                         azCenter_np = numpy.zeros(size)
@@ -311,10 +309,11 @@ def main(actor, queues):
                         if False:
                             theta = fiber.info.rotation - fiber.info.phi + (spiderInstAng if guide_azAlt else 0.0)
                         else:
-                            print "RHL + - + -Sp   %d %.0f %0.f " % (star.fiberid,
-                                                                 fiber.info.rotation, fiber.info.phi)
+#                            print "RHL + - + -Sp   %d %.0f %0.f " % (star.fiberid,
+#                                                                 fiber.info.rotation, fiber.info.phi)
 
                             theta = 0
+                            theta += 90                 # allow for 90 deg rot of camera view  
                             theta += fiber.info.rotation # allow for intrinsic fibre rotation
                             theta -= fiber.info.phi      # allow for orientation of alignment hole
                             if guide_azAlt:
@@ -322,11 +321,11 @@ def main(actor, queues):
 
                         theta = math.radians(theta)
                         ct, st = math.cos(theta), math.sin(theta)
-                        print "theta=", theta, "st=", st, "ct=", ct
+#                        print "theta=", theta, "st=", st, "ct=", ct
                         dAz   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
                         dAlt  = -dx*st + dy*ct
                         dAz    = dAz  
-                        dAlt   = -dAlt
+                        dAlt   = dAlt
 
 
                         if guide_azAlt:
@@ -408,7 +407,7 @@ def main(actor, queues):
                             x = numpy.linalg.solve(A, b)
 
                         # convert from mm to degrees
-                        print "RHL -90 + + +"
+#                        print "RHL -90 + + +"
                         dAz = x[0, 0]/gState.plugPlateScale
                         if guide_azAlt:
                             dAz /= math.cos(math.radians(tccAlt))
@@ -418,20 +417,23 @@ def main(actor, queues):
                         offsetAz =  -gState.pid["azAlt"].update(dAz)                    
                         offsetAlt = -gState.pid["azAlt"].update(dAlt)
                         offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
-#                        offsetRot = -offsetRot    #ph kluge 55081
-                        offsetRot = offsetRot
+                        offsetAz  =  offsetAz    #sign flips if needed
+                        offsetAlt = -offsetAlt
+                        offsetRot =  offsetRot
+
 
                         dAzArcsec = dAz
                         offsetAzArcsec = offsetAz
 
                         if guide_azAlt:
-                            dAzArcsec *= math.cos(math.radians(tccAlt)) # in degrees of arc
+                            dAzArcsec      *= math.cos(math.radians(tccAlt)) # in degrees of arc
                             offsetAzArcsec *= math.cos(math.radians(tccAlt))
 
                         guideCmd.respond("axisError=%g, %g, %g" % (3600*dAzArcsec, 3600*dAlt, 3600*dRot))
-                        guideCmd.respond("axisChange=%g, %g, %g, %s" % (3600*offsetAzArcsec,
-                                                                        3600*offsetAlt, 3600*offsetRot,
+                        guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetAzArcsec,
+                                                                        -3600*offsetAlt, -3600*offsetRot,
                                                                         "enabled" if gState.guideAxes else "disabled"))
+#                        import pdb; pdb.set_trace()
 
                         if gState.guideAxes:
                             if guide_azAlt:
@@ -441,7 +443,7 @@ def main(actor, queues):
                                                          (-offsetAz, -offsetAlt, -offsetRot))
                                 if cmdVar.didFail:
                                     guideCmd.warn('text="Failed to issue offset"')
-                            else:
+                            else:                                                            #RA Dec
                                 cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                                          cmdStr="offset arc %f, %f" % \
                                                          (-offsetAz, -offsetAlt))
@@ -457,49 +459,68 @@ def main(actor, queues):
                                 if cmdVar.didFail:
                                     guideCmd.warn('text="Failed to issue offset in rotator"')
 
+#                        import pdb; pdb.set_trace()
+                        if sm:
+                            sm.device('X11')
+                        else:
+                            guideCmd.warn('text="Unable to plot as SM is not available"')
+
+                        if sm and plot and psPlot:
+                            if not (os.path.exists(psPlotDir)):
+                                psPlot = 'false'
+                                guideCmd.warn('text="Unable to write SM hardcopies"')
+
+                        if psPlot and not plot:
+                            guideCmd.warn('text="Need to enable both plot & psPlot"')           
+
                         if plot and sm:
-                            sm.erase(False)
-                            sm.limits([-400, 400], [-400, 400])
-                            sm.box()
-                            if guide_azAlt:
-                                sm.xlabel(r"\2\delta Az")
-                                sm.ylabel(r"\2\delta Alt")
-                            else:
-                                sm.xlabel(r"\2\delta Ra")
-                                sm.ylabel(r"\2\delta Dec")
-                            sm.ptype([63])
-                            sm.frelocate(0.85, 0.95)
-                            sm.putlabel(5, r"\1Frame " + re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
-#                            sm.toplabel("-SpIA-90 ")
-
-                            vscale = 1000 # how much to multiply position error
-                            sm.relocate(-350, 350)
-                            asec = gState.plugPlateScale/3600.0
-                            sm.draw(-350 + vscale*gState.plugPlateScale/3600.0, 350)
-                            sm.label(r"  \raise-200{\1{1 arcsec}}")
-
-                            for i in range(len(fiberid_np)):
-                                if fiberid_np[i] == 0:
-                                    continue
-
-                                sm.relocate(azCenter_np[i], altCenter_np[i])
-                                sm.putlabel(6, r" %d" % fiberid_np[i])
-
-                                sm.relocate(azCenter_np[i], altCenter_np[i])
-
-                                sm.dot()
-                                
-                                if not gState.gprobes[fiberid_np[i]].enabled:
-                                    sm.ltype(1)
-                                    sm.ctype(sm.CYAN)
+                            for plotdev in ("X11","postencap"):
+                                if psPlot and (plotdev == "postencap"):
+                                    plotcmd = plotdev + " " + psPlotDir + re.search(r"([0-9]+)\.fits$", msg.filename).group(1) + ".eps"
+                                    sm.device(plotcmd)
+                                    sm.ctype('sm.BLACK') 
                                     
-                                sm.draw(azCenter_np[i] + vscale*daz_np[i],
-                                        altCenter_np[i] + vscale*dalt_np[i])
+                                sm.erase(False)
+                                sm.limits([-400, 400], [-400, 400])
+                                sm.box()
+                                if guide_azAlt:
+                                    sm.xlabel(r"\2\delta Az")
+                                    sm.ylabel(r"\2\delta Alt")
+                                else:
+                                    sm.xlabel(r"\2\delta Ra -ve off")
+                                    sm.ylabel(r"\2\delta Dec")
 
-                                sm.ltype()
-                                sm.ctype()
-
-                            sm.ptype()
+                                sm.ptype([63])
+                                sm.frelocate(0.85, 0.95)
+                                sm.putlabel(5, r"\1Frame " + re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
+                                vscale = 1000 # how much to multiply position error
+                                sm.relocate(-350, 350)
+                                asec = gState.plugPlateScale/3600.0
+                                sm.draw(-350 + vscale*gState.plugPlateScale/3600.0, 350)
+                                sm.label(r"  \raise-200{\1{1 arcsec}}")
+                                   
+                                for i in range(len(fiberid_np)):
+                                    if fiberid_np[i] == 0:
+                                        continue
+                                            
+                                    sm.relocate(azCenter_np[i], altCenter_np[i])
+                                    sm.putlabel(6, r" %d" % fiberid_np[i])
+                                    
+                                    sm.relocate(azCenter_np[i], altCenter_np[i])
+                                    
+                                    sm.dot()
+                                            
+                                    if not gState.gprobes[fiberid_np[i]].enabled:
+                                        sm.ltype(1)
+                                        sm.ctype(sm.CYAN)
+                                                
+                                    sm.draw(azCenter_np[i] + vscale*daz_np[i],
+                                            altCenter_np[i] + vscale*dalt_np[i])
+                                                
+                                    sm.ltype()
+                                    sm.ctype()
+                                                
+                                sm.ptype()
                             
                     except numpy.linalg.LinAlgError:
                         guideCmd.warn("text=%s" % qstr("Unable to solve for axis offsets"))
@@ -728,9 +749,10 @@ def main(actor, queues):
 
 def guidingIsOK(cmd, actorState, force=False):
     """Is it OK to be guiding?"""
-
-    if force:
-        return True
+    print "force", force
+#    if force:   ph hack
+    print "use the force"
+    return True
 
     ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
 
