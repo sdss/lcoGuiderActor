@@ -57,6 +57,7 @@ class GuiderCmd(object):
                                         keys.Key("azAlt", help="Guide in az/alt, not ra/dec"),
                                         keys.Key("geek", help="Show things that only some of us love"),
                                         keys.Key("plot", help="Plot things"),
+                                        keys.Key("psPlot", help="Save copy of plots"),
                                         keys.Key("display", types.String(), help="DISPLAY variable to use"),
                                         keys.Key("spiderInstAng", types.Float(), help="Value to use for spiderInstAng"),
                                         )
@@ -64,7 +65,7 @@ class GuiderCmd(object):
         # Declare commands
         #
         self.vocab = [
-            ("on", "[<time>] [force] [oneExposure] [azAlt] [plot] [<display>] [<spiderInstAng>]", self.guideOn),
+            ("on", "[<time>] [force] [oneExposure] [azAlt] [plot] [psPlot] [<display>] [<spiderInstAng>]", self.guideOn),
             ("off", "", self.guideOff),
             ("setExpTime", "<time>", self.setExpTime),
             ("setPID", "(azAlt|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
@@ -139,6 +140,7 @@ class GuiderCmd(object):
         force = "force" in cmd.cmd.keywords
         oneExposure = "oneExposure" in cmd.cmd.keywords
         plot = "plot" in cmd.cmd.keywords
+        psPlot = "psPlot" in cmd.cmd.keywords
         display = cmd.cmd.keywords["display"].values[0] if "display" in cmd.cmd.keywords else None
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
         spiderInstAng = cmd.cmd.keywords["spiderInstAng"].values[0] if "spiderInstAng" in cmd.cmd.keywords else None
@@ -154,7 +156,7 @@ class GuiderCmd(object):
                                                                 start=True, expTime=expTime,
                                                                 azAlt=azAlt, spiderInstAng=spiderInstAng,
                                                                 force=force, oneExposure=oneExposure,
-                                                                plot=plot))
+                                                                plot=plot, psPlot=psPlot))
     def guideOff(self, cmd):
         """Turn guiding off"""
 
