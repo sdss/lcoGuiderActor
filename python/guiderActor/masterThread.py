@@ -321,12 +321,13 @@ def main(actor, queues):
 
                         theta = math.radians(theta)
                         ct, st = math.cos(theta), math.sin(theta)
-#                        print "theta=", theta, "st=", st, "ct=", ct
+#                       print "theta=", theta, "st=", st, "ct=", ct
                         dAz   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
                         dAlt  = -dx*st + dy*ct
-                        dAz    = dAz  
-                        dAlt   = dAlt
-
+                        dAz    =  dAz  
+                        dAlt   = -dAlt
+#                       The vector arrow move correctly with these sign flips
+#                       Move telescope N arrow point S, move telescope E vectors point W 
 
                         if guide_azAlt:
                             ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
@@ -418,7 +419,7 @@ def main(actor, queues):
                         offsetAlt = -gState.pid["azAlt"].update(dAlt)
                         offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
                         offsetAz  =  offsetAz    #sign flips if needed
-                        offsetAlt = -offsetAlt
+                        offsetAlt =  offsetAlt
                         offsetRot =  offsetRot
 
 
@@ -461,9 +462,14 @@ def main(actor, queues):
 
 #                        import pdb; pdb.set_trace()
                         if sm:
+#                            try:
                             sm.device('X11')
+#                            except:
+#                                guideCmd.warn("X forwarding set incorrectly, cannot open sm guider window")                            
+#                            continue
                         else:
                             guideCmd.warn('text="Unable to plot as SM is not available"')
+                            
 
                         if sm and plot and psPlot:
                             if not (os.path.exists(psPlotDir)):
@@ -478,7 +484,7 @@ def main(actor, queues):
                                 if psPlot and (plotdev == "postencap"):
                                     plotcmd = plotdev + " " + psPlotDir + re.search(r"([0-9]+)\.fits$", msg.filename).group(1) + ".eps"
                                     sm.device(plotcmd)
-                                    sm.ctype('sm.BLACK') 
+                                    sm.ctype(r'BLACK') 
                                     
                                 sm.erase(False)
                                 sm.limits([-400, 400], [-400, 400])
@@ -487,7 +493,7 @@ def main(actor, queues):
                                     sm.xlabel(r"\2\delta Az")
                                     sm.ylabel(r"\2\delta Alt")
                                 else:
-                                    sm.xlabel(r"\2\delta Ra -ve off")
+                                    sm.xlabel(r"\2\delta Ra")
                                     sm.ylabel(r"\2\delta Dec")
 
                                 sm.ptype([63])
@@ -749,10 +755,8 @@ def main(actor, queues):
 
 def guidingIsOK(cmd, actorState, force=False):
     """Is it OK to be guiding?"""
-    print "force", force
-#    if force:   ph hack
-    print "use the force"
-    return True
+    if force:
+        return True
 
     ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
 
