@@ -462,11 +462,12 @@ def main(actor, queues):
 
 #                        import pdb; pdb.set_trace()
                         if sm:
-#                            try:
-                            sm.device('X11')
-#                            except:
-#                                guideCmd.warn("X forwarding set incorrectly, cannot open sm guider window")                            
-#                            continue
+                            try:
+                                sm.device('X11')
+                            except:
+                                guideCmd.warn('text="X display error, cannot open sm guider window"')
+                                plot = False
+                    
                         else:
                             guideCmd.warn('text="Unable to plot as SM is not available"')
                             
@@ -545,11 +546,13 @@ def main(actor, queues):
                     # Scale
                     #
                     dScale = b3/A[2, 2]
+                    dScaleCorrection = -dScale * 100.    #value for operators to enter manually
                     offsetScale = -gState.pid["scale"].update(dScale)
 
                     guideCmd.respond("scaleError=%g" % (dScale))
                     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                                              "enabled" if gState.guideScale else "disabled"))
+                    guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))
                     #
                     # Now focus. If the ith star is d_i out of focus, and the RMS of an
                     # in-focus star would be r0, and we are Delta out of focus, we measure
