@@ -461,12 +461,13 @@ def main(actor, queues):
                                     guideCmd.warn('text="Failed to issue offset in rotator"')
 
 #                        import pdb; pdb.set_trace()
-                        if sm:
-                            try:
-                                sm.device('X11')
-                            except:
-                                guideCmd.warn('text="X display error, cannot open sm guider window"')
-                                plot = False
+                        if sm: 
+                            if plot:
+                                try:
+                                    sm.device('X11')
+                                except:
+                                    guideCmd.warn('text="X display error, cannot open sm guider window"')
+                                    plot = False
                     
                         else:
                             guideCmd.warn('text="Unable to plot as SM is not available"')
