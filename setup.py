@@ -5,7 +5,7 @@ import sdss3tools
 import os
 
 sdss3tools.setup(
-        ext_modules=[Extension('libguide', 
+        ext_modules=[Extension('gimg', 
                                sources=['src/gimg/ipGguide.c', 'src/gimg/gutils.c'],
                                include_dirs=['include'],
                                )],
