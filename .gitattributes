@@ -3,10 +3,10 @@ bin/guiderToDs9 -text
 etc/guider.cfg -text
 include/ipGguide.h -text
 include/shLegacy.h -text
-python/gcamera/__init__.py -text
-python/gcamera/procimg.py -text
-python/gcamera/protoGcamFITS.py -text
-python/gcamera/pyGuide_test.py -text
+python/gimg/__init__.py -text
+python/gimg/procimg.py -text
+python/gimg/protoGcamFITS.py -text
+python/gimg/pyGuide_test.py -text
 python/guiderActor/Commands/GuiderCmd.py -text
 python/guiderActor/Commands/__init__.py -text
 python/guiderActor/PID.py -text
