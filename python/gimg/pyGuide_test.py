@@ -98,7 +98,7 @@ class GuideTest(object):
 
 		self.mode = mode # ???? 
 		self.ipGguide = None
-		self.ipGguide = ctypes.CDLL(os.path.expandvars("$GCAMERA_DIR/lib/libguide.so"))
+		self.ipGguide = ctypes.CDLL(os.path.expandvars("$GUIDERACTOR_DIR/lib/gimg.so"))
 		
 		self.CID = cartridgeId
 		self.gprobes = gprobes
