@@ -10,4 +10,9 @@ python/guiderActor/guiderActor_main.py -text
 python/guiderActor/masterThread.py -text
 python/guiderActor/myGlobals.py -text
 /setup.py -text
+src/Makefile -text
+src/gimg/Makefile -text
+src/gimg/gutils.c -text
+src/gimg/ipGguide.c -text
+src/gimg/shUtils.c -text
 ups/guiderActor.table -text
