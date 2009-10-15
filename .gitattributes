@@ -9,4 +9,5 @@ python/guiderActor/gcameraThread.py -text
 python/guiderActor/guiderActor_main.py -text
 python/guiderActor/masterThread.py -text
 python/guiderActor/myGlobals.py -text
+/setup.py -text
 ups/guiderActor.table -text
