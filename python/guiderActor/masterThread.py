@@ -7,7 +7,7 @@ from opscore.utility.qstr import qstr
 from opscore.utility.tback import tback
 import PID
 
-import gcamera.pyGuide_test as pg
+import gimg.pyGuide_test as pg
 reload(pg)
 import pyfits
 import os.path
