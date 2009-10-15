@@ -473,12 +473,12 @@ class GuideTest(object):
 		hdu = pyfits.new_table(pyfits.ColDefs(cols))
 		return hdu
 
-	def getObjectHDU(self):
+	def getObjectHDU(self, objInfo=None):
 		hdu = pyfits.BinTableHDU(name="OFFSETS")
 		return hdu
 
         
-	def writeFITS(self, cmd):
+	def writeFITS(self, cmd, objInfo=None):
 		try:
 			rawHeader = pyfits.getheader(self.dataname)
 		except Exception, e:
@@ -514,7 +514,7 @@ class GuideTest(object):
 			fiberHDU = self.getFiberHDU()
 
 			# Object&offset quantities.
-			objectHDU = self.getObjectHDU()
+			objectHDU = self.getObjectHDU(objInfo=objInfo)
 
 			# Pile 'em all together.
 			hlist = pyfits.HDUList()
@@ -530,7 +530,6 @@ class GuideTest(object):
 			hlist.writeto(procpath)
 		except Exception, e:
 			cmd.warn("text='could not write proc- guider file: %s'" % (e,))
-			pdb.set_trace()
 			return
 
 		cmd.inform('file=%s,%s' % (dirname, outname))
