@@ -1,5 +1,4 @@
 setupRequired(actorcore CPL)
-setupRequired(gcamera)
 setupRequired(sopActor)
 setupOptional(sm)
 
