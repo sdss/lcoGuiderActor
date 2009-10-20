@@ -275,7 +275,7 @@ def main(actor, queues):
                     A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
                     b = numpy.matrix(numpy.zeros(3).reshape([3,1])); b3 = 0.0
 
-                    if plot:                           #setup arrays for sm
+                    if plot or sm:                           #setup arrays for sm
                         size = len(gState.gprobes) + 1 # fibers are 1-indexed
                         fiberid_np = numpy.zeros(size)
                         azCenter_np = numpy.zeros(size)
@@ -579,7 +579,7 @@ def main(actor, queues):
                     focalRatio = 5.0
                     C = 5/(32.0*focalRatio*focalRatio)
 
-                    if plot:                           # setup arrays for sm
+                    if plot or sm: # setup arrays for sm
                         size = len(gState.gprobes) + 1 # fibers are 1-indexed
                         x_np = numpy.zeros(size)
                         xErr_np = numpy.zeros(size)
