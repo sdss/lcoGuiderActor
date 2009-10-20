@@ -448,7 +448,7 @@ class GuideTest(object):
 		return pyfits.Column(name=name, format=fitsType, array=c)
 		
 	def getFiberHDU(self):
-		# The names and types should come from the keyword data -- try to get form guiderActor
+		""" Return an HDU containing all the probe info. """
 
 		probeFields = (('exists','u1','L'),
 			       ('enabled','u1','L'),
@@ -467,7 +467,8 @@ class GuideTest(object):
 			col = self.getAwfulColumn(name, npType, fitsType, self.gprobes)
 			cols.append(col)
 		
-		# Add the measured data columns
+
+		
 		# xoffs = pyfits.Column('xStarOffset', 'E', [
 		
 		hdu = pyfits.new_table(pyfits.ColDefs(cols))
@@ -476,7 +477,6 @@ class GuideTest(object):
 	def getObjectHDU(self, objInfo=None):
 		hdu = pyfits.BinTableHDU(name="OFFSETS")
 		return hdu
-
         
 	def writeFITS(self, cmd, objInfo=None):
 		try:
