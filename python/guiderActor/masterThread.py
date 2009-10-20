@@ -78,6 +78,10 @@ try:
 except:
     gState = GuiderState()
 
+def postscriptDevice(psPlotDir, frameNo, prefix=""):
+    """Return the SM device to write the postscript file for guide frame frameNo"""
+    return "postencap %s%d.eps" % (prefix, frameNo)
+
 def main(actor, queues):
     """Main loop for master thread"""
 
@@ -175,6 +179,7 @@ def main(actor, queues):
                         continue
                     
                     guideCmd.respond("processing=%s" % msg.filename)
+                    frameNo = int(re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
 
                     h = pyfits.getheader(msg.filename)
                     flatfile = h.get('FLATFILE', None)
@@ -350,7 +355,7 @@ def main(actor, queues):
 
                         if True:
                             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
-                                int(re.search(r"([0-9]+)\.fits$", msg.filename).group(1)),
+                                frameNo,
                                 star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
                                 fiber.info.xFocal, fiber.info.yFocal,
                                 star.fwhm/2.35, fiber.info.focusOffset)
@@ -472,35 +477,36 @@ def main(actor, queues):
                         else:
                             guideCmd.warn('text="Unable to plot as SM is not available"')
                             
-
                         if sm and plot and psPlot:
                             if not (os.path.exists(psPlotDir)):
-                                psPlot = 'false'
+                                psPlot = False
                                 guideCmd.warn('text="Unable to write SM hardcopies"')
 
                         if psPlot and not plot:
                             guideCmd.warn('text="Need to enable both plot & psPlot"')           
 
                         if plot and sm:
-                            for plotdev in ("X11","postencap"):
-                                if psPlot and (plotdev == "postencap"):
-                                    plotcmd = plotdev + " " + psPlotDir + re.search(r"([0-9]+)\.fits$", msg.filename).group(1) + ".eps"
-                                    sm.device(plotcmd)
-                                    sm.ctype(r'BLACK') 
+                            for plotdev in ("X11 -device 0", "postscript"):
+                                if plotdev == "postscript":
+                                    if not psPlot:
+                                        continue
+                                    deviceCmd = postscriptDevice(psPlotDir, frameNo)
+                                else:
+                                    deviceCmd = plotdev
+
+                                sm.device(deviceCmd)
                                     
                                 sm.erase(False)
                                 sm.limits([-400, 400], [-400, 400])
                                 sm.box()
-                                if guide_azAlt:
-                                    sm.xlabel(r"\2\delta Az")
-                                    sm.ylabel(r"\2\delta Alt")
-                                else:
-                                    sm.xlabel(r"\2\delta Ra")
-                                    sm.ylabel(r"\2\delta Dec")
+                                sm.frelocate(0.5, 1.03)
+                                sm.putlabel(5, r"\1Offsets")
+                                sm.xlabel(r"\2\delta Ra")
+                                sm.ylabel(r"\2\delta Dec")
 
                                 sm.ptype([63])
                                 sm.frelocate(0.85, 0.95)
-                                sm.putlabel(5, r"\1Frame " + re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
+                                sm.putlabel(5, r"\1Frame %d" % frameNo)
                                 vscale = 1000 # how much to multiply position error
                                 sm.relocate(-350, 350)
                                 asec = gState.plugPlateScale/3600.0
@@ -558,11 +564,26 @@ def main(actor, queues):
                     # Now focus. If the ith star is d_i out of focus, and the RMS of an
                     # in-focus star would be r0, and we are Delta out of focus, we measure
                     # an RMS size R_i
-                    #   R_i^2 = r0^2 + (d_i + Delta)^2
+                    #   R_i^2 = r0^2 + C (d_i + Delta)^2
                     # i.e.
-                    #   R_i^2 - d_i^2 = (r0^2 + Delta^2) + 2 Delta d_i
-                    # which is a linear equation for x == R_i^2 - d_i^2
+                    #   R_i^2 - C d_i^2 = (r0^2 + C Delta^2) + 2 C Delta d_i
+                    # which is a linear equation for x == R_i^2 - C d_i^2
                     #
+                    # If the secondary is half the diameter of the primary, the
+                    # RMS^2 size of an image of radius r is 5/8 r^2.  The f ratio
+                    # is f, so if the image is formed a distance d from focus, the
+                    # radius of the doughnut is d/(2 f) so
+                    # RMS^2 = 5/(32 f^2) d^2, i.e. C = 5/(32 f^2)
+                    #
+                    focalRatio = 5.0
+                    C = 5/(32.0*focalRatio*focalRatio)
+
+                    if plot:                           # setup arrays for sm
+                        size = len(gState.gprobes) + 1 # fibers are 1-indexed
+                        x_np = numpy.zeros(size)
+                        xErr_np = numpy.zeros(size)
+                        d_np = numpy.zeros(size)
+
                     A = numpy.matrix(numpy.zeros(2*2).reshape([2,2]))
                     b = numpy.matrix(numpy.zeros(2).reshape([2,1]))
 
@@ -581,41 +602,53 @@ def main(actor, queues):
                         except AttributeError:
                             rms = star.fwhm/2.35
 
-                        rms *= 1/3600.0*gState.plugPlateScale*1e3
+                        micronsPerArcsec = 1/3600.0*gState.plugPlateScale*1e3 # convert arcsec to microns
+                        rms *= micronsPerArcsec # in microns
 
-                        sigma = 1
+                        rmsErr = 1
+
+                        d = fiber.info.focusOffset
+                        x = rms*rms - C*d*d
+                        xErr = 2*rms*rmsErr
 
                         try:
-                            ivar = 1/(2*math.pow(rms*sigma, 2)) # x's inverse variance
+                            ivar = 1/(xErr*xErr)
                         except ZeroDivisionError:
                             ivar = 1e-5
 
-                        focalRatio = 5.0
-                        d = fiber.info.focusOffset/focalRatio
-                        x = rms*rms - d*d
-
                         b[0] += x*ivar
-                        b[0] += x*d*ivar
+                        b[1] += x*d*ivar
 
                         A[0, 0] += ivar
                         A[0, 1] += d*ivar
 
                         A[1, 1] += d*d*ivar
 
+                        if plot:
+                            try:
+                                fiberid_np[star.fiberid] = star.fiberid
+                                x_np[star.fiberid] = x
+                                xErr_np[star.fiberid] = xErr
+                                d_np[star.fiberid] = d
+                            except IndexError, e:
+                                #import pdb; pdb.set_trace()
+                                pass
+
                     A[1, 0] = A[0, 1]
                     try:
                         x = numpy.linalg.solve(A, b)
                     
-                        Delta = x[1, 0]/2
+                        Delta = x[1, 0]/(2*C)
                         try:
-                            rms0 = math.sqrt(A[0, 0] - Delta*Delta)
+                            rms0 = math.sqrt(x[0, 0] - C*Delta*Delta)/micronsPerArcsec
                         except ValueError, e:
                             rms0 = float("NaN")
 
                         dFocus = Delta*gState.dSecondary_dmm # mm to move the secondary
                         offsetFocus = -gState.pid["focus"].update(dFocus)
 
-                        guideCmd.respond("seeing=%g" % (rms0*2.35))
+                        sigmaToFWHM = 2.35 # approximate conversion for a Gaussian
+                        guideCmd.respond("seeing=%g" % (rms0*sigmaToFWHM))
                         guideCmd.respond("focusError=%g" % (dFocus))
                         guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if gState.guideFocus else "disabled"))
                         if gState.guideFocus:
@@ -626,6 +659,60 @@ def main(actor, queues):
                                 guideCmd.warn('text="Failed to issue focus offset"')
                     except numpy.linalg.LinAlgError:
                         guideCmd.warn("text=%s" % qstr("Unable to solve for focus offset"))
+
+                    if sm:
+                        for plotdev in ("X11 -device 1", "postscript"):
+                            if plotdev == "postscript":
+                                if not psPlot:
+                                    continue
+                                deviceCmd = postscriptDevice(psPlotDir, frameNo, "Focus")
+                            else:
+                                deviceCmd = plotdev
+
+                            sm.device(deviceCmd)
+
+                            sm.erase(False)
+                            #
+                            # Bravely convert to FWHM in arcsec (brave because of the sqrt)
+                            #
+                            f = sigmaToFWHM/micronsPerArcsec
+                            X_np = f*numpy.sqrt(x_np)
+                            XErr_np = f*xErr_np/(2*numpy.sqrt(x_np))
+
+                            sm.limits(d_np, X_np)
+                            sm.box()
+                            sm.frelocate(0.5, 1.03)
+                            sm.putlabel(5, r"\1Focus")
+
+                            sm.xlabel(r"\2d_i \equiv{} fibre piston (\mu m)")
+                            sm.ylabel(r"\2\ssqrt{\sigma_i^2 - C d_i^2} (FWHM, arcsec)")
+
+                            sm.frelocate(0.85, 0.95)
+                            sm.putlabel(5, r"\1Frame %d" % frameNo)
+
+                            for i in range(len(fiberid_np)):
+                                if fiberid_np[i] == 0:
+                                    continue
+
+                                sm.relocate(d_np[i], X_np[i])
+                                sm.putlabel(6, r" %d" % fiberid_np[i])
+
+                            for l in (2, 4):
+                                sm.errorbar(d_np, X_np, XErr_np, l)
+
+                            #dd_np = numpy.array([-1000, 1000])
+                            dd_np = numpy.arange(-1000, 1000, 25)
+
+                            sm.ctype(sm.CYAN)
+                            sm.connect(dd_np, f*numpy.sqrt(x[0, 0] + x[1, 0]*dd_np))
+                            sm.frelocate(0.1, 0.1); sm.label(r"\line 0 2000 \colour{default} Best fit")
+                            
+                            sm.ltype(1); sm.ctype(sm.MAGENTA)
+                            sm.connect(dd_np, 0*dd_np + rms0*sigmaToFWHM)
+                            sm.frelocate(0.1, 0.15); sm.label(r"\line 1 2000 \colour{default} Seeing")
+                            sm.ltype(); sm.ctype()
+
+                            del dd_np
                 #
                 # Write output fits file for TUI
                 #
