@@ -477,8 +477,9 @@ def main(actor, queues):
                     
                         else:
                             guideCmd.warn('text="Unable to plot as SM is not available"')
+                            plot = False
                             
-                        if sm and plot and psPlot:
+                        if plot and psPlot:
                             if not (os.path.exists(psPlotDir)):
                                 psPlot = False
                                 guideCmd.warn('text="Unable to write SM hardcopies"')
@@ -486,7 +487,7 @@ def main(actor, queues):
                         if psPlot and not plot:
                             guideCmd.warn('text="Need to enable both plot & psPlot"')           
 
-                        if plot and sm:
+                        if plot:
                             for plotdev in ("X11 -device 0", "postscript"):
                                 if plotdev == "postscript":
                                     if not psPlot:
@@ -579,11 +580,11 @@ def main(actor, queues):
                     focalRatio = 5.0
                     C = 5/(32.0*focalRatio*focalRatio)
 
-                    if plot or sm: # setup arrays for sm
-                        size = len(gState.gprobes) + 1 # fibers are 1-indexed
-                        x_np = numpy.zeros(size)
-                        xErr_np = numpy.zeros(size)
-                        d_np = numpy.zeros(size)
+                    # setup arrays for sm and saving to FITS
+                    size = len(gState.gprobes) + 1 # fibers are 1-indexed
+                    x_np = numpy.zeros(size)
+                    xErr_np = numpy.zeros(size)
+                    d_np = numpy.zeros(size)
 
                     A = numpy.matrix(numpy.zeros(2*2).reshape([2,2]))
                     b = numpy.matrix(numpy.zeros(2).reshape([2,1]))
@@ -625,15 +626,13 @@ def main(actor, queues):
 
                         A[1, 1] += d*d*ivar
 
-                        if plot:
-                            try:
-                                fiberid_np[star.fiberid] = star.fiberid
-                                x_np[star.fiberid] = x
-                                xErr_np[star.fiberid] = xErr
-                                d_np[star.fiberid] = d
-                            except IndexError, e:
-                                #import pdb; pdb.set_trace()
-                                pass
+                        try:
+                            fiberid_np[star.fiberid] = star.fiberid
+                            x_np[star.fiberid] = x
+                            xErr_np[star.fiberid] = xErr
+                            d_np[star.fiberid] = d
+                        except IndexError, e:
+                            pass
 
                     A[1, 0] = A[0, 1]
                     try:
@@ -661,7 +660,7 @@ def main(actor, queues):
                     except numpy.linalg.LinAlgError:
                         guideCmd.warn("text=%s" % qstr("Unable to solve for focus offset"))
 
-                    if sm:
+                    if plot:
                         for plotdev in ("X11 -device 1", "postscript"):
                             if plotdev == "postscript":
                                 if not psPlot:
@@ -708,9 +707,19 @@ def main(actor, queues):
                             sm.connect(dd_np, f*numpy.sqrt(x[0, 0] + x[1, 0]*dd_np))
                             sm.frelocate(0.1, 0.1); sm.label(r"\line 0 2000 \colour{default} Best fit")
                             
-                            sm.ltype(1); sm.ctype(sm.MAGENTA)
-                            sm.connect(dd_np, 0*dd_np + rms0*sigmaToFWHM)
-                            sm.frelocate(0.1, 0.15); sm.label(r"\line 1 2000 \colour{default} Seeing")
+                            sm.ctype(sm.MAGENTA)
+                            sm.frelocate(0.1, 0.15)
+                            if False:
+                                sm.label(r"\line 1 2000 \colour{default} Seeing")
+                                sm.ltype(1)
+                                sm.connect(dd_np, 0*dd_np + rms0*sigmaToFWHM)
+                            else:
+                                sm.label(r"{\2\apoint 45 4 1} \colour{default} Seeing")
+                                sm.relocate(0, rms0*sigmaToFWHM)
+                                sm.expand(4); sm.angle(45)
+                                sm.dot()
+                                sm.expand(); sm.angle(0)
+                                
                             sm.ltype(); sm.ctype()
 
                             del dd_np
