@@ -7,7 +7,8 @@ from opscore.utility.qstr import qstr
 from opscore.utility.tback import tback
 import PID
 
-import gcamera.pyGuide_test as pg
+#import gcamera.pyGuide_test as pg
+import gimg.pyGuide_test as pg
 reload(pg)
 
 import pyfits
@@ -78,6 +79,36 @@ try:
     gState
 except:
     gState = GuiderState()
+
+class StarInfo(object):
+    """ Gather all info about a star. This should go in the straight star object, but I'm too chicken right now. """
+
+    def __init__(self, basestar):
+        self.fiberid = basestar.fiberid
+        self.xs = basestar.xs
+        self.ys = basestar.ys
+        self.fwhm = basestar.fwhm
+
+        self.dx = numpy.nan
+        self.dy = numpy.nan
+        self.dRA = numpy.nan
+        self.dDec = numpy.nan
+
+class FrameInfo(object):
+    """ Gather all info about the guiding . """
+
+    def __init__(self):
+        self.dRA = numpy.nan
+        self.dDec = numpy.nan
+        self.dRot = numpy.nan
+        self.dFocus = numpy.nan
+        self.dScale = numpy.nan
+
+        self.offsetRA = numpy.nan
+        self.offsetDec = numpy.nan
+        self.offsetRot = numpy.nan
+        self.offsetFocus = numpy.nan
+        self.offsetScale = numpy.nan
 
 def postscriptDevice(psPlotDir, frameNo, prefix=""):
     """Return the SM device to write the postscript file for guide frame frameNo"""
@@ -220,7 +251,7 @@ def main(actor, queues):
                             try:
                                 fiber = gState.gprobes[gcamFiber.fiberid]
                             except IndexError, e:
-                                guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % star.fiberid)
+                                guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % gcamFiber.fiberid)
                                 continue
 
                             fiber.info.xCenter = gcamFiber.xcen
@@ -230,6 +261,9 @@ def main(actor, queues):
                         guideCmd.fail("text=%s" % qstr("Error in processing guide images: %s" % e))
                         guideCmd = None
                         continue
+
+                    # Object to gather all per-frame guiding info into.
+                    frameInfo = FrameInfo()
 
                     if guide_azAlt:
                         spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
@@ -283,6 +317,7 @@ def main(actor, queues):
                         daz_np = numpy.zeros(size)
                         dalt_np = numpy.zeros(size)
 
+                    starInfos = {}
                     for star in stars:
                         try:
                             fiber = gState.gprobes[star.fiberid]
@@ -295,11 +330,17 @@ def main(actor, queues):
                         except AttributeError, e:
                             guideCmd.warn('text="Gprobe %d was not listed in plPlugMapM file"' % star.fiberid)
                             continue
+
+                        starInfo = StarInfo(star)
+                        starInfos[star.fiberid] = starInfo
+
                         #
                         # dx, dy are the offsets on the ALTA guider image
                         #
                         dx = guideCameraScale*(star.xs - (fiber.info.xCenter - fiber.info.xFerruleOffset))
                         dy = guideCameraScale*(star.ys - (fiber.info.yCenter - fiber.info.yFerruleOffset))
+                        starInfo.dx = dx
+                        starInfo.dy = dy
 
                         if dx != dx or dy != dy:
                             guideCmd.warn("text=%s" %
@@ -312,19 +353,14 @@ def main(actor, queues):
                         # phi is the orientation of the alignment hole measured clockwise from N
                         # rotation is the anticlockwise rotation from x on the ALTA to the pin
                         #
-                        if False:
-                            theta = fiber.info.rotation - fiber.info.phi + (spiderInstAng if guide_azAlt else 0.0)
-                        else:
 #                            print "RHL + - + -Sp   %d %.0f %0.f " % (star.fiberid,
 #                                                                 fiber.info.rotation, fiber.info.phi)
 
-                            theta = 0
-                            theta += 90                 # allow for 90 deg rot of camera view  
-                            theta += fiber.info.rotation # allow for intrinsic fibre rotation
-                            theta -= fiber.info.phi      # allow for orientation of alignment hole
-                            if guide_azAlt:
-                                theta += spiderInstAng # allow for telescope rotation
+                        theta = 90                 # allow for 90 deg rot of camera view  
+                        theta += fiber.info.rotation # allow for intrinsic fibre rotation
+                        theta -= fiber.info.phi      # allow for orientation of alignment hole
 
+                        fiber.info.rotStar2Sky = theta # Squirrel the real angle away.
                         theta = math.radians(theta)
                         ct, st = math.cos(theta), math.sin(theta)
 #                       print "theta=", theta, "st=", st, "ct=", ct
@@ -332,16 +368,15 @@ def main(actor, queues):
                         dAlt  = -dx*st + dy*ct
                         dAz    =  dAz  
                         dAlt   = -dAlt
+
+                        starInfo.dRa = dAz
+                        starInfo.dDec = dAlt
+
 #                       The vector arrow move correctly with these sign flips
 #                       Move telescope N arrow point S, move telescope E vectors point W 
 
-                        if guide_azAlt:
-                            ct, st = math.cos(math.radians(spiderInstAng)), math.sin(math.radians(spiderInstAng))
-                            azCenter =   fiber.info.xFocal*ct + fiber.info.yFocal*st # centre of hole
-                            altCenter = -fiber.info.xFocal*st + fiber.info.yFocal*ct
-                        else:
-                            azCenter =  fiber.info.xFocal
-                            altCenter = fiber.info.yFocal
+                        azCenter =  fiber.info.xFocal
+                        altCenter = fiber.info.yFocal
 
                         if plot:
                             try:
@@ -355,6 +390,15 @@ def main(actor, queues):
                                 pass
 
                         if True:
+                            guideCmd.inform("star=%d,%2d, %7.2f,%7.2f, %7.2f,%7.2f, %6.1f,%6.1f,  %6.1f,%6.1f, %6.1f,%6.1f,%4.1f, %7.3f,%4.0f" % (
+                                    frameNo, star.fiberid, 
+                                    dAz, dAlt, 
+                                    dx, dy, 
+                                    star.xs, star.ys, 
+                                    fiber.info.xCenter, fiber.info.yCenter,
+                                    fiber.info.xFocal, fiber.info.yFocal, math.degrees(fiber.info.rotStar2Sky),
+                                    star.fwhm/2.35, fiber.info.focusOffset))
+                            
                             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
                                 frameNo,
                                 star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
@@ -388,7 +432,7 @@ def main(actor, queues):
                     if nStar == 0:
                         guideCmd.warn('text="No stars are available for guiding"')
 
-                        imageObj.writeFITS(guideCmd)
+                        imageObj.writeFITS(actorState.models, guideCmd, frameInfo, starInfos)
 
                         if oneExposure:
                             queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
@@ -421,6 +465,10 @@ def main(actor, queues):
                         dAlt = x[1, 0]/gState.plugPlateScale
                         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
+                        frameInfo.dRa = dAz
+                        frameInfo.dDec = dAlt
+                        frameInfo.dRot = dRot
+
                         offsetAz =  -gState.pid["azAlt"].update(dAz)                    
                         offsetAlt = -gState.pid["azAlt"].update(dAlt)
                         offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
@@ -428,6 +476,9 @@ def main(actor, queues):
                         offsetAlt =  offsetAlt
                         offsetRot =  offsetRot
 
+                        frameInfo.offsetRa = offsetAz
+                        frameInfo.offsetDec = offsetAlt
+                        frameInfo.offsetRot = offsetRot
 
                         dAzArcsec = dAz
                         offsetAzArcsec = offsetAz
@@ -443,28 +494,20 @@ def main(actor, queues):
 #                        import pdb; pdb.set_trace()
 
                         if gState.guideAxes:
-                            if guide_azAlt:
-                                guideCmd.inform('text="Guiding in az/alt"')
-                                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                                         cmdStr="offset guide %f, %f, %f" % \
-                                                         (-offsetAz, -offsetAlt, -offsetRot))
-                                if cmdVar.didFail:
-                                    guideCmd.warn('text="Failed to issue offset"')
-                            else:                                                            #RA Dec
-                                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                                         cmdStr="offset arc %f, %f" % \
+                            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                                     cmdStr="offset arc %f, %f" % \
                                                          (-offsetAz, -offsetAlt))
 
-                                if cmdVar.didFail:
-                                    guideCmd.warn('text="Failed to issue offset"')
+                            if cmdVar.didFail:
+                                guideCmd.warn('text="Failed to issue offset"')
 
-                                if offsetRot:
-                                    cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                                             cmdStr="offset guide %f, %f, %g" % \
+                            if offsetRot:
+                                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                                         cmdStr="offset guide %f, %f, %g" % \
                                                              (0.0, 0.0, -offsetRot))
 
-                                if cmdVar.didFail:
-                                    guideCmd.warn('text="Failed to issue offset in rotator"')
+                            if cmdVar.didFail:
+                                guideCmd.warn('text="Failed to issue offset in rotator"')
 
 #                        import pdb; pdb.set_trace()
                         if sm: 
@@ -558,6 +601,9 @@ def main(actor, queues):
                     dScaleCorrection = -dScale * 100.    #value for operators to enter manually
                     offsetScale = -gState.pid["scale"].update(dScale)
 
+                    frameInfo.dScale = dScale
+                    frameInfo.offsetScale = offsetScale
+
                     guideCmd.respond("scaleError=%g" % (dScale))
                     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                                              "enabled" if gState.guideScale else "disabled"))
@@ -598,6 +644,7 @@ def main(actor, queues):
                             
                         if not fiber.enabled:
                             continue
+                        starInfo = starInfos[star.fiberid]
 
                         try:
                             rms = star.rms
@@ -646,6 +693,9 @@ def main(actor, queues):
 
                         dFocus = Delta*gState.dSecondary_dmm # mm to move the secondary
                         offsetFocus = -gState.pid["focus"].update(dFocus)
+
+                        frameInfo.dFocus = dFocus
+                        frameInfo.offsetFocus = offsetFocus
 
                         sigmaToFWHM = 2.35 # approximate conversion for a Gaussian
                         guideCmd.respond("seeing=%g" % (rms0*sigmaToFWHM))
@@ -726,7 +776,7 @@ def main(actor, queues):
                 #
                 # Write output fits file for TUI
                 #
-                imageObj.writeFITS(guideCmd)
+                imageObj.writeFITS(actorState.models, guideCmd, frameInfo, starInfos)
 
                 #
                 # Is there anything to indicate that we shouldn't be guiding?
