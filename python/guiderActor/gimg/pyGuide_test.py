@@ -7,6 +7,9 @@ import pyfits
 import pdb
 import time
 
+import actorcore.utility.fits as actorFits
+reload(actorFits)
+
 class REGION(ctypes.Structure):
 	_fields_ = [("nrow", ctypes.c_int),
 				("ncol", ctypes.c_int),
@@ -98,7 +101,7 @@ class GuideTest(object):
 
 		self.mode = mode # ???? 
 		self.ipGguide = None
-		self.ipGguide = ctypes.CDLL(os.path.expandvars("$GUIDERACTOR_DIR/lib/gimg.so"))
+		self.ipGguide = ctypes.CDLL(os.path.expandvars("$GCAMERA_DIR/lib/libguide.so"))
 		
 		self.CID = cartridgeId
 		self.gprobes = gprobes
@@ -395,7 +398,7 @@ class GuideTest(object):
 			info = self.gprobes[i].info
 			xc = info.xCenter
 			yc = info.yCenter
-			rot = info.rotation
+			rot = info.rotStar2Sky
 
 			stamps.append(self.getOneStamp(fullImage, xc, yc, rad, rot, isMask=isMask))
 		return stamps
@@ -437,7 +440,8 @@ class GuideTest(object):
 
 		return maskImg
 
-	def getAwfulColumn(self, name, npType, fitsType, objs):
+	def getAwfulFITSColumn(self, name, npType, fitsType, objs):
+		
 		c = np.zeros(len(objs), dtype=npType)
 		i = 0
 		for k in objs.keys():
@@ -447,8 +451,11 @@ class GuideTest(object):
 
 		return pyfits.Column(name=name, format=fitsType, array=c)
 		
-	def getFiberHDU(self):
-		""" Return an HDU containing all the probe info. """
+	def getProbeHDU(self, probeInfo=None):
+		""" Return an HDU containing all the probe+star info. 
+
+		Jayzus. Where is all this stuff squirrelled away?
+		"""
 
 		probeFields = (('exists','u1','L'),
 			       ('enabled','u1','L'),
@@ -458,27 +465,38 @@ class GuideTest(object):
 			       ('xFerruleOffset','f4','E'),
 			       ('yFerruleOffset','f4','E'),
 			       ('rotation','f4','E'),
+			       ('rotStar2Sky','f4','E'),
 			       ('focusOffset','f4','E'),
 			       ('fiber_type','S20','A20'))
 
 		cols = []
 		for f in probeFields:
 			name, npType, fitsType = f
-			col = self.getAwfulColumn(name, npType, fitsType, self.gprobes)
+			col = self.getAwfulFITSColumn(name, npType, fitsType, self.gprobes)
 			cols.append(col)
-		
-
-		
-		# xoffs = pyfits.Column('xStarOffset', 'E', [
 		
 		hdu = pyfits.new_table(pyfits.ColDefs(cols))
 		return hdu
 
-	def getObjectHDU(self, objInfo=None):
-		hdu = pyfits.BinTableHDU(name="OFFSETS")
-		return hdu
-        
-	def writeFITS(self, cmd, objInfo=None):
+	def fillPrimaryHDU(self, cmd, models, imageHDU, filename):
+		""" Add in all the site and environment keywords. """
+
+		try:
+			imageHDU.header.update("OBJECT", os.path.splitext(filename)[0], "")
+			tccCards = actorFits.tccCards(models, cmd=cmd)
+			actorFits.extendHeader(cmd, imageHDU.header, tccCards)
+
+			mcpCards = actorFits.mcpCards(models, cmd=cmd)
+			actorFits.extendHeader(cmd, imageHDU.header, mcpCards)
+
+			plateCards = actorFits.plateCards(models, cmd=cmd)
+			actorFits.extendHeader(cmd, imageHDU.header, plateCards)
+
+			self.addPixelWcs(imageHDU.header)
+		except Exception, e:
+			cmd.warn('text="!!!!! failed to fill out primary HDU  !!!!! (%s)"' % (e))
+		
+	def writeFITS(self, models, cmd, frameInfo, starInfo):
 		try:
 			rawHeader = pyfits.getheader(self.dataname)
 		except Exception, e:
@@ -490,8 +508,7 @@ class GuideTest(object):
 
 		# Start with the raw guider header.
 		imageHDU = pyfits.PrimaryHDU(self.cleandata, header=rawHeader)
-		imageHDU.header.update("OBJECT", os.path.splitext(filename)[0], "")
-		self.addPixelWcs(imageHDU.header)
+		self.fillPrimaryHDU(cmd, models, imageHDU, filename)
 
 		try:
 			# The mask planes.
@@ -511,10 +528,10 @@ class GuideTest(object):
 			bigMaskStampHDU = pyfits.ImageHDU(maskImage)
 
 			# probe input&Measured quantities.
-			fiberHDU = self.getFiberHDU()
+			probeHDU = self.getProbeHDU()
 
 			# Object&offset quantities.
-			objectHDU = self.getObjectHDU(objInfo=objInfo)
+			# objectHDU = self.getObjectHDU(starInfo=starInfo)
 
 			# Pile 'em all together.
 			hlist = pyfits.HDUList()
@@ -524,8 +541,7 @@ class GuideTest(object):
 			hlist.append(smallMaskStampHDU)
 			hlist.append(bigStampHDU)
 			hlist.append(bigMaskStampHDU)
-			hlist.append(fiberHDU)
-			hlist.append(objectHDU)
+			hlist.append(probeHDU)
         
 			hlist.writeto(procpath)
 		except Exception, e:
