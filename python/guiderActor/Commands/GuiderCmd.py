@@ -67,7 +67,7 @@ class GuiderCmd(object):
         # Declare commands
         #
         self.vocab = [
-            ("on", "[<time>] [force] [oneExposure] [azAlt] [plot] [psPlot] [<display>] [<spiderInstAng>]", self.guideOn),
+            ("on", "[<time>] [force] [oneExposure] [plot] [psPlot] [<display>] [<spiderInstAng>]", self.guideOn),
             ("off", "", self.guideOff),
             ("setExpTime", "<time>", self.setExpTime),
             ("setPID", "(azAlt|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
@@ -138,7 +138,6 @@ class GuiderCmd(object):
     def guideOn(self, cmd):
         """Turn guiding on"""
 
-        azAlt = "azAlt" in cmd.cmd.keywords
         force = "force" in cmd.cmd.keywords
         oneExposure = "oneExposure" in cmd.cmd.keywords
         plot = "plot" in cmd.cmd.keywords
@@ -156,7 +155,7 @@ class GuiderCmd(object):
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
                                                                 start=True, expTime=expTime,
-                                                                azAlt=azAlt, spiderInstAng=spiderInstAng,
+                                                                spiderInstAng=spiderInstAng,
                                                                 force=force, oneExposure=oneExposure,
                                                                 plot=plot, psPlot=psPlot))
     def guideOff(self, cmd):
