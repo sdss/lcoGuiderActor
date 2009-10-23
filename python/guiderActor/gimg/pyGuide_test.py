@@ -442,16 +442,25 @@ class GuideTest(object):
 
 	def getAwfulFITSColumn(self, name, npType, fitsType, objs):
 		
-		c = np.zeros(len(objs), dtype=npType)
+		col = np.zeros(len(objs), dtype=npType)
 		i = 0
 		for k in objs.keys():
 			probeInfo = objs[k].info
-			c[i] = getattr(probeInfo,name)
+			col[i] = getattr(probeInfo,name)
 			i += 1
 
-		return pyfits.Column(name=name, format=fitsType, array=c)
+		return pyfits.Column(name=name, format=fitsType, array=col)
 		
-	def getProbeHDU(self, probeInfo=None):
+	def fillAwfulFITSColumn(self, name, npType, fitsType, nobj, objs):
+
+		col = np.zeros(nobj, dtype=npType)
+		for o in objs.values():
+			fid = o.fiberid-1
+			col[fid] = getattr(o,name)
+
+		return pyfits.Column(name=name, format=fitsType, array=col)
+		
+	def getProbeHDU(self, cmd, starInfo=None):
 		""" Return an HDU containing all the probe+star info. 
 
 		Jayzus. Where is all this stuff squirrelled away?
@@ -469,16 +478,62 @@ class GuideTest(object):
 			       ('focusOffset','f4','E'),
 			       ('fiber_type','S20','A20'))
 
+		starFields = (('xstar','f4','E'),
+			      ('ystar','f4','E'),
+			      ('dx','f4','E'),
+			      ('dy','f4','E'),
+			      ('dRA','f4','E'),
+			      ('dDec','f4','E'),
+			      ('fwhm','f4','E'))
+
 		cols = []
 		for f in probeFields:
 			name, npType, fitsType = f
 			col = self.getAwfulFITSColumn(name, npType, fitsType, self.gprobes)
 			cols.append(col)
-		
+
+		nobj = len(self.gprobes)
+		for f in starFields:
+			name, npType, fitsType = f
+			col = self.fillAwfulFITSColumn(name, npType, fitsType, nobj, starInfo)
+			cols.append(col)
+
 		hdu = pyfits.new_table(pyfits.ColDefs(cols))
 		return hdu
 
-	def fillPrimaryHDU(self, cmd, models, imageHDU, filename):
+	def getGuideloopCards(self, cmd, frameInfo):
+		cards = []
+		
+		defs = (('dRA', 'DRA', 'measured offset in RA'),
+			('dDec', 'DDec', 'measured offset in Dec'),
+			('dRot', 'DRot', 'measured rotator offset'),
+			('dFocus', 'DFocus', 'measured focus offset '),
+			('dScale', 'DScale', 'measured scale offset '),
+			('filtRA', 'FILTRA', 'filtered offset in RA'),
+			('filtDec', 'FILTDec', 'filtered offset in Dec'),
+			('filtRot', 'FILTRot', 'filtered rotator offset'),
+			('filtFocus', 'FILTFcus', 'filtered focus offset '),
+			('filtScale', 'FILTScle', 'filtered scale offset '),
+			('offsetRA', 'OFFRA', 'applied offset in RA'),
+			('offsetDec', 'OFFDec', 'applied offset in Dec'),
+			('offsetRot', 'OFFRot', 'applied rotator offset'),
+			('offsetFocus', 'OFFFocus', 'applied focus offset '),
+			('offsetScale', 'OFFScale', 'applied scale offset '))
+		for name, fitsName, comment in defs:
+			try:
+				val = getattr(frameInfo,name)
+				if val != val:
+					val = -99999.9 # F.ing F.TS
+				c = actorFits.makeCard(cmd, fitsName, val, 'guide loop info')
+				cards.append(c)
+			except Exception, e:
+				cmd.warn('text="failed to make guider card %s=%s (%s)"' % (
+						name, val, e))
+				import pdb; pdb.set_trace()
+
+		return cards
+
+	def fillPrimaryHDU(self, cmd, models, imageHDU, frameInfo, filename):
 		""" Add in all the site and environment keywords. """
 
 		try:
@@ -491,6 +546,9 @@ class GuideTest(object):
 
 			plateCards = actorFits.plateCards(models, cmd=cmd)
 			actorFits.extendHeader(cmd, imageHDU.header, plateCards)
+
+			guiderCards = self.getGuideloopCards(cmd, frameInfo)
+			actorFits.extendHeader(cmd, imageHDU.header, guiderCards)
 
 			self.addPixelWcs(imageHDU.header)
 		except Exception, e:
@@ -508,7 +566,7 @@ class GuideTest(object):
 
 		# Start with the raw guider header.
 		imageHDU = pyfits.PrimaryHDU(self.cleandata, header=rawHeader)
-		self.fillPrimaryHDU(cmd, models, imageHDU, filename)
+		self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, filename)
 
 		try:
 			# The mask planes.
@@ -528,7 +586,7 @@ class GuideTest(object):
 			bigMaskStampHDU = pyfits.ImageHDU(maskImage)
 
 			# probe input&Measured quantities.
-			probeHDU = self.getProbeHDU()
+			probeHDU = self.getProbeHDU(cmd, starInfo)
 
 			# Object&offset quantities.
 			# objectHDU = self.getObjectHDU(starInfo=starInfo)
