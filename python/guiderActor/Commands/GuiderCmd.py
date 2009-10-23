@@ -5,6 +5,7 @@
 import pdb
 import logging
 import os, re, sys
+import numpy
 import threading
 
 import opscore.protocols.keys as keys
@@ -35,6 +36,7 @@ class GuiderCmd(object):
             self.rotation = rotation
             self.focusOffset = focusOffset
             self.fiber_type = fiber_type
+            self.rotStar2Sky = numpy.nan
 
     def __init__(self, actor):
         self.actor = actor
