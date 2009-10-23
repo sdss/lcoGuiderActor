@@ -85,9 +85,10 @@ class StarInfo(object):
 
     def __init__(self, basestar):
         self.fiberid = basestar.fiberid
-        self.xs = basestar.xs
-        self.ys = basestar.ys
+        self.xstar = basestar.xs
+        self.ystar = basestar.ys
         self.fwhm = basestar.fwhm
+        self.fwhmErr = numpy.nan
 
         self.dx = numpy.nan
         self.dy = numpy.nan
@@ -103,6 +104,12 @@ class FrameInfo(object):
         self.dRot = numpy.nan
         self.dFocus = numpy.nan
         self.dScale = numpy.nan
+
+        self.filtRA = numpy.nan
+        self.filtDec = numpy.nan
+        self.filtRot = numpy.nan
+        self.filtFocus = numpy.nan
+        self.filtScale = numpy.nan
 
         self.offsetRA = numpy.nan
         self.offsetDec = numpy.nan
@@ -122,7 +129,6 @@ def main(actor, queues):
 
     actorState = guiderActor.myGlobals.actorState
     timeout = actorState.timeout
-    guide_azAlt = False                 # guide in az/alt, not ra/dec
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
     plot = False                        # use SM to plot things
@@ -167,7 +173,6 @@ def main(actor, queues):
                 except AttributeError:
                     pass
 
-                guide_azAlt = msg.azAlt
                 force = msg.force
                 oneExposure = msg.oneExposure
                 plot = msg.plot
@@ -265,36 +270,6 @@ def main(actor, queues):
                     # Object to gather all per-frame guiding info into.
                     frameInfo = FrameInfo()
 
-                    if guide_azAlt:
-                        spiderInstAngKey = actorState.models["tcc"].keyVarDict["spiderInstAng"]
-                        spiderInstAng = spiderInstAngKey[0].getPos()
-
-                        tccPos = actorState.models["tcc"].keyVarDict["tccPos"]
-                        tccAlt = tccPos[1]
-
-                        if spiderInstAng is None or tccAlt is None:
-                            txt = qstr("spiderInstAng/tccAlt is None; are we tracking?")
-
-                            if force:
-                                guideCmd.warn("text=%s" % txt)
-                                tccAlt = 0.0
-
-                                if fakeSpiderInstAng is None:
-                                    guideCmd.fail('text=%s' %
-                                                  qstr('You must specify a spiderInstAng to "guide" in az/alt when the telescope is not tracking"'))
-                                    guideCmd = None
-                                    continue
-                                    
-                                spiderInstAng = fakeSpiderInstAng
-                            else:
-                                guideCmd.fail("text=%s" % txt)
-                                guideCmd = None
-                                continue
-
-                        spiderInstAng = spiderInstAng - 0 
-                    #
-                    # end of if asAlt
-                    #
                     # Setup to solve for the axis and maybe scale offsets.  We work consistently
                     # in mm on the focal plane, only converting to angles to command the TCC
                     #
@@ -369,7 +344,7 @@ def main(actor, queues):
                         dAz    =  dAz  
                         dAlt   = -dAlt
 
-                        starInfo.dRa = dAz
+                        starInfo.dRA = dAz
                         starInfo.dDec = dAlt
 
 #                       The vector arrow move correctly with these sign flips
@@ -449,8 +424,7 @@ def main(actor, queues):
                     A[2, 1] = A[1, 2]
                     try:
                         if nStar == 1:
-                            guideCmd.warn('text="Only one star is usable; guiding on %s"' %
-                                          ("az/alt" if guide_azAlt else "ra/dec"))
+                            guideCmd.warn('text="Only one star is usable"')
 
                             x = b
                             x[2, 0] = 0 # no rotation
@@ -460,12 +434,10 @@ def main(actor, queues):
                         # convert from mm to degrees
 #                        print "RHL -90 + + +"
                         dAz = x[0, 0]/gState.plugPlateScale
-                        if guide_azAlt:
-                            dAz /= math.cos(math.radians(tccAlt))
                         dAlt = x[1, 0]/gState.plugPlateScale
                         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
-                        frameInfo.dRa = dAz
+                        frameInfo.dRA = dAz
                         frameInfo.dDec = dAlt
                         frameInfo.dRot = dRot
 
@@ -476,16 +448,15 @@ def main(actor, queues):
                         offsetAlt =  offsetAlt
                         offsetRot =  offsetRot
 
-                        frameInfo.offsetRa = offsetAz
-                        frameInfo.offsetDec = offsetAlt
-                        frameInfo.offsetRot = offsetRot
+                        frameInfo.filtRA = offsetAz
+                        frameInfo.filtDec = offsetAlt
+                        frameInfo.filtRot = offsetRot
+                        frameInfo.offsetRA = offsetAz if gState.guideAxes else 0.0
+                        frameInfo.offsetDec = offsetAlt if gState.guideAxes else 0.0
+                        frameInfo.offsetRot = offsetRot if gState.guideAxes else 0.0
 
                         dAzArcsec = dAz
                         offsetAzArcsec = offsetAz
-
-                        if guide_azAlt:
-                            dAzArcsec      *= math.cos(math.radians(tccAlt)) # in degrees of arc
-                            offsetAzArcsec *= math.cos(math.radians(tccAlt))
 
                         guideCmd.respond("axisError=%g, %g, %g" % (3600*dAzArcsec, 3600*dAlt, 3600*dRot))
                         guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetAzArcsec,
@@ -602,7 +573,8 @@ def main(actor, queues):
                     offsetScale = -gState.pid["scale"].update(dScale)
 
                     frameInfo.dScale = dScale
-                    frameInfo.offsetScale = offsetScale
+                    frameInfo.filtScale = offsetScale
+                    frameInfo.offsetScale = offsetScale if gState.guideScale else 0.0
 
                     guideCmd.respond("scaleError=%g" % (dScale))
                     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
@@ -695,7 +667,8 @@ def main(actor, queues):
                         offsetFocus = -gState.pid["focus"].update(dFocus)
 
                         frameInfo.dFocus = dFocus
-                        frameInfo.offsetFocus = offsetFocus
+                        frameInfo.filtFocus = offsetFocus
+                        frameInfo.offsetFocus = offsetFocus if gState.guideFocus else 0.0
 
                         sigmaToFWHM = 2.35 # approximate conversion for a Gaussian
                         guideCmd.respond("seeing=%g" % (rms0*sigmaToFWHM))
