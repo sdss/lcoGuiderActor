@@ -608,8 +608,8 @@ class GuideTest(object):
         
 			hlist.writeto(procpath)
 		except Exception, e:
-			cmd.warn("text='could not write proc- guider file: %s CALLING PDB'" % (e,))
-			import pdb; pdb.set_trace()
+			cmd.warn("text='could not write proc- guider file: %s'" % (e,))
+			#import pdb; pdb.set_trace()
 			return
 
 		cmd.inform('file=%s,%s' % (dirname, outname))
