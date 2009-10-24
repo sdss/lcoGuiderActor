@@ -387,7 +387,7 @@ class GuideTest(object):
 		img = fullImage[yc-rad:yc+rad+1,
 				xc-rad:xc+rad+1]
 		rotImg = self.rotateStamp(img, rot, isMask=isMask)
-
+		# print "img, rotimg: %s, %s" % (str(img.shape), str(rotImg.shape))
 		return rotImg
         
 	def getStamps(self, fullImage, probeList, rad, isMask=False):
@@ -396,21 +396,24 @@ class GuideTest(object):
 		stamps = []
 		for i in probeList:
 			info = self.gprobes[i].info
-			xc = info.xCenter
-			yc = info.yCenter
+			xc = int(info.xCenter)
+			yc = int(info.yCenter)
 			rot = info.rotStar2Sky
 
 			stamps.append(self.getOneStamp(fullImage, xc, yc, rad, rot, isMask=isMask))
 		return stamps
 
-	def getStampImages(self, probeTypes, maskImage):
+	def getStampImages(self, probeTypes, maskImage, byRadHack=None):
 		fiberList = []
 		for i in range(self.pfib.g_nfibers):
 			probe = self.gprobes.get(i, None)
 			if probe and probe.info.fiber_type in probeTypes:
 				fiberList.append(i)
+			if byRadHack and probe and int(probe.info.radius) == int(byRadHack):
+				fiberList.append(i)
 
 		rad = reduce(max, [self.gprobes[i].info.radius for i in fiberList])
+		rad = int(rad+0.5)
 		imageStamps = self.getStamps(self.cleandata, fiberList, rad)
 		maskStamps = self.getStamps(maskImage, fiberList, rad, isMask=True)
 
@@ -529,7 +532,6 @@ class GuideTest(object):
 			except Exception, e:
 				cmd.warn('text="failed to make guider card %s=%s (%s)"' % (
 						name, val, e))
-				import pdb; pdb.set_trace()
 
 		return cards
 
@@ -574,16 +576,19 @@ class GuideTest(object):
 			maskHDU = pyfits.ImageHDU(maskImage)
 
 			# The small fiber postage stamps
-			stampImage, maskImage = self.getStampImages(probeTypes=('GUIDE', 'TRITIUM'),
-								    maskImage=maskImage)
+			stampImage, stampMaskImage = self.getStampImages(probeTypes=('GUIDE', 'TRITIUM'),
+									 maskImage=maskImage)
 			smallStampHDU = pyfits.ImageHDU(stampImage)
-			smallMaskStampHDU = pyfits.ImageHDU(maskImage)
+			smallMaskStampHDU = pyfits.ImageHDU(stampMaskImage)
 
 			# The big fiber postage stamps
-			stampImage, maskImage = self.getStampImages(probeTypes=('ACQUIRE',),
-								    maskImage=maskImage)
+			# The old cartridge big fibers are not declared as ACQUIRE, so hack in
+			# a radius test. Find a better way, Loomis.
+			stampImage, stampMaskImage = self.getStampImages(probeTypes=('ACQUIRE',),
+									 maskImage=maskImage,
+									 byRadHack=14.1)
 			bigStampHDU = pyfits.ImageHDU(stampImage)
-			bigMaskStampHDU = pyfits.ImageHDU(maskImage)
+			bigMaskStampHDU = pyfits.ImageHDU(stampMaskImage)
 
 			# probe input&Measured quantities.
 			probeHDU = self.getProbeHDU(cmd, starInfo)
@@ -603,7 +608,8 @@ class GuideTest(object):
         
 			hlist.writeto(procpath)
 		except Exception, e:
-			cmd.warn("text='could not write proc- guider file: %s'" % (e,))
+			cmd.warn("text='could not write proc- guider file: %s CALLING PDB'" % (e,))
+			import pdb; pdb.set_trace()
 			return
 
 		cmd.inform('file=%s,%s' % (dirname, outname))
