@@ -136,6 +136,8 @@ def main(actor, queues):
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
     
     guideCmd = None                     # the Cmd that started the guide loop
+
+    sigmaToFWHM = 2.35 # approximate conversion for a Gaussian
     
 #    import pdb; pdb.set_trace()
     while True:
@@ -372,13 +374,13 @@ def main(actor, queues):
                                     star.xs, star.ys, 
                                     fiber.info.xCenter, fiber.info.yCenter,
                                     fiber.info.xFocal, fiber.info.yFocal, math.degrees(fiber.info.rotStar2Sky),
-                                    star.fwhm/2.35, fiber.info.focusOffset))
+                                    star.fwhm/sigmaToFWHM, fiber.info.focusOffset))
                             
                             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
                                 frameNo,
                                 star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
                                 fiber.info.xFocal, fiber.info.yFocal,
-                                star.fwhm/2.35, fiber.info.focusOffset)
+                                star.fwhm/sigmaToFWHM, fiber.info.focusOffset)
 
 
                         if not fiber.enabled:
@@ -621,7 +623,7 @@ def main(actor, queues):
                         try:
                             rms = star.rms
                         except AttributeError:
-                            rms = star.fwhm/2.35
+                            rms = star.fwhm/sigmaToFWHM
 
                         micronsPerArcsec = 1/3600.0*gState.plugPlateScale*1e3 # convert arcsec to microns
                         rms *= micronsPerArcsec # in microns
@@ -670,7 +672,6 @@ def main(actor, queues):
                         frameInfo.filtFocus = offsetFocus
                         frameInfo.offsetFocus = offsetFocus if gState.guideFocus else 0.0
 
-                        sigmaToFWHM = 2.35 # approximate conversion for a Gaussian
                         guideCmd.respond("seeing=%g" % (rms0*sigmaToFWHM))
                         guideCmd.respond("focusError=%g" % (dFocus))
                         guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if gState.guideFocus else "disabled"))
@@ -682,70 +683,75 @@ def main(actor, queues):
                                 guideCmd.warn('text="Failed to issue focus offset"')
                     except numpy.linalg.LinAlgError:
                         guideCmd.warn("text=%s" % qstr("Unable to solve for focus offset"))
+                        x = None
 
                     if plot:
-                        for plotdev in ("X11 -device 1", "postscript"):
-                            if plotdev == "postscript":
-                                if not psPlot:
-                                    continue
-                                deviceCmd = postscriptDevice(psPlotDir, frameNo, "Focus")
-                            else:
-                                deviceCmd = plotdev
+                        try:
+                            for plotdev in ("X11 -device 1", "postscript"):
+                                if plotdev == "postscript":
+                                    if not psPlot:
+                                        continue
+                                    deviceCmd = postscriptDevice(psPlotDir, frameNo, "Focus")
+                                else:
+                                    deviceCmd = plotdev
 
-                            sm.device(deviceCmd)
+                                sm.device(deviceCmd)
 
-                            sm.erase(False)
-                            #
-                            # Bravely convert to FWHM in arcsec (brave because of the sqrt)
-                            #
-                            f = sigmaToFWHM/micronsPerArcsec
-                            X_np = f*numpy.sqrt(x_np)
-                            XErr_np = f*xErr_np/(2*numpy.sqrt(x_np))
+                                sm.erase(False)
+                                #
+                                # Bravely convert to FWHM in arcsec (brave because of the sqrt)
+                                #
+                                f = sigmaToFWHM/micronsPerArcsec
+                                X_np = f*numpy.sqrt(x_np)
+                                XErr_np = f*xErr_np/(2*numpy.sqrt(x_np))
 
-                            sm.limits(d_np, X_np)
-                            sm.box()
-                            sm.frelocate(0.5, 1.03)
-                            sm.putlabel(5, r"\1Focus")
+                                sm.limits(d_np, X_np)
+                                sm.box()
+                                sm.frelocate(0.5, 1.03)
+                                sm.putlabel(5, r"\1Focus")
 
-                            sm.xlabel(r"\2d_i \equiv{} fibre piston (\mu m)")
-                            sm.ylabel(r"\2\ssqrt{\sigma_i^2 - C d_i^2} (FWHM, arcsec)")
+                                sm.xlabel(r"\2d_i \equiv{} fibre piston (\mu m)")
+                                sm.ylabel(r"\2\ssqrt{\sigma_i^2 - C d_i^2} (FWHM, arcsec)")
 
-                            sm.frelocate(0.85, 0.95)
-                            sm.putlabel(5, r"\1Frame %d" % frameNo)
+                                sm.frelocate(0.85, 0.95)
+                                sm.putlabel(5, r"\1Frame %d" % frameNo)
 
-                            for i in range(len(fiberid_np)):
-                                if fiberid_np[i] == 0:
-                                    continue
+                                for i in range(len(fiberid_np)):
+                                    if fiberid_np[i] == 0:
+                                        continue
 
-                                sm.relocate(d_np[i], X_np[i])
-                                sm.putlabel(6, r" %d" % fiberid_np[i])
+                                    sm.relocate(d_np[i], X_np[i])
+                                    sm.putlabel(6, r" %d" % fiberid_np[i])
 
-                            for l in (2, 4):
-                                sm.errorbar(d_np, X_np, XErr_np, l)
+                                for l in (2, 4):
+                                    sm.errorbar(d_np, X_np, XErr_np, l)
 
-                            #dd_np = numpy.array([-1000, 1000])
-                            dd_np = numpy.arange(-1000, 1000, 25)
+                                #dd_np = numpy.array([-1000, 1000])
+                                dd_np = numpy.arange(-1000, 1000, 25)
 
-                            sm.ctype(sm.CYAN)
-                            sm.connect(dd_np, f*numpy.sqrt(x[0, 0] + x[1, 0]*dd_np))
-                            sm.frelocate(0.1, 0.1); sm.label(r"\line 0 2000 \colour{default} Best fit")
-                            
-                            sm.ctype(sm.MAGENTA)
-                            sm.frelocate(0.1, 0.15)
-                            if False:
-                                sm.label(r"\line 1 2000 \colour{default} Seeing")
-                                sm.ltype(1)
-                                sm.connect(dd_np, 0*dd_np + rms0*sigmaToFWHM)
-                            else:
-                                sm.label(r"{\2\apoint 45 4 1} \colour{default} Seeing")
-                                sm.relocate(0, rms0*sigmaToFWHM)
-                                sm.expand(4); sm.angle(45)
-                                sm.dot()
-                                sm.expand(); sm.angle(0)
-                                
-                            sm.ltype(); sm.ctype()
+                                sm.ctype(sm.CYAN)
+                                if x != None: # I.e. we successfully fit for focus
+                                    sm.connect(dd_np, f*numpy.sqrt(x[0, 0] + x[1, 0]*dd_np))
+                                    sm.frelocate(0.1, 0.1); sm.label(r"\line 0 2000 \colour{default} Best fit")
 
-                            del dd_np
+                                    sm.ctype(sm.MAGENTA)
+                                    sm.frelocate(0.1, 0.15)
+                                    if False:
+                                        sm.label(r"\line 1 2000 \colour{default} Seeing")
+                                        sm.ltype(1)
+                                        sm.connect(dd_np, 0*dd_np + rms0*sigmaToFWHM)
+                                    else:
+                                        sm.label(r"{\2\apoint 45 4 1} \colour{default} Seeing")
+                                        sm.relocate(0, rms0*sigmaToFWHM)
+                                        sm.expand(4); sm.angle(45)
+                                        sm.dot()
+                                        sm.expand(); sm.angle(0)
+
+                                sm.ltype(); sm.ctype()
+
+                                del dd_np
+                        except Exception, e:
+                            guideCmd.warn('text="plot failed: %s"' % (e))
                 #
                 # Write output fits file for TUI
                 #
