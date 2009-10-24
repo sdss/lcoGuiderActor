@@ -412,6 +412,9 @@ class GuideTest(object):
 			if byRadHack and probe and int(probe.info.radius) == int(byRadHack):
 				fiberList.append(i)
 
+		if len(fiberList) == 0:
+			return np.zeros([0,0],dtype=self.cleandata.dtype), np.zeros([0,0],dtype=maskImage.dtype),
+		
 		rad = reduce(max, [self.gprobes[i].info.radius for i in fiberList])
 		rad = int(rad+0.5)
 		imageStamps = self.getStamps(self.cleandata, fiberList, rad)
