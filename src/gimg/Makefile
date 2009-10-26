@@ -8,9 +8,9 @@ SO_EXT = so
 SHELL = /bin/sh
 SDSS_CFLAGS =  -g -Wall
 
-BIN = $(GCAMERA_DIR)/bin
-LIB = $(GCAMERA_DIR)/lib
-INC = $(GCAMERA_DIR)/include
+BIN = $(GUIDERACTOR_DIR)/bin
+LIB = $(GUIDERACTOR_DIR)/lib
+INC = $(GUIDERACTOR_DIR)/include
 
 GIMG_TARGET = $(LIB)/libguide.$(SO_EXT)
 
