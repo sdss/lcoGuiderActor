@@ -443,6 +443,7 @@ gextendmask(
     }
     
     /*compute the first octant*/
+    midflg = 0;
     for(k=0;k<=fringe;k++){
         xbase[k] = k;
         ybase[k] = sqrt((double)(fringe*fringe - k*k)) + 0.5; 
@@ -886,41 +887,40 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
     }
     /* double check to see if any peaks are assigned to a fiber twice. checks to see which 
        fiber is closer to the center guess */
-     for(i=0;i<npk;i++){
-    	 for(j=i+1; j<npk;j++){
-    	 	if(fid[i] == fid[j]){
-    	 		int dx1,dx2, dy1,dy2;
-    	 		dx = xpk[i] - fiberx[i] - xpkoff;
-            	dy = ypk[i] - fibery[i] - ypkoff;
-         		dx = xpk[j] - fiberx[j] - xpkoff;
-          		dy = ypk[j] - fibery[j] - ypkoff;
-				  	if (dx1*dx1+dy1*dy1>dx2*dx2+dy2*dy2){
-				  		xpk[i] = xpk[j];
-				  		ypk[i] = ypk[j];
-				  		fid[i] = fid[j];
-				  		for(k=i+1;k<npk;k++){ 
-                    		xpk[k-1] = xpk[k];
-                   			ypk[k-1] = ypk[k];
-                    		apk[k-1] = apk[k];
-                    		fid[k-1] = fid[k];
-                		}
-				  	}
-				  	else{
-				  		xpk[j] = xpk[i];
-				  		ypk[j] = ypk[i];
-				  		fid[j] = fid[i];
-				  		for(k=j+1;k<npk;k++){ 
-                    		xpk[k-1] = xpk[k];
-                   			ypk[k-1] = ypk[k];
-                    		apk[k-1] = apk[k];
-                    		fid[k-1] = fid[k];
-                    	}
-					}
-					
-				npk--;
-			}
+    for(i=0;i<npk;i++){
+        for(j=i+1; j<npk;j++){
+	    if(fid[i] == fid[j]){
+	        int dx1,dx2, dy1,dy2;
+		dx1 = xpk[i] - fiberx[i] - xpkoff;
+		dy1 = ypk[i] - fibery[i] - ypkoff;
+		dx2 = xpk[j] - fiberx[j] - xpkoff;
+		dy2 = ypk[j] - fibery[j] - ypkoff;
+		if (dx1*dx1+dy1*dy1>dx2*dx2+dy2*dy2){
+		    xpk[i] = xpk[j];
+		    ypk[i] = ypk[j];
+		    fid[i] = fid[j];
+		    for(k=i+1;k<npk;k++){ 
+		        xpk[k-1] = xpk[k];
+			ypk[k-1] = ypk[k];
+			apk[k-1] = apk[k];
+			fid[k-1] = fid[k];
+		    }
 		}
+		else{
+		    xpk[j] = xpk[i];
+		    ypk[j] = ypk[i];
+		    fid[j] = fid[i];
+		    for(k=j+1;k<npk;k++){ 
+		        xpk[k-1] = xpk[k];
+			ypk[k-1] = ypk[k];
+			apk[k-1] = apk[k];
+			fid[k-1] = fid[k];
+		    }
+		}
+		npk--;
+	    }
 	}
+    }
 
 #ifdef FINDEBUG    
     printf("\nid'd xpk,ypk,npk = %d %d %d\n",*xpk,*ypk,npk);        
