@@ -373,7 +373,7 @@ def main(actor, queues):
                                     dx, dy, 
                                     star.xs, star.ys, 
                                     fiber.info.xCenter, fiber.info.yCenter,
-                                    fiber.info.xFocal, fiber.info.yFocal, math.degrees(fiber.info.rotStar2Sky),
+                                    fiber.info.xFocal, fiber.info.yFocal, fiber.info.rotStar2Sky,
                                     star.fwhm/sigmaToFWHM, fiber.info.focusOffset))
                             
                             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
