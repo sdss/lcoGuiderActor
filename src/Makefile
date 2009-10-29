@@ -12,7 +12,7 @@ SHELL = /bin/sh
 .c.o :
 	$(CC) -c $(CCCHK) $(CFLAGS) $*.c
 
-CFLAGS  = $(SDSS_CFLAGS) -DCHECK_LEAKS -I../include
+CFLAGS  = $(SDSS_CFLAGS) -g -O2 -DCHECK_LEAKS -I../include
 
 # List of subdirectories
 SUBDIRS = gimg
