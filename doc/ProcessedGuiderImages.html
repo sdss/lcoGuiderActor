@@ -1,0 +1,67 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+	<title>Processed Guider Images</title>
+</head>
+<body>
+
+<h1>Processed Guider Images</h1>
+
+<p>This manual describes the contents of processed guider images (proc-guide). In particular this describes images with the following in the header:
+<pre>SDSSFMT proc-guide 1 0
+</pre>
+
+<h3>HDU0</h3>
+
+<p>The calibrated guider image&mdash;at least as calibrated as it was for processing by the guide loop. As of guiderActor v1_0_9, neither dark subtraction nor field flattening is done, so the image is not really calibrated.
+
+<p>The header contains cards describing the configuration of the guide loop and some measured and applied offsets.
+
+<h3>HDU1</h3>
+
+<p>The mask for the calibrated guide image. The bit planes are:
+<ul>
+    <li>(bit 0) saturated pixels. As of v1_0_9 no useful characterization of the camera has been done, so only 0xFFFF pixels have this set.
+    <li>(bit 1) bad pixels. Hot/dead pixels, etc. Currently none are defined.
+    <li>(bit 2) fiber mask. Not available in v1_0_9 and earlier.
+</ul>
+
+<h3>HDU2</h3>
+
+<p>Postage stamp images for the small guide probes, where each postage stamp image has been rotated so that north is up and ???east is to the right??? Each postage stamp is square. The full image is one tall, skinny image comprised of the postage stamps, in order of increasing probe number starting from row=y=0. (Note: both ds9 and numpy agree on which axis is x and which is y).
+
+<h3>HDU3</h3>
+
+<p>Masks associated with the postage stamp images for the small guide probes, in the same format.
+
+<h3>HDU4</h3>
+
+<p>Postage stamp images for the large guide probes, in the same basic format as HDU2.
+
+<h3>HDU5</h3>
+
+<p>Masks associated with the postage stamp images for the large guide probes, in the same format.
+
+<h3>HDU6</h3>
+
+<p>A binary table containing information about the guide probes and guide stars. Each entry is for one guide probe, listed in probe number order (1 first).
+
+<table>
+<tr align="left"><th>Column</th><th>Type</th><th>Description</th></tr>
+<tr><td>Exists</td><td>string</td><td>Does the guide probe exist? ("T/"F")</td></tr>
+<tr><td>Enabled</td><td>string</td><td>Is the guide probe enabled? ("T"/"F")</td></tr>
+<tr><td>X/YFocal</td><td>float</td><td>Center of guide probe on plug plate (mm)</td></tr>
+<tr><td>X/YCenter</td><td>float</td><td>Center of guide probe on image (pixels)</td></tr>
+<tr><td>Radius</td><td>float</td><td>Radius of guide probe active area on image (pixels)</td></tr>
+<tr><td>X/YFerruleOffset</td><td>float</td><td>Offset of guide probe active area w.r.t the ferrule (mm)</td></tr>
+<tr><td>Rotation</td><td>float</td><td>Rotation of guide probe ferrule w.r.t the plate (deg)</td></tr>
+<tr><td>RotStar2Sky</td><td>float</td><td>Rotation of sky with respect to the image; 0 if north is along Y, 90 if north is along X??? (deg)</td></tr>
+<tr><td>FocusOffset</td><td>float</td><td>Focus offset of guide probe in &micro;m; sign???</td></tr>
+<tr><td>X/YStar</td><td>float</td><td>Centroid of star on image (pixels)</td></tr>
+<tr><td>DX/Y</td><td>float</td><td>Centroid of star - center of guide probe on image (mm on focal plane)</td></tr>
+<tr><td>DRA/DDec</td><td>float</td><td>Centroid of star - center of guide probe along RA/Dec (mm on focal plane)</td></tr>
+<tr><td>FWHM</td><td>float</td><td>FWHM of star (arcsec)</td></tr>
+</table>
+
+</body>
+</html>
