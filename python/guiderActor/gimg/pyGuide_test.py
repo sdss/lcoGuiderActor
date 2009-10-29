@@ -101,7 +101,7 @@ class GuideTest(object):
 
 		self.mode = mode # ???? 
 		self.ipGguide = None
-		self.ipGguide = ctypes.CDLL(os.path.expandvars("$GCAMERA_DIR/lib/libguide.so"))
+		self.ipGguide = ctypes.CDLL(os.path.expandvars("$GUIDERACTOR_DIR/lib/libguide.so"))
 		
 		self.CID = cartridgeId
 		self.gprobes = gprobes
@@ -348,7 +348,7 @@ class GuideTest(object):
 				offset = (self.xs[16]-xcorrect-self.xcen[16], self.ys[16]-ycorrect-self.xcen[16])
 		return offset
     	
-	def transpose(self, reginarr):
+	def UNUSED_transpose(self, reginarr):
 		xreginarr, yreginarr = np.shape(reginarr)
 		regin = REGION(xreginarr , yreginarr, self._rowPtrs(new_numpy_array, ctypes.c_ushort))
 		new_numpy_array = np.zeros([xreginarr,yreginarr], 'Int16')
@@ -447,22 +447,51 @@ class GuideTest(object):
 		return maskImg
 
 	def getAwfulFITSColumn(self, name, npType, fitsType, objs):
-		
+		""" Generate a pyfits Column filled with attributes objs.info
+
+                Args:
+                     name     - the name of the attribute to look for in objs.info
+                     npType   - the numpy type of the given attribute
+                     fitsType - the FITS type we want.
+                     objs     - the objects whose .info we extract from.
+
+                Returns:
+                     - a pyfits Column
+                """
+                
 		col = np.zeros(len(objs), dtype=npType)
 		i = 0
-		for k in objs.keys():
-			probeInfo = objs[k].info
-			col[i] = getattr(probeInfo,name)
+		for o in objs.values():
+			probeInfo = o.info
+                        try:
+                                col[i] = getattr(probeInfo,name)
+                        except:
+                                pass
 			i += 1
 
 		return pyfits.Column(name=name, format=fitsType, array=col)
 		
 	def fillAwfulFITSColumn(self, name, npType, fitsType, nobj, objs):
+		""" Fill a pyfits Column with attributes from objs.info
 
+                Args:
+                     name     - the name of the attribute to look for in objs.info
+                     npType   - the numpy type of the given attribute
+                     fitsType - the FITS type we want.
+                     nobj     - the number of rows we generate
+                     objs     - the objects whose .info we extract from.
+
+                Returns:
+                     - a pyfits Column
+                """
+                
 		col = np.zeros(nobj, dtype=npType)
 		for o in objs.values():
 			fid = o.fiberid-1
-			col[fid] = getattr(o,name)
+                        try:
+                                col[fid] = getattr(o,name)
+                        except:
+                                pass
 
 		return pyfits.Column(name=name, format=fitsType, array=col)
 		
@@ -474,6 +503,8 @@ class GuideTest(object):
 
 		probeFields = (('exists','u1','L'),
 			       ('enabled','u1','L'),
+                               ('xFocal','f4','E'),
+                               ('yFocal','f4','E'),
 			       ('xCenter','f4','E'),
 			       ('yCenter','f4','E'),
 			       ('radius','f4','E'),
@@ -490,7 +521,8 @@ class GuideTest(object):
 			      ('dy','f4','E'),
 			      ('dRA','f4','E'),
 			      ('dDec','f4','E'),
-			      ('fwhm','f4','E'))
+			      ('fwhm','f4','E'),
+			      ('poserr','f4','E'))
 
 		cols = []
 		for f in probeFields:
@@ -510,27 +542,27 @@ class GuideTest(object):
 	def getGuideloopCards(self, cmd, frameInfo):
 		cards = []
 		
-		defs = (('dRA', 'DRA', 'measured offset in RA'),
-			('dDec', 'DDec', 'measured offset in Dec'),
-			('dRot', 'DRot', 'measured rotator offset'),
-			('dFocus', 'DFocus', 'measured focus offset '),
-			('dScale', 'DScale', 'measured scale offset '),
-			('filtRA', 'FILTRA', 'filtered offset in RA'),
-			('filtDec', 'FILTDec', 'filtered offset in Dec'),
-			('filtRot', 'FILTRot', 'filtered rotator offset'),
-			('filtFocus', 'FILTFcus', 'filtered focus offset '),
-			('filtScale', 'FILTScle', 'filtered scale offset '),
-			('offsetRA', 'OFFRA', 'applied offset in RA'),
-			('offsetDec', 'OFFDec', 'applied offset in Dec'),
-			('offsetRot', 'OFFRot', 'applied rotator offset'),
-			('offsetFocus', 'OFFFocus', 'applied focus offset '),
-			('offsetScale', 'OFFScale', 'applied scale offset '))
+		defs = (('dRA', 'DRA', 'measured offset in RA, deg'),
+			('dDec', 'DDec', 'measured offset in Dec, deg'),
+			('dRot', 'DRot', 'measured rotator offset, deg'),
+			('dFocus', 'DFocus', 'measured focus offset, um '),
+			('dScale', 'DScale', 'measured scale offset, %'),
+			('filtRA', 'FILTRA', 'filtered offset in RA, deg'),
+			('filtDec', 'FILTDec', 'filtered offset in Dec, deg'),
+			('filtRot', 'FILTRot', 'filtered rotator offset, deg'),
+			('filtFocus', 'FILTFcus', 'filtered focus offset, um '),
+			('filtScale', 'FILTScle', 'filtered scale offset, %'),
+			('offsetRA', 'OFFRA', 'applied offset in RA, deg'),
+			('offsetDec', 'OFFDec', 'applied offset in Dec, deg'),
+			('offsetRot', 'OFFRot', 'applied rotator offset, deg'),
+			('offsetFocus', 'OFFFocus', 'applied focus offset, um'),
+			('offsetScale', 'OFFScale', 'applied scale offset, %'))
 		for name, fitsName, comment in defs:
 			try:
 				val = getattr(frameInfo,name)
 				if val != val:
 					val = -99999.9 # F.ing F.TS
-				c = actorFits.makeCard(cmd, fitsName, val, 'guide loop info')
+				c = actorFits.makeCard(cmd, fitsName, val, comment)
 				cards.append(c)
 			except Exception, e:
 				cmd.warn('text="failed to make guider card %s=%s (%s)"' % (
@@ -571,8 +603,9 @@ class GuideTest(object):
 
 		# Start with the raw guider header.
 		imageHDU = pyfits.PrimaryHDU(self.cleandata, header=rawHeader)
+                imageHDU.header.update("SDSSFMT", "GPROC 1 0", "type major minor version for this file")
 		self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, filename)
-
+                
 		try:
 			# The mask planes.
 			maskImage = self.getMaskImage()
@@ -594,6 +627,7 @@ class GuideTest(object):
 			bigMaskStampHDU = pyfits.ImageHDU(stampMaskImage)
 
 			# probe input&Measured quantities.
+                        #import pdb; pdb.set_trace()
 			probeHDU = self.getProbeHDU(cmd, starInfo)
 
 			# Object&offset quantities.
