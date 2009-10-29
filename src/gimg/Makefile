@@ -6,7 +6,7 @@
 
 SO_EXT = so
 SHELL = /bin/sh
-SDSS_CFLAGS =  -g -Wall
+SDSS_CFLAGS =  -g -O2 -Wall
 
 BIN = $(GUIDERACTOR_DIR)/bin
 LIB = $(GUIDERACTOR_DIR)/lib
