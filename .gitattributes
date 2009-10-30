@@ -1,6 +1,7 @@
 * text=auto !eol
 bin/guiderToDs9 -text
 doc/ProcessedGuiderImages.html -text
+etc/gcamFiberInfo.par -text
 etc/guider.cfg -text
 include/ipGguide.h -text
 include/shLegacy.h -text
