@@ -80,7 +80,16 @@ class GuideTest(object):
 
 		self.dataname = dataname
 		self.rawdata = pyfits.getdata(dataname)
+
+                # We can't cope with bright pixels. Hack a fix.
+                w = np.where(self.rawdata >= 0x8000)
+                if len(w[0] > 0):
+                        if cmd:
+                                cmd.warn('text="the exposure has saturated pixels"')
+                        self.rawdata[w[0],w[1]] = 0x7fff
+                        
 		self.cleandata = self.rawdata.astype('Int16')
+
 		h = pyfits.getheader(dataname) 
 		self.dataExptime = h.get('EXPTIME', 1.0)
 
@@ -417,7 +426,9 @@ class GuideTest(object):
                                         fiberList.append(i)
 
 		if len(fiberList) == 0:
-			return np.zeros([0,0],dtype=self.cleandata.dtype), np.zeros([0,0],dtype=maskImage.dtype),
+			return (np.zeros([0,0],dtype=self.cleandata.dtype),
+                                np.zeros([0,0],dtype=maskImage.dtype),
+                                [])
 		
 		rad = reduce(max, [self.gprobes[i].info.radius for i in fiberList])
 		rad = int(rad+0.5)
@@ -448,7 +459,7 @@ class GuideTest(object):
 	def getMaskImage(self):
 		""" Stuff the 1-bit mask planes into an 8-bit image. """
 
-		satMask = (self.rawdata == 2**16-1)
+		satMask = (self.rawdata >= 0x7FFF)
 		badMask = (self.rawdata == 0) # No idea what is bad. Is there a map?
 		maskedMask = (self.rawdata * 0) # Must regenerate image from mask object
 
@@ -672,7 +683,7 @@ class GuideTest(object):
 			hlist.writeto(procpath, clobber=True)
 		except Exception, e:
 			cmd.warn("text='could not write proc- guider file: %s'" % (e,))
-			#import pdb; pdb.set_trace()
+			# import pdb; pdb.set_trace()
 			return
 
 		cmd.inform('file=%s,%s' % (dirname, outname))
