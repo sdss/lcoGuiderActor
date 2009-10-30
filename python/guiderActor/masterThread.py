@@ -117,6 +117,9 @@ class FrameInfo(object):
         self.offsetFocus = numpy.nan
         self.offsetScale = numpy.nan
 
+        self.guideCameraScale = numpy.nan
+        self.plugPlateScale = numpy.nan
+        
 def postscriptDevice(psPlotDir, frameNo, prefix=""):
     """Return the SM device to write the postscript file for guide frame frameNo"""
     return "postencap %s%d.eps" % (prefix, frameNo)
@@ -282,6 +285,8 @@ def main(actor, queues):
                     # so we'll include a possible magnification
                     #
                     guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
+                    frameInfo.guideCameraScale = guideCameraScale
+                    frameInfo.plugPlateScale = gState.plugPlateScale
                     
                     A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
                     b = numpy.matrix(numpy.zeros(3).reshape([3,1])); b3 = 0.0
@@ -376,10 +381,10 @@ def main(actor, queues):
                                     fiber.info.xFocal, fiber.info.yFocal, fiber.info.rotStar2Sky,
                                     star.fwhm/sigmaToFWHM, fiber.info.focusOffset))
                             
-                            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %7.3f %4.0f" % (
+                            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %4.0f" % (
                                 frameNo,
                                 star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
-                                fiber.info.xFocal, fiber.info.yFocal,
+                                fiber.info.xFocal, fiber.info.yFocal, fiber.info.rotStar2Sky,
                                 star.fwhm/sigmaToFWHM, fiber.info.focusOffset)
 
 
@@ -474,7 +479,7 @@ def main(actor, queues):
                             if cmdVar.didFail:
                                 guideCmd.warn('text="Failed to issue offset"')
 
-                            if offsetRot:
+                            if offsetRot: 
                                 cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                                          cmdStr="offset guide %f, %f, %g" % \
                                                              (0.0, 0.0, -offsetRot))
@@ -665,7 +670,8 @@ def main(actor, queues):
                         except ValueError, e:
                             rms0 = float("NaN")
 
-                        dFocus = Delta*gState.dSecondary_dmm # mm to move the secondary
+                        # Note sign change here.
+                        dFocus = -Delta*gState.dSecondary_dmm # mm to move the secondary
                         offsetFocus = -gState.pid["focus"].update(dFocus)
 
                         frameInfo.dFocus = dFocus
