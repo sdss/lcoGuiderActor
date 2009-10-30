@@ -388,7 +388,7 @@ class GuideTest(object):
 				xc-rad:xc+rad+1]
 		rotImg = self.rotateStamp(img, rot, isMask=isMask)
 		# print "img, rotimg: %s, %s" % (str(img.shape), str(rotImg.shape))
-		return rotImg
+		return np.flipud(rotImg)
         
 	def getStamps(self, fullImage, probeList, rad, isMask=False):
 		""" Generates a list of postage stamps. Note that they are 2*r+1 pixels square. """
@@ -396,10 +396,10 @@ class GuideTest(object):
 		stamps = []
 		for i in probeList:
 			info = self.gprobes[i].info
-			xc = int(info.xCenter)
-			yc = int(info.yCenter)
-			rot = info.rotStar2Sky
-
+			xc = int(info.xCenter + 0.5)
+			yc = int(info.yCenter + 0.5)
+			rot = -info.rotStar2Sky
+                        print "rotating probe image %d at (%d,%d) by %0.1f degrees" % (i,xc,yc,rot)
 			stamps.append(self.getOneStamp(fullImage, xc, yc, rad, rot, isMask=isMask))
 		return stamps
 
@@ -407,10 +407,14 @@ class GuideTest(object):
 		fiberList = []
 		for i in range(self.pfib.g_nfibers):
 			probe = self.gprobes.get(i, None)
-			if probe and probe.info.fiber_type in probeTypes:
-				fiberList.append(i)
-			if byRadHack and probe and int(probe.info.radius) == int(byRadHack):
-				fiberList.append(i)
+                        if not probe:
+                                continue
+                        if byRadHack:
+                                if int(probe.info.radius) in byRadHack:
+                                        fiberList.append(i)
+                        else:
+                                if probe.info.fiber_type in probeTypes:
+                                        fiberList.append(i)
 
 		if len(fiberList) == 0:
 			return np.zeros([0,0],dtype=self.cleandata.dtype), np.zeros([0,0],dtype=maskImage.dtype),
@@ -420,7 +424,15 @@ class GuideTest(object):
 		imageStamps = self.getStamps(self.cleandata, fiberList, rad)
 		maskStamps = self.getStamps(maskImage, fiberList, rad, isMask=True)
 
-		return np.vstack(imageStamps), np.vstack(maskStamps)
+                imageStamps = np.vstack(imageStamps)
+                maskStamps = np.vstack(maskStamps)
+                
+                # Fill the stamp background
+                med = np.median(self.cleandata)
+                w = np.where(imageStamps == 0)
+                imageStamps[w[0],w[1]] = med
+                
+		return imageStamps, maskStamps, fiberList
 
 	def addPixelWcs(self, header, wcsName=""):
 		"""Add a WCS that sets the bottom left pixel's centre to be (0.5, 0.5)"""
@@ -495,7 +507,7 @@ class GuideTest(object):
 
 		return pyfits.Column(name=name, format=fitsType, array=col)
 		
-	def getProbeHDU(self, cmd, starInfo=None):
+	def getProbeHDU(self, cmd, starInfo, smallIds, bigIds):
 		""" Return an HDU containing all the probe+star info. 
 
 		Jayzus. Where is all this stuff squirrelled away?
@@ -536,6 +548,20 @@ class GuideTest(object):
 			col = self.fillAwfulFITSColumn(name, npType, fitsType, nobj, starInfo)
 			cols.append(col)
 
+                # Index columns indicating which stampHDU and which image within that
+                stampSize = np.zeros(nobj, dtype='i2')-1
+                stampIdx = np.zeros(nobj, dtype='i2')-1
+                for i in range(len(smallIds)):
+                        idx = smallIds[i]
+                        stampSize[idx-1] = 1
+                        stampIdx[idx-1] = i
+                for i in range(len(bigIds)):
+                        idx = bigIds[i]
+                        stampSize[idx-1] = 2
+                        stampIdx[idx-1] = i
+                cols.append(pyfits.Column(name='stampSize', format='I', array=stampSize))
+                cols.append(pyfits.Column(name='stampIdx', format='I', array=stampIdx))
+
 		hdu = pyfits.new_table(pyfits.ColDefs(cols))
 		return hdu
 
@@ -556,7 +582,7 @@ class GuideTest(object):
 			('offsetDec', 'OFFDec', 'applied offset in Dec, deg'),
 			('offsetRot', 'OFFRot', 'applied rotator offset, deg'),
 			('offsetFocus', 'OFFFocus', 'applied focus offset, um'),
-			('offsetScale', 'OFFScale', 'applied scale offset, %'))
+                        ('offsetScale', 'OFFScale', 'applied scale offset, %'))
 		for name, fitsName, comment in defs:
 			try:
 				val = getattr(frameInfo,name)
@@ -575,6 +601,8 @@ class GuideTest(object):
 
 		try:
 			imageHDU.header.update("OBJECT", os.path.splitext(filename)[0], "")
+			imageHDU.header.update("GCAMSCAL", frameInfo.guideCameraScale, "guide camera plate scale (mm/pixel)")
+			imageHDU.header.update("PLATSCAL", frameInfo.plugPlateScale, "plug plate scale (mm/degree)")
 			tccCards = actorFits.tccCards(models, cmd=cmd)
 			actorFits.extendHeader(cmd, imageHDU.header, tccCards)
 
@@ -612,26 +640,24 @@ class GuideTest(object):
 			maskHDU = pyfits.ImageHDU(maskImage)
 
 			# The small fiber postage stamps
-			stampImage, stampMaskImage = self.getStampImages(probeTypes=('GUIDE', 'TRITIUM'),
-									 maskImage=maskImage)
+			stampImage, stampMaskImage, smallIds = self.getStampImages(probeTypes=('GUIDE', 'TRITIUM'),
+                                                                                   maskImage=maskImage,
+                                                                                   byRadHack=(8,1))
 			smallStampHDU = pyfits.ImageHDU(stampImage)
 			smallMaskStampHDU = pyfits.ImageHDU(stampMaskImage)
 
 			# The big fiber postage stamps
 			# The old cartridge big fibers are not declared as ACQUIRE, so hack in
 			# a radius test. Find a better way, Loomis.
-			stampImage, stampMaskImage = self.getStampImages(probeTypes=('ACQUIRE',),
-									 maskImage=maskImage,
-									 byRadHack=14.1)
+			stampImage, stampMaskImage, bigIds = self.getStampImages(probeTypes=('ACQUIRE',),
+                                                                                 maskImage=maskImage,
+                                                                                 byRadHack=(14,28))
 			bigStampHDU = pyfits.ImageHDU(stampImage)
 			bigMaskStampHDU = pyfits.ImageHDU(stampMaskImage)
 
 			# probe input&Measured quantities.
                         #import pdb; pdb.set_trace()
-			probeHDU = self.getProbeHDU(cmd, starInfo)
-
-			# Object&offset quantities.
-			# objectHDU = self.getObjectHDU(starInfo=starInfo)
+			probeHDU = self.getProbeHDU(cmd, starInfo, smallIds, bigIds)
 
 			# Pile 'em all together.
 			hlist = pyfits.HDUList()
@@ -643,7 +669,7 @@ class GuideTest(object):
 			hlist.append(bigMaskStampHDU)
 			hlist.append(probeHDU)
         
-			hlist.writeto(procpath)
+			hlist.writeto(procpath, clobber=True)
 		except Exception, e:
 			cmd.warn("text='could not write proc- guider file: %s'" % (e,))
 			#import pdb; pdb.set_trace()
