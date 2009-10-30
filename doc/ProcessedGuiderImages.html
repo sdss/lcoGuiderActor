@@ -48,19 +48,21 @@
 
 <table>
 <tr align="left"><th>Column</th><th>Type</th><th>Description</th></tr>
-<tr><td>Exists</td><td>string</td><td>Does the guide probe exist? ("T/"F")</td></tr>
-<tr><td>Enabled</td><td>string</td><td>Is the guide probe enabled? ("T"/"F")</td></tr>
-<tr><td>X/YFocal</td><td>float</td><td>Center of guide probe on plug plate (mm)</td></tr>
-<tr><td>X/YCenter</td><td>float</td><td>Center of guide probe on image (pixels)</td></tr>
-<tr><td>Radius</td><td>float</td><td>Radius of guide probe active area on image (pixels)</td></tr>
-<tr><td>X/YFerruleOffset</td><td>float</td><td>Offset of guide probe active area w.r.t the ferrule (mm)</td></tr>
-<tr><td>Rotation</td><td>float</td><td>Rotation of guide probe ferrule w.r.t the plate (deg)</td></tr>
-<tr><td>RotStar2Sky</td><td>float</td><td>Rotation of sky with respect to the image; 0 if north is along Y, 90 if north is along X??? (deg)</td></tr>
-<tr><td>FocusOffset</td><td>float</td><td>Focus offset of guide probe in &micro;m; sign???</td></tr>
-<tr><td>X/YStar</td><td>float</td><td>Centroid of star on image (pixels)</td></tr>
-<tr><td>DX/Y</td><td>float</td><td>Centroid of star - center of guide probe on image (mm on focal plane)</td></tr>
-<tr><td>DRA/DDec</td><td>float</td><td>Centroid of star - center of guide probe along RA/Dec (mm on focal plane)</td></tr>
-<tr><td>FWHM</td><td>float</td><td>FWHM of star (arcsec)</td></tr>
+<tr><td>exists</td><td>string</td><td>Does the guide probe exist? ("T/"F")</td></tr>
+<tr><td>enabled</td><td>string</td><td>Is the guide probe enabled? ("T"/"F")</td></tr>
+<tr><td>x/yFocal</td><td>float</td><td>Center of guide probe on plug plate (mm)</td></tr>
+<tr><td>x/yCenter</td><td>float</td><td>Center of guide probe on image (pixels)</td></tr>
+<tr><td>radius</td><td>float</td><td>Radius of guide probe active area on image (pixels)</td></tr>
+<tr><td>x/yFerruleOffset</td><td>float</td><td>Offset of guide probe active area w.r.t the ferrule (mm)</td></tr>
+<tr><td>rotation</td><td>float</td><td>Rotation of guide probe ferrule w.r.t the plate (deg)</td></tr>
+<tr><td>rotStar2Sky</td><td>float</td><td>Rotation of sky with respect to the image; 0 if north is along Y, 90 if north is along X??? (deg)</td></tr>
+<tr><td>focusOffset</td><td>float</td><td>Focus offset of guide probe in &micro;m; sign???</td></tr>
+<tr><td>fiber_type</td><td>string</td><td>Type of guide probe; one of: "ACQUIRE", "GUIDE", "TRITIUM"</td>
+<tr><td>x/ystar</td><td>float</td><td>Centroid of star on image (pixels)</td></tr>
+<tr><td>dx/y</td><td>float</td><td>Centroid of star - center of guide probe on image (mm on focal plane)</td></tr>
+<tr><td>dRA/dDec</td><td>float</td><td>Centroid of star - center of guide probe along RA/Dec (mm on focal plane)</td></tr>
+<tr><td>fwhm</td><td>float</td><td>FWHM of star (arcsec)</td></tr>
+<tr><td>poserr</td><td>float</td><td>???</td></tr>
 </table>
 
 </body>
