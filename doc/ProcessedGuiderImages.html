@@ -13,7 +13,7 @@
 
 <h3>HDU0</h3>
 
-<p>The calibrated guider image&mdash;at least as calibrated as it was for processing by the guide loop. As of guiderActor v1_0_9, neither dark subtraction nor field flattening is done, so the image is not really calibrated.
+<p>The calibrated guider image&mdash;at least as calibrated as it was for processing by the guide loop. As of guiderActor v1_0_12, neither dark subtraction nor flat field correction is done, so the image is not really calibrated.
 
 <p>The header contains cards describing the configuration of the guide loop and some measured and applied offsets.
 
@@ -28,7 +28,7 @@
 
 <h3>HDU2</h3>
 
-<p>Postage stamp images for the small guide probes, where each postage stamp image has been rotated so that north is up and ???east is to the right??? Each postage stamp is square. The full image is one tall, skinny image comprised of the postage stamps, in order of increasing probe number starting from row=y=0. (Note: both ds9 and numpy agree on which axis is x and which is y).
+<p>Postage stamp images for the small guide probes, where each postage stamp image has been rotated so that north is up and ???east is to the right??? Each postage stamp is square. Extra pixels (pixels around the edge that are not computed from the camera image), if any, are set to the estimated background. The full image is one tall, skinny image comprised of the postage stamps, in order of increasing probe number starting from row=y=0.
 
 <h3>HDU3</h3>
 
@@ -44,7 +44,7 @@
 
 <h3>HDU6</h3>
 
-<p>A binary table containing information about the guide probes and guide stars. Each entry is for one guide probe, listed in probe number order (1 first).
+<p>A binary table containing information about the guide probes and guide stars. Each entry is for one guide probe; data is listed in probe number order (starting from 1).
 
 <table>
 <tr align="left"><th>Column</th><th>Type</th><th>Description</th></tr>
