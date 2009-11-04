@@ -28,7 +28,7 @@ def main(actor, queues):
                 filenameKey = guiderActor.myGlobals.actorState.models["gcamera"].keyVarDict["filename"]
 
                 cmdVar = actor.cmdr.call(actor="gcamera", cmdStr="expose time=%f" % (msg.expTime),
-                                         keyVars=[filenameKey], timeLim=timeLim)
+                                         keyVars=[filenameKey], timeLim=timeLim, forUserCmd=msg.cmd)
                 if cmdVar.didFail:
                     msg.cmd.warn('text="Failed to take exposure"')
                     msg.replyQueue.put(Msg(Msg.EXPOSURE_FINISHED, cmd=msg.cmd, success=False))
