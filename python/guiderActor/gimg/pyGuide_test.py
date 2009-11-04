@@ -412,7 +412,7 @@ class GuideTest(object):
 			stamps.append(self.getOneStamp(fullImage, xc, yc, rad, rot, isMask=isMask))
 		return stamps
 
-	def getStampImages(self, probeTypes, maskImage, byRadHack=None):
+	def getStampImages(self, probeTypes, maskImage, byRadHack=None, fillBackground=None):
 		fiberList = []
 		for i in range(self.pfib.g_nfibers):
 			probe = self.gprobes.get(i, None)
@@ -439,9 +439,9 @@ class GuideTest(object):
                 maskStamps = np.vstack(maskStamps)
                 
                 # Fill the stamp background
-                med = np.median(self.cleandata)
-                w = np.where(imageStamps == 0)
-                imageStamps[w[0],w[1]] = med
+		if fillBackground != None:
+			w = np.where(imageStamps == 0)
+			imageStamps[w[0],w[1]] = fillBackground
                 
 		return imageStamps, maskStamps, fiberList
 
@@ -640,9 +640,12 @@ class GuideTest(object):
 		outname = "proc-%s" % (filename)
 		procpath = os.path.join(dirname, outname)
 
+                imageBackground = np.median(self.cleandata)
+
 		# Start with the raw guider header.
 		imageHDU = pyfits.PrimaryHDU(self.cleandata, header=rawHeader)
-                imageHDU.header.update("SDSSFMT", "GPROC 1 0", "type major minor version for this file")
+                imageHDU.header.update("SDSSFMT", "GPROC 1 1", "type major minor version for this file")
+                imageHDU.header.update("IMGBACK", imageBackground, "crude background for entire image. For displays.")
 		self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, filename)
                 
 		try:
