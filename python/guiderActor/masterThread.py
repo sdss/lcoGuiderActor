@@ -44,7 +44,7 @@ class GuiderState(object):
         self.setGuideMode("scale")
 
         self.pid = {}               # PIDs for various axes
-        for what in ["azAlt", "rot", "scale", "focus"]:
+        for what in ["raDec", "rot", "scale", "focus"]:
             self.pid[what] = PID.PID(self.expTime, 0, 0, 0)
 
     def deleteAllGprobes(self):
@@ -89,6 +89,7 @@ class StarInfo(object):
         self.ystar = basestar.ys
         self.fwhm = basestar.fwhm
         self.fwhmErr = numpy.nan
+        self.poserr = numpy.nan
 
         self.dx = numpy.nan
         self.dy = numpy.nan
@@ -294,10 +295,10 @@ def main(actor, queues):
                     if plot or sm:                           #setup arrays for sm
                         size = len(gState.gprobes) + 1 # fibers are 1-indexed
                         fiberid_np = numpy.zeros(size)
-                        azCenter_np = numpy.zeros(size)
-                        altCenter_np = numpy.zeros(size)
-                        daz_np = numpy.zeros(size)
-                        dalt_np = numpy.zeros(size)
+                        raCenter_np = numpy.zeros(size)
+                        decCenter_np = numpy.zeros(size)
+                        dRA_np = numpy.zeros(size)
+                        dDec_np = numpy.zeros(size)
 
                     starInfos = {}
                     for star in stars:
@@ -321,16 +322,24 @@ def main(actor, queues):
                         #
                         dx = guideCameraScale*(star.xs - (fiber.info.xCenter - fiber.info.xFerruleOffset))
                         dy = guideCameraScale*(star.ys - (fiber.info.yCenter - fiber.info.yFerruleOffset))
+                        poserr = star.poserr
+
                         starInfo.dx = dx
                         starInfo.dy = dy
+                        starInfo.poserr = poserr
 
-                        if dx != dx or dy != dy:
+                        if dx != dx or dy != dy or poserr != poserr:
                             guideCmd.warn("text=%s" %
                                           qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber=(%g, %g)" % (
                                 star.fiberid, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter)))
                             continue
+                        if poserr == 0:
+                            guideCmd.warn("text=%s" %
+                                          qstr("position error is 0 for gprobe %d star=(%g, %g) fiber=(%g, %g)" % (
+                                star.fiberid, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter)))
+                            continue
                         #
-                        # theta is the angle to rotate (x, y) on the ALTA to (az, alt)
+                        # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
                         #
                         # phi is the orientation of the alignment hole measured clockwise from N
                         # rotation is the anticlockwise rotation from x on the ALTA to the pin
@@ -346,27 +355,27 @@ def main(actor, queues):
                         theta = math.radians(theta)
                         ct, st = math.cos(theta), math.sin(theta)
 #                       print "theta=", theta, "st=", st, "ct=", ct
-                        dAz   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
-                        dAlt  = -dx*st + dy*ct
-                        dAz    =  dAz  
-                        dAlt   = -dAlt
+                        dRA   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
+                        dDec  = -dx*st + dy*ct
+                        dRA    =  dRA/poserr
+                        dDec   = -dDec/poserr
 
-                        starInfo.dRA = dAz
-                        starInfo.dDec = dAlt
+                        starInfo.dRA = dRA
+                        starInfo.dDec = dDec
 
 #                       The vector arrow move correctly with these sign flips
 #                       Move telescope N arrow point S, move telescope E vectors point W 
 
-                        azCenter =  fiber.info.xFocal
-                        altCenter = fiber.info.yFocal
+                        raCenter =  fiber.info.xFocal
+                        decCenter = fiber.info.yFocal
 
                         if plot:
                             try:
                                 fiberid_np[star.fiberid] = star.fiberid
-                                azCenter_np[star.fiberid] = azCenter
-                                altCenter_np[star.fiberid] = altCenter
-                                daz_np[star.fiberid] = dAz
-                                dalt_np[star.fiberid] = dAlt
+                                raCenter_np[star.fiberid] = raCenter
+                                decCenter_np[star.fiberid] = decCenter
+                                dRA_np[star.fiberid] = dRA
+                                dDec_np[star.fiberid] = dDec
                             except IndexError, e:
                                 #import pdb; pdb.set_trace()
                                 pass
@@ -374,7 +383,7 @@ def main(actor, queues):
                         if True:
                             guideCmd.inform("star=%d,%2d, %7.2f,%7.2f, %7.2f,%7.2f, %6.1f,%6.1f,  %6.1f,%6.1f, %6.1f,%6.1f,%4.1f, %7.3f,%4.0f" % (
                                     frameNo, star.fiberid, 
-                                    dAz, dAlt, 
+                                    dRA, dDec, 
                                     dx, dy, 
                                     star.xs, star.ys, 
                                     fiber.info.xCenter, fiber.info.yCenter,
@@ -383,7 +392,7 @@ def main(actor, queues):
                             
                             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %4.0f" % (
                                 frameNo,
-                                star.fiberid, dAz, dAlt, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
+                                star.fiberid, dRA, dDec, dx, dy, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter,
                                 fiber.info.xFocal, fiber.info.yFocal, fiber.info.rotStar2Sky,
                                 star.fwhm/sigmaToFWHM, fiber.info.focusOffset)
 
@@ -391,24 +400,24 @@ def main(actor, queues):
                         if not fiber.enabled:
                             continue
 
-                        b[0] += dAz
-                        b[1] += dAlt
-                        b[2] += azCenter*dAlt - altCenter*dAz
+                        b[0] += dRA
+                        b[1] += dDec
+                        b[2] += raCenter*dDec - decCenter*dRA
 
                         A[0, 0] += 1
                         A[0, 1] += 0
-                        A[0, 2] += -altCenter
+                        A[0, 2] += -decCenter
 
                         A[1, 1] += 1
-                        A[1, 2] += azCenter
+                        A[1, 2] += raCenter
 
-                        A[2, 2] += azCenter*azCenter + altCenter*altCenter
+                        A[2, 2] += raCenter*raCenter + decCenter*decCenter
                         #
                         # Now scale.  We don't actually solve for scale and axis updates
                         # simultanously, and we don't allow for the axis update when
                         # estimating the scale. 
                         #
-                        b3 += azCenter*dAz + altCenter*dAlt
+                        b3 += raCenter*dRA + decCenter*dDec
                         
                     nStar = A[0, 0]
                     if nStar == 0:
@@ -440,41 +449,41 @@ def main(actor, queues):
 
                         # convert from mm to degrees
 #                        print "RHL -90 + + +"
-                        dAz = x[0, 0]/gState.plugPlateScale
-                        dAlt = x[1, 0]/gState.plugPlateScale
+                        dRA = x[0, 0]/gState.plugPlateScale
+                        dDec = x[1, 0]/gState.plugPlateScale
                         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
-                        frameInfo.dRA = dAz
-                        frameInfo.dDec = dAlt
+                        frameInfo.dRA = dRA
+                        frameInfo.dDec = dDec
                         frameInfo.dRot = dRot
 
-                        offsetAz =  -gState.pid["azAlt"].update(dAz)                    
-                        offsetAlt = -gState.pid["azAlt"].update(dAlt)
+                        offsetRa =  -gState.pid["raDec"].update(dRA)                    
+                        offsetDec = -gState.pid["raDec"].update(dDec)
                         offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
-                        offsetAz  =  offsetAz    #sign flips if needed
-                        offsetAlt =  offsetAlt
+                        offsetRa  =  offsetRa    #sign flips if needed
+                        offsetDec =  offsetDec
                         offsetRot =  offsetRot
 
-                        frameInfo.filtRA = offsetAz
-                        frameInfo.filtDec = offsetAlt
+                        frameInfo.filtRA = offsetRa
+                        frameInfo.filtDec = offsetDec
                         frameInfo.filtRot = offsetRot
-                        frameInfo.offsetRA = offsetAz if gState.guideAxes else 0.0
-                        frameInfo.offsetDec = offsetAlt if gState.guideAxes else 0.0
+                        frameInfo.offsetRA = offsetRa if gState.guideAxes else 0.0
+                        frameInfo.offsetDec = offsetDec if gState.guideAxes else 0.0
                         frameInfo.offsetRot = offsetRot if gState.guideAxes else 0.0
 
-                        dAzArcsec = dAz
-                        offsetAzArcsec = offsetAz
+                        dRAArcsec = dRA
+                        offsetRaArcsec = offsetRa
 
-                        guideCmd.respond("axisError=%g, %g, %g" % (3600*dAzArcsec, 3600*dAlt, 3600*dRot))
-                        guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetAzArcsec,
-                                                                        -3600*offsetAlt, -3600*offsetRot,
+                        guideCmd.respond("axisError=%g, %g, %g" % (3600*dRAArcsec, 3600*dDec, 3600*dRot))
+                        guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetRaArcsec,
+                                                                        -3600*offsetDec, -3600*offsetRot,
                                                                         "enabled" if gState.guideAxes else "disabled"))
 #                        import pdb; pdb.set_trace()
 
                         if gState.guideAxes:
                             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                                      cmdStr="offset arc %f, %f" % \
-                                                         (-offsetAz, -offsetAlt))
+                                                         (-offsetRa, -offsetDec))
 
                             if cmdVar.didFail:
                                 guideCmd.warn('text="Failed to issue offset"')
@@ -540,10 +549,10 @@ def main(actor, queues):
                                     if fiberid_np[i] == 0:
                                         continue
                                             
-                                    sm.relocate(azCenter_np[i], altCenter_np[i])
+                                    sm.relocate(raCenter_np[i], decCenter_np[i])
                                     sm.putlabel(6, r" %d" % fiberid_np[i])
                                     
-                                    sm.relocate(azCenter_np[i], altCenter_np[i])
+                                    sm.relocate(raCenter_np[i], decCenter_np[i])
                                     
                                     sm.dot()
                                             
@@ -551,8 +560,8 @@ def main(actor, queues):
                                         sm.ltype(1)
                                         sm.ctype(sm.CYAN)
                                                 
-                                    sm.draw(azCenter_np[i] + vscale*daz_np[i],
-                                            altCenter_np[i] + vscale*dalt_np[i])
+                                    sm.draw(raCenter_np[i] + vscale*dRA_np[i],
+                                            decCenter_np[i] + vscale*dDec_np[i])
                                                 
                                     sm.ltype()
                                     sm.ctype()

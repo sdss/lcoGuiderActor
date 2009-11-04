@@ -43,7 +43,7 @@ class GuiderCmd(object):
         #
         # Declare keys that we're going to use
         #
-        self.keys = keys.KeysDictionary("guider_guider", (1, 1),
+        self.keys = keys.KeysDictionary("guider_guider", (2, 1),
                                         keys.Key("cartridge", types.Int(), help="A cartridge ID"),
                                         keys.Key("fibers", types.Int()*(1,None), help="A list of fibers"),
                                         keys.Key("pointing", types.String(),
@@ -56,7 +56,6 @@ class GuiderCmd(object):
                                         keys.Key("Ti", types.Float(), help="Integral time"),
                                         keys.Key("Td", types.Float(), help="Derivative time"),
                                         keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
-                                        keys.Key("azAlt", help="Guide in az/alt, not ra/dec"),
                                         keys.Key("geek", help="Show things that only some of us love"),
                                         keys.Key("plot", help="Plot things"),
                                         keys.Key("psPlot", help="Save copy of plots"),
@@ -70,7 +69,7 @@ class GuiderCmd(object):
             ("on", "[<time>] [force] [oneExposure] [plot] [psPlot] [<display>] [<spiderInstAng>]", self.guideOn),
             ("off", "", self.guideOff),
             ("setExpTime", "<time>", self.setExpTime),
-            ("setPID", "(azAlt|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
+            ("setPID", "(raDec|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
             ("disable", "<fibers>|<gprobes>", self.disableFibers),
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
             ("loadCartridge", "<cartridge> [<pointing>]", self.loadCartridge),
@@ -119,7 +118,7 @@ class GuiderCmd(object):
         """Set something's PID coefficients"""
 
         what = None
-        for k in ["azAlt", "rot", "focus", "scale"]:
+        for k in ["raDec", "rot", "focus", "scale"]:
             if k in cmd.cmd.keywords:
                 what = k
                 break
