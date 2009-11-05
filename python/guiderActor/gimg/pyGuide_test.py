@@ -414,10 +414,8 @@ class GuideTest(object):
 
 	def getStampImages(self, probeTypes, maskImage, byRadHack=None, fillBackground=None):
 		fiberList = []
-		for i in range(self.pfib.g_nfibers):
-			probe = self.gprobes.get(i, None)
-                        if not probe:
-                                continue
+		for i in self.gprobes.keys():
+			probe = self.gprobes[i]
                         if byRadHack:
                                 if int(probe.info.radius) in byRadHack:
                                         fiberList.append(i)
