@@ -24,10 +24,11 @@ class GuiderState(object):
     """Save the state of the guider"""
 
     class Gprobe(object):
-        def __init__(self, id, info, enable=True):
+        def __init__(self, id, info, enable=True, flags=None):
             self.id = id
             self.info = info
             self.enabled = enable
+            self.flags = flags
 
     def __init__(self):
         self.cartridge = -1
@@ -51,7 +52,7 @@ class GuiderState(object):
         """Delete all fibers """
         self.gprobes = {}
 
-    def setGprobeState(self, fiber, enable=True, info=None, create=False):
+    def setGprobeState(self, fiber, enable=True, info=None, create=False, flags=None):
         """Set a fiber's state"""
 
         if fiber in ("ACQUIRE", "GUIDE"):
@@ -61,7 +62,7 @@ class GuiderState(object):
                     gp.enabled = enable
         else:
             if not self.gprobes.has_key(fiber) and create:
-                self.gprobes[fiber] = GuiderState.Gprobe(fiber, info, enable)
+                self.gprobes[fiber] = GuiderState.Gprobe(fiber, info, enable, flags)
             else:
                 self.gprobes[fiber].enabled = enable
 
@@ -802,7 +803,10 @@ def main(actor, queues):
                 for id, info in msg.gprobes.items():
                     if info.exists:
                         enabled = False if info.fiber_type == "TRITIUM" else info.enabled
-                        gState.setGprobeState(id, enable=enabled, info=info, create=True)
+                    else:
+                        enabled = False
+
+                    gState.setGprobeState(id, enable=enabled, info=info, create=True, flags=info.flags)
                 #
                 # Report the cartridge status
                 #
@@ -859,12 +863,23 @@ def main(actor, queues):
                 msg.cmd.inform('text="The guider is %s"' % ("running" if guideCmd else "off"))
 
                 fiberState = []
+                gprobeBitsDict = {}
                 for f in gState.gprobes.values():
                     if f:
                         fiberState.append("\"(%d=%s)\"" % (f.id, f.enabled))
+                        gprobeBitsDict[f.id] = ("0x%x" % f.flags)
 
                 if len(fiberState) > 0:
                     msg.cmd.respond("gprobes=%s" % ", ".join(fiberState))
+
+                # Some fiber IDs may be absent from gprobeBits.keys(), so make a filled list
+                if gprobeBitsDict:
+                    gprobeBits = [0xff,]*(1 + sorted([int(k) for k in gprobeBitsDict.keys()])[-1])
+                    for k, f in gprobeBitsDict.items():
+                        gprobeBits[k] = f
+                    msg.cmd.respond("gprobeBits=%s" % ", ".join(gprobeBits[1:]))
+                    
+
                 msg.cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 msg.cmd.respond("expTime=%g" % (gState.expTime))
                 msg.cmd.respond("scales=%g, %g, %g, %g" % (gState.plugPlateScale,
