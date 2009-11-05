@@ -22,10 +22,16 @@ import gcameraThread
 class GuiderCmd(object):
     """ Wrap commands to the guider actor"""
 
+    GOOD   =  0x0                       # N.b. these are repeated in PlatedbCmd.py. Caveat editor
+    BROKEN =  0x1
+    NOSTAR =  0x2
+    DISABLE = 0x4
+    UNKNOWN = 0xff                      # shouldn't ever happen.
+
     class GprobeInfo(object):
         """Capture information about a guider probe"""
         def __init__(self, exists, enabled, xCenter, yCenter, radius, rotation,
-                     xFerruleOffset, yFerruleOffset, focusOffset, fiber_type):
+                     xFerruleOffset, yFerruleOffset, focusOffset, fiber_type, flags):
             self.exists = exists
             self.enabled = enabled
             self.xCenter = xCenter
@@ -37,6 +43,7 @@ class GuiderCmd(object):
             self.focusOffset = focusOffset
             self.fiber_type = fiber_type
             self.rotStar2Sky = numpy.nan
+            self.flags = flags
 
     def __init__(self, actor):
         self.actor = actor
@@ -211,18 +218,19 @@ class GuiderCmd(object):
             cmd.fail("text=\"Failed to lookup gprobes for cartridge %d\"" % (cartridge))
             return
 
-        enabled = {}
+        enabled = {}; flags = {}
         for el in cmdVar.getLastKeyVarData(gprobesInUseKey):
-            mat = re.search(r"^\((\d+)\s*=\s*(True|False)\s*\)$", el)
-            id, isEnabled = int(mat.group(1)), (mat.group(2) == 'True')
+            mat = re.search(r"^\((\d+)\s*=\s*(\S+)\s*\)$", el)
+            id, flags[id] = int(mat.group(1)), int(mat.group(2), 16)
 
-            enabled[id] = isEnabled
+            enabled[id] = True if flags[id] == GuiderCmd.GOOD else False
 
         gprobes = {}
         for cartridgeID, gpID, exists, xCenter, yCenter, radius, rotation, \
                 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type in cmdVar.getKeyVarData(gprobeKey):
-            gprobes[gpID] = GuiderCmd.GprobeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius, rotation,
-                                                 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type)
+            gprobes[gpID] = GuiderCmd.GprobeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius,
+                                                 rotation, xFerruleOffset, yFerruleOffset, focusOffset,
+                                                 fiber_type, flags.get(gpID, GuiderCmd.UNKNOWN))
 
         #
         # Add in the plate/fibre geometry from plPlugMapM
