@@ -121,6 +121,7 @@ class FrameInfo(object):
 
         self.guideCameraScale = numpy.nan
         self.plugPlateScale = numpy.nan
+        self.seeing = numpy.nan
         
 def postscriptDevice(psPlotDir, frameNo, prefix=""):
     """Return the SM device to write the postscript file for guide frame frameNo"""
@@ -323,8 +324,9 @@ def main(actor, queues):
                         #
                         dx = guideCameraScale*(star.xs - (fiber.info.xCenter - fiber.info.xFerruleOffset))
                         dy = guideCameraScale*(star.ys - (fiber.info.yCenter - fiber.info.yFerruleOffset))
-                        poserr = star.poserr
-
+                        poserr = star.xyserr
+                        poserr = 1.0
+                        
                         starInfo.dx = dx
                         starInfo.dy = dy
                         starInfo.poserr = poserr
@@ -687,7 +689,8 @@ def main(actor, queues):
                         frameInfo.dFocus = dFocus
                         frameInfo.filtFocus = offsetFocus
                         frameInfo.offsetFocus = offsetFocus if gState.guideFocus else 0.0
-
+                        frameInfo.seeing = rms0*sigmaToFWHM
+                        
                         guideCmd.respond("seeing=%g" % (rms0*sigmaToFWHM))
                         guideCmd.respond("focusError=%g" % (dFocus))
                         guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if gState.guideFocus else "disabled"))
