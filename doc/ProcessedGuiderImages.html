@@ -23,7 +23,7 @@
 <ul>
     <li>(bit 0) saturated pixels. As of v1_0_9 no useful characterization of the camera has been done, so only 0xFFFF pixels have this set.
     <li>(bit 1) bad pixels. Hot/dead pixels, etc. Currently none are defined.
-    <li>(bit 2) fiber mask. Not available in v1_0_9 and earlier.
+    <li>(bit 2) masked pixels (i.e. edge of guide probe). Not available in v1_0_9 and earlier.
 </ul>
 
 <h3>HDU2</h3>
@@ -53,7 +53,7 @@
 <tr><td>x/yFocal</td><td>float</td><td>Center of guide probe on plug plate (mm)</td></tr>
 <tr><td>x/yCenter</td><td>float</td><td>Center of guide probe on image (pixels)</td></tr>
 <tr><td>radius</td><td>float</td><td>Radius of guide probe active area on image (pixels)</td></tr>
-<tr><td>x/yFerruleOffset</td><td>float</td><td>Offset of guide probe active area w.r.t the ferrule (mm)</td></tr>
+<tr><td>x/yFerruleOffset</td><td>float</td><td>Offset of guide probe active area w.r.t the ferrule (mm); need more info???</td></tr>
 <tr><td>rotation</td><td>float</td><td>Rotation of guide probe with respect to the plate (deg); what is the 0 point and sign???</td></tr>
 <tr><td>rotStar2Sky</td><td>float</td><td>Rotation of sky with respect to the image (deg); what is the 0 point and sign???</td></tr>
 <tr><td>focusOffset</td><td>float</td><td>Focus offset of guide probe in &micro;m; + is further from the secondary (shorter ferrule)</td></tr>
@@ -64,7 +64,7 @@
 <tr><td>fwhm</td><td>float</td><td>FWHM of star (arcsec)</td></tr>
 <tr><td>poserr</td><td>float</td><td>???</td></tr>
 <tr><td>stampSize</td><td>int</td><td>Index of postage stamp HDU: 1=HDU4 (small), 2=HDU4 (large), -1=none (Tritium source).</td></tr>
-<tr><td>stampIdx</td><td>int</td><td>Index of postage stamp: 0 for the postage stamp starting at x=0, -1 if no postage stamp (e.g. Tritium source or possibly a fiber that is unavailable).</td></tr>
+<tr><td>stampIdx</td><td>int</td><td>Index of postage stamp: 0 for the postage stamp starting at x=0, -1 if no postage stamp (e.g. Tritium source or possibly a guide probe that is unavailable).</td></tr>
 </table>
 
 </body>
