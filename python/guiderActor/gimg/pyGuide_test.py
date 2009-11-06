@@ -481,14 +481,13 @@ class GuideTest(object):
                 """
                 
 		col = np.zeros(len(objs), dtype=npType)
-		i = 0
-		for o in objs.values():
+		for i in objs.keys():
+			o = objs[i]
 			probeInfo = o.info
                         try:
-                                col[i] = getattr(probeInfo,name)
+                                col[i-1] = getattr(probeInfo,name)
                         except:
                                 pass
-			i += 1
 
 		return pyfits.Column(name=name, format=fitsType, array=col)
 		
@@ -507,7 +506,8 @@ class GuideTest(object):
                 """
                 
 		col = np.zeros(nobj, dtype=npType)
-		for o in objs.values():
+		for i in objs.keys():
+			o = objs[i]
 			fid = o.fiberid-1
                         try:
                                 col[fid] = getattr(o,name)
@@ -654,7 +654,8 @@ class GuideTest(object):
 			# The small fiber postage stamps
 			stampImage, stampMaskImage, smallIds = self.getStampImages(probeTypes=('GUIDE', 'TRITIUM'),
                                                                                    maskImage=maskImage,
-                                                                                   byRadHack=(8,1))
+                                                                                   byRadHack=(8,1),
+										   fillBackground=imageBackground)
 			smallStampHDU = pyfits.ImageHDU(stampImage)
 			smallMaskStampHDU = pyfits.ImageHDU(stampMaskImage)
 
@@ -663,7 +664,8 @@ class GuideTest(object):
 			# a radius test. Find a better way, Loomis.
 			stampImage, stampMaskImage, bigIds = self.getStampImages(probeTypes=('ACQUIRE',),
                                                                                  maskImage=maskImage,
-                                                                                 byRadHack=(14,28))
+                                                                                 byRadHack=(14,28),
+										 fillBackground=imageBackground)
 			bigStampHDU = pyfits.ImageHDU(stampImage)
 			bigMaskStampHDU = pyfits.ImageHDU(stampMaskImage)
 
@@ -687,7 +689,7 @@ class GuideTest(object):
 			# import pdb; pdb.set_trace()
 			return
 
-		cmd.inform('file=%s,%s' % (dirname, outname))
+		cmd.inform('file=%s/,%s' % (dirname, outname))
 
 	def runAllSteps(self):
 		#import pdb; pdb.set_trace()
