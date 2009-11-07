@@ -481,11 +481,11 @@ class GuideTest(object):
                 """
                 
 		col = np.zeros(len(objs), dtype=npType)
-		for i in objs.keys():
-			o = objs[i]
+		for i, o in objs.items():
+			fid = i-1
 			probeInfo = o.info
                         try:
-                                col[i-1] = getattr(probeInfo,name)
+                                col[fid] = getattr(probeInfo,name)
                         except:
                                 pass
 
@@ -506,8 +506,7 @@ class GuideTest(object):
                 """
                 
 		col = np.zeros(nobj, dtype=npType)
-		for i in objs.keys():
-			o = objs[i]
+		for i, o in objs.items():
 			fid = o.fiberid-1
                         try:
                                 col[fid] = getattr(o,name)
@@ -642,8 +641,11 @@ class GuideTest(object):
 
 		# Start with the raw guider header.
 		imageHDU = pyfits.PrimaryHDU(self.cleandata, header=rawHeader)
-                imageHDU.header.update("SDSSFMT", "GPROC 1 1", "type major minor version for this file")
+                imageHDU.header.update("SDSSFMT", "GPROC 1 2", "type major minor version for this file")
                 imageHDU.header.update("IMGBACK", imageBackground, "crude background for entire image. For displays.")
+		imageHDU.header.update("SEEING", frameInfo.seeing if frameInfo.seeing == frameInfo.seeing else 0.0, 
+				       "Estimate of current seeing, arcsec fwhm")
+
 		self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, filename)
                 
 		try:
