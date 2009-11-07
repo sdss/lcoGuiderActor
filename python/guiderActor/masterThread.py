@@ -304,6 +304,9 @@ def main(actor, queues):
 
                     starInfos = {}
                     for star in stars:
+                        starInfo = StarInfo(star)
+                        starInfos[star.fiberid] = starInfo
+
                         try:
                             fiber = gState.gprobes[star.fiberid]
                         except IndexError, e:
@@ -316,8 +319,6 @@ def main(actor, queues):
                             guideCmd.warn('text="Gprobe %d was not listed in plPlugMapM file"' % star.fiberid)
                             continue
 
-                        starInfo = StarInfo(star)
-                        starInfos[star.fiberid] = starInfo
 
                         #
                         # dx, dy are the offsets on the ALTA guider image
@@ -325,7 +326,6 @@ def main(actor, queues):
                         dx = guideCameraScale*(star.xs - (fiber.info.xCenter - fiber.info.xFerruleOffset))
                         dy = guideCameraScale*(star.ys - (fiber.info.yCenter - fiber.info.yFerruleOffset))
                         poserr = star.xyserr
-                        poserr = 1.0
                         
                         starInfo.dx = dx
                         starInfo.dy = dy
@@ -360,8 +360,8 @@ def main(actor, queues):
 #                       print "theta=", theta, "st=", st, "ct=", ct
                         dRA   =  dx*ct + dy*st # error in guide star position; n.b. still in mm here
                         dDec  = -dx*st + dy*ct
-                        dRA    =  dRA/poserr
-                        dDec   = -dDec/poserr
+                        dRA    =  dRA #/poserr
+                        dDec   = -dDec #/poserr
 
                         starInfo.dRA = dRA
                         starInfo.dDec = dDec
