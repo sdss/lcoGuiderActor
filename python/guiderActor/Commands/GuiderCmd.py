@@ -23,7 +23,7 @@ class GuiderCmd(object):
     """ Wrap commands to the guider actor"""
 
     GOOD   =  0x0                       # N.b. these are repeated in PlatedbCmd.py. Caveat editor
-    BROKEN =  0x1
+    BROKEN =  0x1                       # Worse, they are repeated in 
     NOSTAR =  0x2
     DISABLE = 0x4
     UNKNOWN = 0xff                      # shouldn't ever happen.
@@ -230,7 +230,8 @@ class GuiderCmd(object):
                 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type in cmdVar.getKeyVarData(gprobeKey):
             gprobes[gpID] = GuiderCmd.GprobeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius,
                                                  rotation, xFerruleOffset, yFerruleOffset, focusOffset,
-                                                 fiber_type, flags.get(gpID, GuiderCmd.UNKNOWN))
+                                                 fiber_type, 
+                                                 flags.get(gpID, GuiderCmd.UNKNOWN) | GuiderCmd.NOSTAR)
 
         #
         # Add in the plate/fibre geometry from plPlugMapM
@@ -262,6 +263,7 @@ class GuiderCmd(object):
                 gprobes[id].yFocal = float(el[i]); i += 1
                 gprobes[id].phi = float(el[i]); i += 1
                 gprobes[id].throughput = float(el[i]); i += 1
+                gprobes[id].flags &= ~GuiderCmd.NOSTAR
 
             except KeyError:
                 cmd.warn("text=\"Unknown fiberId %d from plugmap file (%s)\"" % (id, ", ".join([str(e) for e in el[1:]])))

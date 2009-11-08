@@ -30,6 +30,15 @@ class GuiderState(object):
             self.enabled = enable
             self.flags = flags
 
+        def isEnabled(self):
+            raise NotImplementedError()
+
+        def setEnabled(self, enabled):
+            if enabled:
+                self.flags |= self._ENABLED
+            else:
+                self.flags &= ~self._ENABLED
+
     def __init__(self):
         self.cartridge = -1
         self.plate = -1
@@ -804,6 +813,10 @@ def main(actor, queues):
                 #
                 gState.gprobes = {}
                 for id, info in msg.gprobes.items():
+                    # FIXABLE HACK: set broken/unplugged probes to be !exists
+                    # # The fix is to unify all the probe structures
+                    if info.flags & 0x3:
+                        info.exists = False
                     if info.exists:
                         enabled = False if info.fiber_type == "TRITIUM" else info.enabled
                     else:
