@@ -467,7 +467,7 @@ class GuideTest(object):
 
 		return maskImg
 
-	def getAwfulFITSColumn(self, name, npType, fitsType, objs):
+	def getAwfulFITSColumn(self, name, npType, fitsType, objs, inInfo=True):
 		""" Generate a pyfits Column filled with attributes objs.info
 
                 Args:
@@ -483,9 +483,10 @@ class GuideTest(object):
 		col = np.zeros(len(objs), dtype=npType)
 		for i, o in objs.items():
 			fid = i-1
-			probeInfo = o.info
+			if inInfo:
+				o = o.info
                         try:
-                                col[fid] = getattr(probeInfo,name)
+                                col[fid] = getattr(o,name)
                         except:
                                 pass
 
@@ -521,19 +522,20 @@ class GuideTest(object):
 		Jayzus. Where is all this stuff squirrelled away?
 		"""
 
-		probeFields = (('exists','u1','L'),
-			       ('enabled','u1','L'),
-                               ('xFocal','f4','E'),
-                               ('yFocal','f4','E'),
-			       ('xCenter','f4','E'),
-			       ('yCenter','f4','E'),
-			       ('radius','f4','E'),
-			       ('xFerruleOffset','f4','E'),
-			       ('yFerruleOffset','f4','E'),
-			       ('rotation','f4','E'),
-			       ('rotStar2Sky','f4','E'),
-			       ('focusOffset','f4','E'),
-			       ('fiber_type','S20','A20'))
+		probeFields = (('exists','u1','L',True),
+			       ('enabled','u1','L',False),
+			       ('flags','u1','L',False),
+                               ('xFocal','f4','E',True),
+                               ('yFocal','f4','E',True),
+			       ('xCenter','f4','E',True),
+			       ('yCenter','f4','E',True),
+			       ('radius','f4','E',True),
+			       ('xFerruleOffset','f4','E',True),
+			       ('yFerruleOffset','f4','E',True),
+			       ('rotation','f4','E',True),
+			       ('rotStar2Sky','f4','E',True),
+			       ('focusOffset','f4','E',True),
+			       ('fiber_type','S20','A20',True))
 
 		starFields = (('xstar','f4','E'),
 			      ('ystar','f4','E'),
@@ -544,10 +546,12 @@ class GuideTest(object):
 			      ('fwhm','f4','E'),
 			      ('poserr','f4','E'))
 
+		# import pdb; pdb.set_trace()
+
 		cols = []
 		for f in probeFields:
-			name, npType, fitsType = f
-			col = self.getAwfulFITSColumn(name, npType, fitsType, self.gprobes)
+			name, npType, fitsType, inInfo = f
+			col = self.getAwfulFITSColumn(name, npType, fitsType, self.gprobes, inInfo=inInfo)
 			cols.append(col)
 
 		nobj = len(self.gprobes)
