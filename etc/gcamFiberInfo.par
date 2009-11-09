@@ -11,7 +11,7 @@
 #Note in the old photometrics version of cartridgeInfo.par the 
 #value of radius entered was the diameter and coords were unbinned 
 #************************************************************
-#Last updated Oct12 5pm PH
+#Last updated Nov09 1pm PH
 #
 #OLD CARTERIDGES 1-9  (MARVELS CARTRIDGES)
 #The x,y values have been transformed from photometrics values
@@ -86,6 +86,11 @@
 #If guiding in Alt Az a third angle is necessary
 #The relationship of the rotator angle, spiderInstangle to plate y.
 #     This is -90 ???
+#
+#*************************************************************************
+#Dead fiber notes
+#Cartridge 8 fiber 1 broken alignent pin, it's not dead, reinstate when fixed 
+#
 #**************************************************************************
 
 version $Revision$             # SVN revision for this file
@@ -124,17 +129,17 @@ GPROBE   1  8 1  258.0 250.0  8.5    0.0    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   1  9 1  209.0 253.0  8.5  345.0    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   1 10 1  240.0 309.0 14.1  280.0    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   1 11 1  297.0 361.0 14.1   90.0    0.0   0.0   0.0    0.0  GUIDE
-GPROBE   2  1 1  313.0 177.0  8.5  189.6    0.0   0.0   0.0    0.0  GUIDE
+GPROBE   2  1 0  313.0 177.0  8.5  189.6    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   2  2 1  259.0 179.0  8.5  182.1    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   2  3 1  211.0 179.0  8.5  283.5    0.0   0.0   0.0    0.0  GUIDE
-GPROBE   2  4 1  314.0 220.0  8.5  253.0    0.0   0.0   0.0    0.0  GUIDE
+GPROBE   2  4 0  314.0 220.0  8.5  253.0    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   2  5 1  260.0 216.0  8.5 -101.1    0.0   0.0   0.0    0.0  GUIDE
-GPROBE   2  6 1  211.0 219.0  8.5  124.1    0.0   0.0   0.0    0.0  GUIDE
-GPROBE   2  7 1  313.0 255.0  8.5 -123.1    0.0   0.0   0.0    0.0  GUIDE
+GPROBE   2  6 0  211.0 219.0  8.5  124.1    0.0   0.0   0.0    0.0  GUIDE
+GPROBE   2  7 0  313.0 255.0  8.5 -123.1    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   2  8 1  258.0 250.0  8.5 -120.6    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   2  9 1  209.0 253.0  8.5  103.0    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   2 10 1  240.0 309.0 14.1  216.4    0.0   0.0   0.0    0.0  GUIDE
-GPROBE   2 11 1  297.0 361.0 14.1  291.7    0.0   0.0   0.0    0.0  GUIDE
+GPROBE   2 11 0  297.0 361.0 14.1  291.7    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   3  1 1  313.0 177.0  8.5  265.9    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   3  2 0  259.0 179.0  8.5   25.4    0.0   0.0   0.0    0.0  GUIDE
 GPROBE   3  3 1  211.0 179.0  8.5  356.0    0.0   0.0   0.0    0.0  GUIDE
