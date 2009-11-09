@@ -52,6 +52,9 @@ class GuiderCmd(object):
         #
         self.keys = keys.KeysDictionary("guider_guider", (2, 1),
                                         keys.Key("cartridge", types.Int(), help="A cartridge ID"),
+                                        keys.Key("fscanId", types.Int(), help="The fscanId identifying a plate scanning"),
+                                        keys.Key("mjd", types.Int(), help="The MJD when a plate was scanned"),
+                                        keys.Key("plate", types.Int(), help="A plugplate ID"),
                                         keys.Key("fibers", types.Int()*(1,None), help="A list of fibers"),
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
@@ -79,7 +82,7 @@ class GuiderCmd(object):
             ("setPID", "(raDec|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
             ("disable", "<fibers>|<gprobes>", self.disableFibers),
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
-            ("loadCartridge", "<cartridge> [<pointing>]", self.loadCartridge),
+            ("loadCartridge", "<cartridge> [<pointing>] [<plate>] [<mjd>] [<fscanId>]", self.loadCartridge),
             ("showCartridge", "", self.showCartridge),
             ('ping', '', self.ping),
             ('restart', '', self.restart),
@@ -175,6 +178,12 @@ class GuiderCmd(object):
         cartridge = cmd.cmd.keywords["cartridge"].values[0]
         pointing = cmd.cmd.keywords["pointing"].values[0] if "pointing" in cmd.cmd.keywords else "A"
         #
+        # If they specify a plate explicitly, we'll bypass the active table and give them what they want
+        #
+        plate = str(cmd.cmd.keywords["plate"].values[0]) if "plate" in cmd.cmd.keywords else None
+        mjd = cmd.cmd.keywords["mjd"].values[0] if "mjd" in cmd.cmd.keywords else None
+        fscanId = cmd.cmd.keywords["fscanId"].values[0] if "fscanId" in cmd.cmd.keywords else None
+                                                #
         # Cartridge ID of 0 means that no cartridge is loaded
         #
         if cartridge == 0:
@@ -196,8 +205,14 @@ class GuiderCmd(object):
         actorState = guiderActor.myGlobals.actorState
 
         pointingInfoKey = actorState.models["platedb"].keyVarDict["pointingInfo"]
+        extraArgs = ""
+        if plate: extraArgs += " plate=%s" % (plate)
+        if mjd: extraArgs += " mjd=%s" % (mjd)
+        if fscanId: extraArgs += " fscanId=%s" % (fscanId)
+        
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-                                            cmdStr="loadCartridge cartridge=%d pointing=%s" % (cartridge, pointing),
+                                            cmdStr="loadCartridge cartridge=%d pointing=%s %s" % \
+                                                (cartridge, pointing, extraArgs),
                                             keyVars=[pointingInfoKey])
         if cmdVar.didFail:
             cmd.fail("text=\"Failed to lookup plate corresponding to %d/%s\"" % (cartridge, pointing))
