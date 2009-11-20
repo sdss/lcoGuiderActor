@@ -55,6 +55,8 @@ class Guider(actorcore.Actor.Actor):
     def __init__(self, name, configFile, debugLevel=30):
         actorcore.Actor.Actor.__init__(self, name, configFile)
 
+        self.headURL = "$HeadURL$"
+
         self.logger.setLevel(debugLevel)
         #self.logger.propagate = True
 
