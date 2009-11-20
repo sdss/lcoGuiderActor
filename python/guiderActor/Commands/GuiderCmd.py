@@ -224,10 +224,13 @@ class GuiderCmd(object):
         #
         # Lookup the valid gprobes
         #
+        extraArgs = ""
+        if plate: extraArgs += "plate=%s" % (plate)
         gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
         gprobesInUseKey = actorState.models["platedb"].keyVarDict["gprobesInUse"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-                                            cmdStr="getGprobes cartridge=%d pointing=%s" % (cartridge, pointing),
+                                            cmdStr="getGprobes cartridge=%d pointing=%s %s" % \
+                                                (cartridge, pointing, extraArgs),
                                             keyVars=[gprobeKey, gprobesInUseKey])
         if cmdVar.didFail:
             cmd.fail("text=\"Failed to lookup gprobes for cartridge %d\"" % (cartridge))
@@ -254,7 +257,7 @@ class GuiderCmd(object):
         guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
         plPlugMapMKey = actorState.models["platedb"].keyVarDict["plPlugMapM"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-                                            cmdStr="getGprobesPlateGeom cartridge=%d" % (cartridge),
+                                            cmdStr="getGprobesPlateGeom cartridge=%d %s" % (cartridge, extraArgs),
                                             keyVars=[guideInfoKey, plPlugMapMKey])
         if cmdVar.didFail:
             cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
@@ -295,6 +298,12 @@ class GuiderCmd(object):
 
     def ping(self, cmd):
         """ Top-level 'ping' command handler. Query the actor for liveness/happiness. """
+
+        try:
+            keyName, verString = self.actor.versionString(cmd)
+            cmd.respond("%s=%s" % (keyName, verString))
+        except:
+            cmd.warn("text='could not fetch version'")
 
         cmd.finish('text="pong"')
 
