@@ -82,7 +82,7 @@ class GuiderCmd(object):
             ("setPID", "(raDec|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
             ("disable", "<fibers>|<gprobes>", self.disableFibers),
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
-            ("loadCartridge", "<cartridge> [<pointing>] [<plate>] [<mjd>] [<fscanId>]", self.loadCartridge),
+            ("loadCartridge", "[<cartridge>] [<pointing>] [<plate>] [<mjd>] [<fscanId>] [force]", self.loadCartridge),
             ("showCartridge", "", self.showCartridge),
             ('ping', '', self.ping),
             ('restart', '', self.restart),
@@ -173,9 +173,14 @@ class GuiderCmd(object):
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=False))
 
     def loadCartridge(self, cmd):
-        """Load a cartridge"""
+        """Load a cartridge
 
-        cartridge = cmd.cmd.keywords["cartridge"].values[0]
+If the cartridge ID is omitted the currently-mounted cartridge is used.  It's an error to specify a cartridge
+that isn't actually mounted (unless you specify force)
+"""
+
+        force = "force" in cmd.cmd.keywords
+        cartridge = cmd.cmd.keywords["cartridge"].values[0] if "cartridge" in cmd.cmd.keywords else -1
         pointing = cmd.cmd.keywords["pointing"].values[0] if "pointing" in cmd.cmd.keywords else "A"
         #
         # If they specify a plate explicitly, we'll bypass the active table and give them what they want
@@ -200,10 +205,33 @@ class GuiderCmd(object):
                                                                 gprobes=gprobes))
             return
         #
-        # Get the plate from the plateDB
+        # Check that the claimed cartridge is actually on the telescope
         #
         actorState = guiderActor.myGlobals.actorState
 
+        instrumentNumKey = actorState.models["mcp"].keyVarDict["instrumentNum"]
+        cmdVar = actorState.actor.cmdr.call(actor="mcp", forUserCmd=cmd,
+                                            cmdStr="info", keyVars=[instrumentNumKey])
+        if cmdVar.didFail:
+            cmd.fail("text=\"Failed to ask mcp for info on cartridges\"")
+            return
+
+        loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
+        cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
+
+        if cartridge < 0:
+            cartridge = loadedCartridge
+            
+        if loadedCartridge != cartridge:
+            msg = "Expected cartridge %s, but %s is loaded" % (cartridge, loadedCartridge)
+            if force:
+                cmd.warn("text=\"%s\"" % (msg + "; proceeding"))
+            else:
+                cmd.fail("text=\"%s\"" % msg)
+                return
+        #
+        # Get the plate from the plateDB
+        #
         pointingInfoKey = actorState.models["platedb"].keyVarDict["pointingInfo"]
         extraArgs = ""
         if plate: extraArgs += " plate=%s" % (plate)
