@@ -50,7 +50,9 @@
 #define PMAX DMAX/8
 
 /*maximum radius we have in the profile arrays seeprofile and radtable */
-#define MAXR 60
+/*2" FWHM = sigma of 2 pixels and go to 3 sigma evaluated at 0.1 sigma steps*/  
+
+#define MAXR 60   
 
 /* max radius^2 we have in the profile arrays seeprofile and radtable */
 /* number of pixels in profile array */
@@ -63,6 +65,7 @@
 
 #define CCDGAIN 1.4   
 /********* VARIABLES ***********/
+
 /*moved out of ipGguide.c*/
 #define UNBINNED_CCD_SIZE 1024
 #define CCD_SIZE UNBINNED_CCD_SIZE/2
@@ -112,12 +115,17 @@ STATIC S16 badrowval[MAXBADPIX];
 STATIC S16 badcolval[MAXBADPIX];
 STATIC int nbadpix = 0;
 
-/* run through histogram and find peak and median 
-   we look for first percentile to define peak 
-   and 55% of the data to find median (the fibers
-   contain about 10 percent of the area; this prob
-   overdoes it for the data, but we will see. */
-#define PEAK_PERCENTILE 0.01
+/* run through histogram from the top and find peak and median 
+   peak of guider fibers is ~1.5% down due to acquisition fibers
+   which transmit more than guide fibers. 
+   55% of the data down to find median
+   70% for the pseudo bias level 
+
+   The 2 acquisition fibers occupy 1.5%
+   The 14 guide fibers occupy 1% 
+   Wings of fibers bring the total fiber area up to near 5%
+*/
+#define PEAK_PERCENTILE 0.015
 #define MEDIAN_PERCENTILE 0.55
 
 /*jeg set bin size on photometrics to break image into 16 bins
@@ -164,10 +172,10 @@ typedef struct ghist_t{
     int ghist_peak;     /* 99th percentile */
     int ghist_ref;      /* halfway between medn and peak */
     int ghist_refl;     /* 1/3 way between medn and peak */
-    int *ghistarr; /* histogram array */
+    int ghist_bias;     /* 35thpercentile--poor mans approx overscan*/
+    int *ghistarr;      /* histogram array */
 } GHIST;
 
-/* in the following, floats or doubles?? */
 /* doubles, python will not work properly with floats -ps */
 typedef struct g_fiberdata{    
     int g_nfibers;         /* number of useful fibers in flat frame */
@@ -193,7 +201,7 @@ typedef struct gfiberstat{
     int cts_illum[16];	   /* counts illuminated */
 } FIBERSTAT;
 
-typedef struct gstarfit{ /*ph where do I finde the template*/
+typedef struct gstarfit{
     float gsampl;       /* profile amplitude; template has ampl DMAX at org */
     float gsbkgnd;      /* mean background level */
     float gswparam;     /* width parameter--100/sigmasq */

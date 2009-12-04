@@ -38,14 +38,15 @@
 ******************************************************************************
 */
 
-#define DEBUG 0				/* print debugging info */
+#define DEBUG 0				/* no debugging info */
+//#define DEBUG 1				/* print debugging info */
 
-/* star14: currently, many values are hardwired in, we need to create variables for these
+/* ph,ps: currently, many values are hardwired in, we need to create variables for these
    in either header file, or passed in from python. */
    
-/* star14: need error handeling to replace dummy code */
+/* ph,ps: need error handeling to replace dummy code */
 
-/* star14: extend profile and other arrays for large fibers, need for aquisition */
+/* ph,ps: extend profile and other arrays for large fibers, need for aquisition */
 
 #include <stdio.h>
 #include <assert.h>
@@ -75,7 +76,7 @@
  */ 
 
 /*--- Fibers ---
- *The large plastic ACQUISITION fibers bundles are 1.5 mm active diameter = 57.7 (26 micron)pixels.
+ * The large plastic ACQUISITION fibers bundles are 1.5 mm active diameter = 57.7 (26 micron)pixels.
  * A usable size is ~ 55 pixels or ~23arcsec. Increased FRD due to squished fibers at the outer circumference
  * of the acquisition fiber bundle result a fall-off in transmission at edges. 
  *  
@@ -86,16 +87,33 @@
  */
 
 /* --- Fiber Layout BOSS Cartridge ---
- * TBD
- */
+ * Approximate locations of the fibers as seen on the guider image, +ve Y up, and +ve X right
+ *
+ *        1  16               
+ *               13          1,8,9,16 short focus fibers
+ *        8   9                
+ *    7            15        
+ *        5  10              2,7,5,10,15 in focus
+ *  2     
+ *        6  12   
+ *   3            11         4, 6 12, 14 long focus fibers
+ *        4  14              3,11 acquisition fibers
+ *  
+ *  Closest fibers 9,13 center to center  = 77 pixels,  
+ *  Illuminated edge to edge min distance = 60 pixels  
+ */ 
 
 /* --- Fiber Layout SDSS Cartridge ---
- * The approximate locations of the fibers in the binned image are:
+ *  Approximate locations of the fibers as seen on the guider image, +ve Y up, and +ve X right
  *
- * These are numbered along rows with increasing column number for the 
- * 3x3 array of small fibers, starting at low rows (1,2,3) and ending at
- * high rows (7,8,9). The big fiber with lowest column number is 10 and
- * the one with high column number is 11. 
+ *       11
+ *    10
+ *   9  8  7
+ *
+ *   6  5  4
+ *
+ *   3  2  1
+ * 
  */
 
 /* All data regions passed to this package are assumed to be binned
@@ -152,7 +170,7 @@
 /******************** DATA DECLARATIONS AND DEFINITIONS ******************/
 
 /* flags for existence of flattener, mask, template dark frame */
-/*star14: probably ok to leave in C code, as we only run once per image */
+/*ph,ps: probably ok to leave in C code, as we only run once per image */
 STATIC int havemask = 0;
 STATIC int havedark = 0;
 STATIC int havehist = 0;
@@ -168,7 +186,7 @@ STATIC float gdnorm = 0.;
  *      FiberstatNew
  *
  ******************************************************************/
-/* star14: added this, will get expanded */
+/* ph,ps: added this, will get expanded */
 FIBERSTAT *
 ipFiberstatNew(void)
 {
@@ -191,7 +209,7 @@ ipFiberstatNew(void)
  */
  
 
-/* star14
+/* ph,ps
  * Look at histograms of new guider and tweak percentile values. 
  *Should reflect fraction of image covered by guide fibers,
  *   but not large aquisition fibers
@@ -213,6 +231,7 @@ gmakehist(
     int thresh;
     int threshm;
     int threshp;
+    int threshb;
     int sum;
     S16 **data; 
 	
@@ -273,33 +292,47 @@ gmakehist(
             }   
         */
     }
-    /* run through histogram and find peak and median */
-    threshp = PEAK_PERCENTILE*ndata;  /* we look for first percentile to define peak */
-    threshm = MEDIAN_PERCENTILE*ndata; /* and 55% of the data to find median (the fibers
-                        * contain about 10 percent of the area; this prob
-                           * overdoes it for the data, but we will see.
-                           */
+
+    /* run through histogram from the TOP and find peak and median
+    * we look for 1.5th percentile to define peak 
+    * and down 55% of the data to find median, 
+    * and down 70% for the pseudo bias estimate
+    * The fibers contain about 5 percent of the area;
+    * The scattered light is about 20 percent
+    *ph values updated for alta camera*/
+    
+    threshp =   PEAK_PERCENTILE*ndata;  
+    threshm = MEDIAN_PERCENTILE*ndata;
+    threshb =   BIAS_PERCENTILE*ndata; 
+
     sum = 0;
     thresh = threshp;
     for(i=DMAX-1;i>=0;i--){
         sum += ptr2[i];
         if (sum > thresh){
-            if(thresh == threshm){
-                gptr->ghist_medn = i;
-                break;
-            }
             if(thresh == threshp){
                 gptr->ghist_peak = i;
                 thresh = threshm; /* look for median next */
+		continue;
             }
+            if(thresh == threshm){
+                gptr->ghist_medn = i;
+                thresh = threshb; /* look for pseudo bias level next */
+		continue;
+            }
+            if(thresh == threshb){
+                gptr->ghist_bias = i;
+                break;
+            }
+
         }
     }
     /* set the reference level halfway between median and peak */
     gptr->ghist_ref = (gptr->ghist_peak + gptr->ghist_medn)/2;
     /* and the 'low' reference level a third of the way up */
     gptr->ghist_refl = (2*gptr->ghist_medn + gptr->ghist_peak)/3;
-    printf("\n peak,medn,ref,refl=%d %d %d %d \n",
-           gptr->ghist_peak,gptr->ghist_medn,gptr->ghist_ref,gptr->ghist_refl);
+    printf("\n peak,medn,ref,refl,bias=%d %d %d %d %d\n",
+           gptr->ghist_peak,gptr->ghist_medn,gptr->ghist_ref,gptr->ghist_refl,gptr->ghist_bias);
 
     // Error handling temporarily disabled
     if(gptr->ghist_peak < FNORM/8){		//changed
@@ -315,13 +348,12 @@ gmakehist(
 
 
 /******************* GMAKEFLAT() ******************************************* 
- * this routine takes a template image (guimaskNewder flat) and produces a 
- * multiplicative flattener picture in which all pixels with the original
- * <= the threshold are zero and the pixels which in the original are
- * greater than the threshold are inverted about 'norm', so that when the
- * product with the original is right shifted 12 bits all nonzero pixels
- * have the value 'norm' ( norm is usually set to ghist.ghist_peak, as
- * being representative of the high values in the flat frame. )
+ * this routine takes a template image (bias and dark subtracted guider flat) 
+ * and produces a multiplicative flattener picture in which all 
+ * original pixels <= the threshold are zero 
+ * and the pixels >= greater than the threshold are inverted about 'norm',
+ * norm is usually set to ghist.ghist_peak, being representative of 
+ * the high values in the flat frame. )
  * The routine returns zero if successful, -1 if the flattener overflowed
  * 12 bits--this is not possible if the processing steps here are followed
  * on a valid flat frame.
@@ -527,9 +559,8 @@ gextendmask(
 #define FINDEBUG
  
 /******************* GFINDFIBERS() ***************************************
- * This routine is specifically tuned to the current (fall 2008) apogee guider
- * flats and guider architecture, in which there are nine small fibers
- * and two large ones on a 512 x 512 frame. Rebinning to 24 x 24 always results
+ * This routine deals with BOSS and Marvels cartridges.
+ * 512 x 512 Alta frame binned to 24 x 24 always results
  * in an image with a single maximum for each fiber or at worst two
  * adjacent maximum pixels with the same value.
  *
@@ -687,7 +718,7 @@ gfindfibers(
 
     /* find peaks in binned image*/
     npk = 0;
-    for(i=1;i<31;i++){				/* maxima cannot be at edge pixals, so 1-31 */
+    for(i=1;i<31;i++){				        /* maxima cannot be at edge pixals, so 1-31 */
         for(j=1;j<xsbin-1;j++){
             if((val = binpic[i][j]) >  BINTHRESH 	/* check surrounding pixals */
             && val >= binpic[i][j+1]
@@ -703,7 +734,7 @@ gfindfibers(
                 apk[npk] = val;
                 npk++;
                 if(npk>MAXPEAKS){			/* mostly arbitrary, but needs to be higher
-						   for the new camera, i.e. npk>25 */
+						           for the new camera, i.e. npk>25 */
 		  fprintf(stderr, "nk = %d\n", npk);
                     shError("GFINDFIBERS: Invalid flat frame. Too many fibers");
                     return (-1);
@@ -776,7 +807,6 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
     }
     if(npk < nfib-1){
         sprintf(pbuf,"GFINDFIBERS: Only %d fibers found",npk);
-	//mur_send_text(pbuf);
         shError(pbuf);
 	/*
 	  return(SH_GENERIC_ERROR);
@@ -811,18 +841,18 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
      * and the largest cluster is identified as the true offset. We search
      * over a range of +/- 48 pixels in the original frame, but do so
      * on data binned down by 8.
-       basically, finds how much object center is off from  the fiber center
-       with an error of +/- 8 pixals.
+     * basically, finds how much object center is off from  the fiber center
+     * with an error of +/- 8 pixels.
      */    
      /*CHANGE THIS NOW*/
     for(i=0;i<14;i++){
         dxarr[i] = dyarr[i] = 0;
     }
     for(i=0;i<npk;i++){
-        for(j=0;j<nfib;j++){		/*star14: cant use 11 here, nfibers  must be passed in*/
-            if(abs(dx = (xpk[i] - fiberx[j])) < 48 && 		/*star14: 48 also needs to change, depending on old bundles or new bundles*/
+        for(j=0;j<nfib;j++){		/*ph,ps: cant use 11 here, nfibers  must be passed in*/
+            if(abs(dx = (xpk[i] - fiberx[j])) < 48 && 		/*ph,ps: 48 also needs to change, depending on old bundles or new bundles*/
                     abs(dy = (ypk[i] - fibery[j])) < 48){
-                dxarr[(dx+56)/8]++;			/*star14: 56 is 7*8, size of dxarr is 14. */
+                dxarr[(dx+56)/8]++;			/*ph,ps: 56 is 7*8, size of dxarr is 14. */
                 dyarr[(dy+56)/8]++;
                 nposs++;		/* what is this variable for?? */
             }
@@ -839,7 +869,7 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
     xpkoff=0;
     
     ypkoff=0; 
-    for(i=1;i<14-1;i++){	/*star14: whole loop needs to change with length of dxarr/dyarr */
+    for(i=1;i<14-1;i++){	/*ph,ps: whole loop needs to change with length of dxarr/dyarr */
         x = 2*dxarr[i] + (dxarr[i-1] + dxarr[i+1]);
         if(x > xmaxpk){			/* wont happen until i>=7 */
             xmaxpk = x;
@@ -876,7 +906,7 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
             dx = xpk[i] - fiberx[j] - xpkoff;
             dy = ypk[i] - fibery[j] - ypkoff;
            
-            /* star14: below muest change with CCD size and fiber spacing */
+            /* ph,ps: below muest change with CCD size and fiber spacing */
             if(dx*dx + dy*dy < 512){                /*ph This is still ok at 256*/
                 fid[i] = fiberid[j];		    /* this makes sure the object is
 						       less than 16 pixals away from center of fiber? */
@@ -1026,8 +1056,8 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
         ptr->g_illrad[k] = sqrt( (float)sump/3.14159 );
 
         
-        /*star14: should be tested for each sized fiber */
-        if(firad[k] >= 40){		/*star14: radius size dependent on cartridge, pass in 30 value*/
+        /*ph,ps: should be tested for each sized fiber */
+        if(firad[k] >= 40){		/*ph,ps: radius size dependent on cartridge, pass in 30 value*/
             sprintf(pbuf,
               "GFINDFIBERS: shError: fiber %d has too large radius, %d pixels",
               k,firad[k]); 
@@ -1061,123 +1091,23 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
     sprintf(pbuf,
     "Gguider found %d fibers, peak ct %d:",npk,peak-medn);  
     shDebug(DEBUG, pbuf);
- //   mur_send_text(pbuf);
     for(i=0;i<npk;i++){ 
       sprintf(pbuf,"Gguider fiber %2d xcen=%5.1f, ycen=%5.1f",
 	      ptr->g_fid[i],
 	      ptr->g_xcen[i],
 	      ptr->g_ycen[i]); 
       shDebug(DEBUG,pbuf);
-   //   mur_send_text(pbuf);
       sprintf(pbuf,"Gguider fiber %2d fibrad=%5.1f, illrad=%5.1f",
 	      ptr->g_fid[i],
 	      ptr->g_fibrad[i],
 	      ptr->g_illrad[i]); 
       shDebug(DEBUG,pbuf);
-   //   mur_send_text(pbuf);
     }
    
     haveflatdata = 1;
     free(binarray);
     return(SH_SUCCESS);
 }
-
-/* helper for hotlist */
-/***************** SSHINSORT() *****************************************/
-/* sort a short array in place using straight insertion.
- * From Numerical recipes.
- */
- 
-static void
-sshinsort(S16 *arr,int n)
-{
-    int i,j;
-    S16 a;
-    
-    for(j=1;j<n;j++){
-        a = arr[j];
-        i = j-1;
-        while(i>=0 && arr[i] > a){
-            arr[i+1] = arr[i];
-            i--;
-        }
-        arr[i+1] = a;
-    }
-}        
-
-/******************* HOTLIST() *****************************************/
-/* 
- * this routine finds all pixels above some threshold, and makes a list
- * of their positions. It returns the number of pixels. It does NOT
- * malloc any storage; the lists are declared static above and the
- * max size is defined as MAXBADPIX. It returns the number of bad pixels
- * found, -1 for an error.
- */
-
-/* star14:only needs to be used on hot dark pixals that dont subtract or very bright ones*/
-
-int
-hotlist(int xs,             /* x size (pixels) */
-        int ys,             /* y size (pixels) */
-        S16 **pic,          /* pointer to line pointer array */
-        int thresh          /* threshold */
-        )
-{
-    int i, j, n;
-    
-    n = 0;
-    for(i=1; i < ys - 1; i++){
-        for(j=1; j < xs - 1; j++){
-            if(pic[i][j] > thresh){
-                badcolval[n] = j;
-                badrowval[n] = i;
-                n++;
-                if(n >= MAXBADPIX){
-		  return(-1);
-                }
-            }
-        }
-    }
-    return(n);
-}
-
-  /******************** HOTFIX() ******************************************/
-/* 
- * This routine replaces a list of hot pixels by the medians of the 
- * surrounding pixels.  the row,col coordinates of the bad pixels are
- * stored in the static arrays badrowval, badcolval, and there are 
- * nbadpix<MAXBADPIX of them. 
- */
-  
-void
-hotfix( int xs,              /* x size */
-        int ys,              /* y size */
-        S16 **pic     /* pointer to line pointer array */
-        )
-{
-    int i, j, n;
-    S16 nbrlist[8];   
-    int med;
-   
-    for(n=0; n<nbadpix; n++){
-        i = badrowval[n];
-        j = badcolval[n];
-        if(i > 0 && i < ys - 1 && j > 0 && j < xs - 1){
-            nbrlist[0] = pic[i][j-1];
-            nbrlist[1] = pic[i][j+1];
-            nbrlist[2] = pic[i+1][j-1];
-            nbrlist[3] = pic[i+1][j];
-            nbrlist[4] = pic[i+1][j+1];
-            nbrlist[5] = pic[i-1][j-1];
-            nbrlist[6] = pic[i-1][j];
-            nbrlist[7] = pic[i-1][j+1];
-            sshinsort(nbrlist,8);
-            med = (nbrlist[3] + nbrlist[4])/2;
-            pic[i][j] = med;
-        }
-    }
-}
-
 
 
 /************************ GINITSEQ() *************************************
@@ -1193,43 +1123,6 @@ ginitseq(void)
     return(SH_SUCCESS) ;
 }
  
-/*********************** GMFLATTEN()  ***************************************/
-/* This routine applies the masked flat to a data frame; the data frame
- * MUST have been dedarked and dezeroed by gsubdark, because it is ASSUMED
- * in this routine that the bias has been removed 
- */
-
-int
-gmflatten(
-    REGION *dataReg, /* data frame to be flattened */
-    REGION *flatReg  /* masked flat field as produced by gmakeflat()*/
-    )
-{
-    S16 **data;   /* data frame to be flattened */
-    S16 **flat;   /* masked flat field as produced by gmakeflat()*/
-    int xsize = dataReg->ncol;     /* number of columns */ 
-    int ysize = dataReg->nrow;     /* number of rows */
-    int i, j;
-
-    if(haveflatdata == 0) {
-      shError("GMFLATTEN: no flat data");
-      return(SH_GENERIC_ERROR);
-    }
-    
-    assert(dataReg->rows_s16 != NULL);
-    data = dataReg->rows_s16;
-   
-	assert(flatReg->rows_s16 != NULL);
-    flat = flatReg->rows_s16;
-    
-
-    for(i=0;i<ysize;i++){
-        for(j=0;j<xsize;j++){
-            data[i][j] = (data[i][j] * flat[i][j]) >> 12;	//star14:lets try to do this with real numbers
-        }
-    }
-    return (SH_SUCCESS);
-} 
 
 /*********************** FITTING ROUTINES *******************************
  *ph
@@ -1248,36 +1141,41 @@ gmflatten(
  * the filter only on even pixel centers, finding the maximum in the
  * end by quadratic interpolation. To this end, we construct a table
  * of 3600 (MAXR2) entries in the function (was 3600 for photometrics ~3sig =20 pix)
- * ph keep same for now but its bigger than it needs to be
+ * ph: keep same for now but its bigger than it needs to be
  * 
  * exp(-s/2) + 0.1*exp(-s/8) - exp(-18) - 0.1*exp(-4.5)/(same at s=0)
  *
- * with spacings in s, which is r^2/sigma^2,  of 0.01, thus evaluating
- * the function over the range r/sigma from 0 to 6, outside of which
- * it is zero. Since r^2 is always an integer, this table look-up is
+ * with spacings in s, which is r^2/sigma^2, of 0.01, thus evaluating
+ * the function over the range r/sigma from 0 to 6, gives (3600 = 6**2/0.01)
+ *  outside of which it is zero. 
+ * Since r^2 is always an integer, this table look-up is
  * exact if 100*r^2/sigma^2 is an integer for any r^2, or 100/sigma^2
  * is an integer. Since sigma is typically about 3, this allows for a 
  * granularity in sigma^2 of about 10 percent, or in sigma of about 5 
  * percent, which is fine. One can certainly linearly interpolate if required.
  *
- * for a small-gaussian sigma of sig and a radus of r, enter this table
+ * For a small-gaussian sigma of sig and a radus of r, enter this table
  * with the value 100*r^2/sig^2. If you do not wish to interpolate,
  * with r^2 integral, 100/sig^2 must be an integer. If we use a rounded
  * value, should be OK (see above). A coarse search grid might be
- *
- *   100/sig^2  sig    fwhm(")
- *      1      10.0     7.0
- *      2       7.0     4.9
- *      3       5.7     4.0
- *      5       4.5     3.1
- *      8       3.5     2.5
- *     13       2.8     1.9
- *     20       2.2     1.6
- *     30       1.8     1.3
- *     50       1.4     1.0
+ *       old photometrics              alta
+ *   100/sig^2 sig(pix) fwhm(")        fwhm(")   
+ *      1      10.0     7.0           10.0   
+ *      2       7.0     4.9            7.0
+ *      3       5.7     4.0            5.7
+ *      5       4.5     3.1            4.5
+ *      8       3.5     2.5            3.5
+ *     13       2.8     1.9            2.8
+ *     20       2.2     1.6            2.2
+ *     30       1.8     1.3            1.8
+ *     50       1.4     1.0            1.4
+ *    100       1.0     0.7            1.0
+ * 
+ * Note for alta camera the conversion from sigma in pixels to fwhm in arcsec is
+ *   0.428(arcec/pix) * 2.354*(sigma/fwhm) = 1.0
  *
  * We begin by finding the maximum in the frame as defined by a 21-pixel
- * core based on 1.8 arcsecond seeing. With that center as a first guess,
+ * core based on 1.8 arcsecond seeing. (*ph* 21 pix= With that center as a first guess,
  * a radial profile is extracted and a sigma is found for a profile fit,
  * which is used to refine the center. This is repeated and the center
  * interpolated quadratically if it is not on the edge.
@@ -1389,7 +1287,7 @@ gmakeseeprof(void)
     }
     seeprofile[0] = PMAX;
     
-    /*star14: MAXR is because r must be <= 3600 */
+    /*ph,ps: MAXR is because r must be <= 3600 */
     for(i=0;i<MAXR;i++) rvalmean[i] = rvalwt[i] = 0 ;
     for(i=0;i<MAXR;i++){
         for(j=1;j<MAXR;j++){
@@ -1510,7 +1408,7 @@ gproffit(
     do{
         sumf = sump = sumw = sumf2 = sumfp = sumerr = 0;
         /* for current guess at wp, do linear least squares to solve for
-         * amplitude, background, and evalutate ms error */
+         * amplitude, background, and evalutate rms error */
         wp = wpg[wpdex]; 
         for(i=0;i<npt;i++){
             w = starwgt[i];
@@ -1735,10 +1633,13 @@ gfindstar(
     
     /* first populate smcap, the filter to be used to find maxima; this
      * corresponds to a parabolic representation of a gaussian with sigma
-     * about 2.5 pixels, or 1.8 arcsecond seeing
+     * about 1.8 alta pixels, or 1.8 arcsecond seeing
      */
      
-    for(k=0;k<6;k++) smcap[k] = PMAX - 270*k;                /*ph 4096 ??? */
+    //smcap[k] = 4096 - 270*k;    Original, triangular but not parabolic? k**2 *ph*
+    //for now scale 4096/270   PMAX    
+
+    for(k=0;k<6;k++) smcap[k] = PMAX - (PMAX/15.1)*k;    
     sumcap = smcap[0] + 4*smcap[1] + 4*smcap[2] + 4*smcap[4] + 8*smcap[5];
     
     /* first smooth the picture in the neighborhood of the fiber with
@@ -1779,11 +1680,9 @@ gfindstar(
     sprintf(pbuf,"Gguide Fiber %d: xc,yc,rc = %d %d %d",
 	    fk,xc,yc,rc);
     shDebug(DEBUG,pbuf);
- //   mur_send_text(pbuf);
     sprintf(pbuf,"Gguide Fiber %d: max,maxj,maxi= %d %d %d ",
 	    fk,max/sumcap,maxj,maxi);
     shDebug(DEBUG,pbuf);        
- //   mur_send_text(pbuf);
    
     /* OK, use this as first guess at maximum. Extract radial profiles in
      * a 3x3 gridlet about this, and walk to find minimum fitting error */ 
@@ -1936,25 +1835,21 @@ gfindstar(
             /* advertise our results */
             sprintf(pbuf,"Gguide xs,ys=%5.2f %5.2f",xs,ys);
             shDebug(DEBUG,pbuf);
-//	    mur_send_text(pbuf);
 
             sprintf(pbuf,
 		    "Gguide err=%6.0f ampl=%5.1f bkgnd=%4.1f",
 		    err2d,fstarfit.gsampl,fstarfit.gsbkgnd); 
             shDebug(DEBUG,pbuf);
-   //         mur_send_text(pbuf);
 
             sprintf(pbuf,
 		    "Gguide fwhm=%4.2f sig=%4.2f fwhm0=%4.2f",
 		    fwhm, fwhm/0.69, fwhm0); 
             shDebug(DEBUG,pbuf);
-       //     mur_send_text(pbuf);
 
             sprintf(pbuf,
 		    "Gguide m=%4.2f e=%4.3f",
 		    ptr->g_mag[fk], ptr->g_poserr[fk] ); 
             shDebug(DEBUG,pbuf);
-    //        mur_send_text(pbuf);
 
             break;
         }
@@ -2004,21 +1899,164 @@ gfindstars(
         }
     }
     /* if mode ==0, we want to use gfindstar on i = SPOTID. else, run on nifber */
- //   if(mode == 0){
-   /* 	err = gfindstar(data,16,ptr);
-    	err = gfindstar(data,16,ptr);
-    	err = gfindstar(data,16,ptr);
-    	if(err !=0){
-            sprintf(pbuf,"GFINDSTARS:Fiber error, fiber %d",i);
-            shError(pbuf);
-            return (SH_GENERIC_ERROR);
-        }
-	//}
- //   else if (mode == 1){
+    /*  if(mode == 0){
+     	   err = gfindstar(data,16,ptr);
+    	   err = gfindstar(data,16,ptr);
+    	   err = gfindstar(data,16,ptr);
+    	   if(err !=0){
+              sprintf(pbuf,"GFINDSTARS:Fiber error, fiber %d",i);
+              shError(pbuf);
+              return (SH_GENERIC_ERROR);
+           }
+	}
+        else if (mode == 1){
   		
-   // }*/
+        }
+     */
     return (SH_SUCCESS);
 }
+
+/**************Depreciated routines below ****************************************/
+
+
+
+
+/******************* HOTLIST() *****************************************/
+/* 
+ * this routine finds all pixels above some threshold, and makes a list
+ * of their positions. It returns the number of pixels. It does NOT
+ * malloc any storage; the lists are declared static above and the
+ * max size is defined as MAXBADPIX. It returns the number of bad pixels
+ * found, -1 for an error.
+ */
+
+/* ph,ps:only needs to be used on hot dark pixals that dont subtract or very bright ones*/
+
+int
+hotlist(int xs,             /* x size (pixels) */
+        int ys,             /* y size (pixels) */
+        S16 **pic,          /* pointer to line pointer array */
+        int thresh          /* threshold */
+        )
+{
+    int i, j, n;
+    
+    n = 0;
+    for(i=1; i < ys - 1; i++){
+        for(j=1; j < xs - 1; j++){
+            if(pic[i][j] > thresh){
+                badcolval[n] = j;
+                badrowval[n] = i;
+                n++;
+                if(n >= MAXBADPIX){
+		  return(-1);
+                }
+            }
+        }
+    }
+    return(n);
+}
+
+/* helper for hotlist */
+/***************** SSHINSORT() *****************************************/
+/* sort a short array in place using straight insertion.
+ * From Numerical recipes.
+ */
+ 
+static void
+sshinsort(S16 *arr,int n)
+{
+    int i,j;
+    S16 a;
+    
+    for(j=1;j<n;j++){
+        a = arr[j];
+        i = j-1;
+        while(i>=0 && arr[i] > a){
+            arr[i+1] = arr[i];
+            i--;
+        }
+        arr[i+1] = a;
+    }
+}        
+
+
+/******************** HOTFIX() ******************************************/
+/* 
+ * This routine replaces a list of hot pixels by the medians of the 
+ * surrounding pixels.  the row,col coordinates of the bad pixels are
+ * stored in the static arrays badrowval, badcolval, and there are 
+ * nbadpix<MAXBADPIX of them. 
+ */
+  
+void
+hotfix( int xs,              /* x size */
+        int ys,              /* y size */
+        S16 **pic     /* pointer to line pointer array */
+        )
+{
+    int i, j, n;
+    S16 nbrlist[8];   
+    int med;
+   
+    for(n=0; n<nbadpix; n++){
+        i = badrowval[n];
+        j = badcolval[n];
+        if(i > 0 && i < ys - 1 && j > 0 && j < xs - 1){
+            nbrlist[0] = pic[i][j-1];
+            nbrlist[1] = pic[i][j+1];
+            nbrlist[2] = pic[i+1][j-1];
+            nbrlist[3] = pic[i+1][j];
+            nbrlist[4] = pic[i+1][j+1];
+            nbrlist[5] = pic[i-1][j-1];
+            nbrlist[6] = pic[i-1][j];
+            nbrlist[7] = pic[i-1][j+1];
+            sshinsort(nbrlist,8);
+            med = (nbrlist[3] + nbrlist[4])/2;
+            pic[i][j] = med;
+        }
+    }
+}
+
+
+
+/*********************** GMFLATTEN()  ***************************************/
+/* This routine applies the masked flat to a data frame; the data frame
+ * MUST have been dedarked and dezeroed by gsubdark, because it is ASSUMED
+ * in this routine that the bias has been removed 
+ */
+
+int
+gmflatten(
+    REGION *dataReg, /* data frame to be flattened */
+    REGION *flatReg  /* masked flat field as produced by gmakeflat()*/
+    )
+{
+    S16 **data;   /* data frame to be flattened */
+    S16 **flat;   /* masked flat field as produced by gmakeflat()*/
+    int xsize = dataReg->ncol;     /* number of columns */ 
+    int ysize = dataReg->nrow;     /* number of rows */
+    int i, j;
+
+    if(haveflatdata == 0) {
+      shError("GMFLATTEN: no flat data");
+      return(SH_GENERIC_ERROR);
+    }
+    
+    assert(dataReg->rows_s16 != NULL);
+    data = dataReg->rows_s16;
+   
+	assert(flatReg->rows_s16 != NULL);
+    flat = flatReg->rows_s16;
+    
+
+    for(i=0;i<ysize;i++){
+        for(j=0;j<xsize;j++){
+            data[i][j] = (data[i][j] * flat[i][j]) >> 12;	//ph,ps:lets try to do this with real numbers
+        }
+    }
+    return (SH_SUCCESS);
+} 
 
 /********************* GTRANSPOSE() ****************************************
  * Transposes the alta image to be oriented the same as Photometrics image
@@ -2042,10 +2080,10 @@ gtranspose(
 #endif
 
 	assert(inReg->rows_s16 != NULL);
-    datain = inReg->rows_s16;
+	datain = inReg->rows_s16;
     
-    assert(outReg->rows_s16 != NULL);
-    dataout = outReg->rows_s16;
+	assert(outReg->rows_s16 != NULL);
+	dataout = outReg->rows_s16;
     
 
 	nrow = inReg->nrow;
@@ -2060,8 +2098,6 @@ gtranspose(
 	}
 	return(SH_SUCCESS);
 }
-
-
 
 /********************** END MODULE, GUIDER.C *******************************/
 

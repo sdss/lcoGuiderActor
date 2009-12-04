@@ -20,6 +20,7 @@ class GHIST(ctypes.Structure):
 				("ghist_peak", ctypes.c_int),
 				("ghist_ref", ctypes.c_int),
 				("ghist_refl", ctypes.c_int),
+                                ("ghist_bias", ctypes.c_int),
 				("ghistarr", ctypes.POINTER(ctypes.c_int))]
 				
 class MASK(ctypes.Structure):
@@ -164,7 +165,7 @@ class GuideTest(object):
 		self.ghistarr = np.zeros([32767], 'Int32')
 		
 		
-		self.phist = GHIST(0, 0, 0, 0, self._makePtr(self.ghistarr, ctypes.c_int32))
+		self.phist = GHIST(0, 0, 0, 0, 0, self._makePtr(self.ghistarr, ctypes.c_int32))
 		self.pfib = FIBERDATA(0,
 				self._makePtr(self.fid, ctypes.c_int32),
 				self._makePtr(self.xcen, ctypes.c_double), 
@@ -278,7 +279,7 @@ class GuideTest(object):
 		self.cleandata -= magicBias
 		# self.cleandark = self.cleandark-magicBias
 	    	
-	def makeHist(self):
+	def makeHist(self, data):
 		# This scales the short int flat into regular int values
 		
 		self.cleanflat = self.cleanflat
@@ -291,13 +292,15 @@ class GuideTest(object):
 		medn = self.phist.ghist_medn
 		peak = self.phist.ghist_peak
 		ref = self.phist.ghist_ref
+                bias = self.phist.ghist_bias
 		norm = peak - medn
 		thresh = ref - medn
 		spotx = self.pxcen[16]*2
 		spoty = self.pycen[16]*2
 		#pdb.set_trace()
 		spotr = self.NFIBERS
-		self.doubleflat = np.where(self.doubleflat>thresh, norm/(self.doubleflat - medn), 0)
+                self.doubleflat = self.doubleflat - bias
+		self.doubleflat = np.where(self.doubleflat>thresh, (peak-bias)/(self.doubleflat), 0)
 		self.cleanflat = np.where(self.cleanflat>thresh, self.cleanflat, 0)
 		t2 = time.time()
 		print "time to make flat:", t2-t1
@@ -356,8 +359,8 @@ class GuideTest(object):
 		offset = None
 		tolerance = 1
 		self.doubleflat = self.checkBin(self.doubleflat).astype('double')
-		### DISABLE flattening. 
-		# self.cleandata = (self.cleandata*self.doubleflat).astype('Int16')
+		self.cleandata -= self.phist.ghist_bias
+		self.cleandata = (self.cleandata*self.doubleflat).astype('Int16')
 		self.datareg = self._getRegion(self.cleandata)
 		self.ipGguide.gfindstars(ctypes.byref(self.datareg), ctypes.byref(self.pfib), self.mode)
 		if self.mode == 0:
@@ -709,7 +712,7 @@ class GuideTest(object):
 	def runAllSteps(self):
 		#import pdb; pdb.set_trace()
 		self.subOverscan()
-		self.makeHist()
+		self.makeHist(self.cleanflat)
 		self.makeFlat()
 		self.makeMask()
 		self.makeFiberdata()
