@@ -18,7 +18,7 @@
 **      Imported into Derish: 2003-01-07
 **      Eric Neilsen
 ** Mods
-**      New Apogee camera:   2008-0829
+**      New Apogee camera:   2009-07-29
 **      Paul Harding      
 ******************************************************************************
 ******************************************************************************
@@ -67,6 +67,8 @@
 /********* VARIABLES ***********/
 
 /*moved out of ipGguide.c*/
+
+/* assume the CCD is square */
 #define UNBINNED_CCD_SIZE 1024
 #define CCD_SIZE UNBINNED_CCD_SIZE/2
 
@@ -127,6 +129,7 @@ STATIC int nbadpix = 0;
 */
 #define PEAK_PERCENTILE 0.015
 #define MEDIAN_PERCENTILE 0.55
+#define   BIAS_PERCENTILE 0.70
 
 /*jeg set bin size on photometrics to break image into 16 bins
 ph maintain the bin size rather than the number of bins for Alta camera.
@@ -146,7 +149,7 @@ ph maintain the bin size rather than the number of bins for Alta camera.
 
 #define SPOTID (MAXFIB-2)		/*fiber alignment spot lives in, zero indexed */
 
-#define MAXFIBERS 20				/* large enough for all possible cartridges */
+#define MAXFIBERS 20			/* large enough for all possible cartridges */
 
 /* max number of iterations in refining the center; we should not need to walk farter
  * than the range limit of 40 pix radius. */
@@ -168,8 +171,8 @@ typedef struct platedata{
 } PLATEDATA;
 
 typedef struct ghist_t{
-    int ghist_medn;     /* median of whole array--essentially the bkgnd */
-    int ghist_peak;     /* 99th percentile */
+    int ghist_medn;     /* median (55 percentile) of whole array--essentially the bkgnd */
+    int ghist_peak;     /* 1.5 th percentile, peak in guide fibers*/
     int ghist_ref;      /* halfway between medn and peak */
     int ghist_refl;     /* 1/3 way between medn and peak */
     int ghist_bias;     /* 35thpercentile--poor mans approx overscan*/
