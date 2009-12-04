@@ -237,7 +237,7 @@ class GuideTest(object):
 		
 		return reg
 		
-	def binImage(self, arr, binsize):
+	def slowbinImage(self, arr, binsize):
 		binshape = tuple([i/binsize for i in np.shape(arr)])
 		binpic = np.zeros(binshape)
 		for x in range(len(binpic)):
@@ -247,20 +247,29 @@ class GuideTest(object):
 				
 		return binpic
 
+	def binImage(self, arr, binsize):
+                binpic = arr * 1  #create a copy
+		binpic.shape = 512,binsize,512,binsize
+		binpic = (binpic.sum(axis=3)).sum(axis=1)/(binsize*binsize) 
+		return binpic
+
 	def checkBin(self, im):
 		x,y = np.shape(im)
 		binx = x/512
 		biny = y/512
-		if binx>1 and biny>1:
-			if binx != biny:
-				print "unsymmetric binning, abort"
-				return -1
-			else:
-				binim = self.binImage(im, binx)
-		else:
-			binim = im
-		return binim
-	
+                if binx != biny:
+                    print "unsymmetric binning, abort"
+                    return -1
+
+		if binx==2:
+                    binim = self.binImage(im, binx)
+		elif binx==1:
+                    binim = im
+                else:
+                    print "incorrect flat size, abort"
+                    return -1
+
+		return binim	
 	def subOverscan(self):
 		""" subtract a dummy overscan of 40 for now, will have to depend on overscan later """
 		magicBias = 0
