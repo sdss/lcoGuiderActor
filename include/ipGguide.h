@@ -61,9 +61,13 @@
 /* inverse gain of guider ccd */
 /* photometrics 22 e-/ADU inverse gain, for low gain, prior to 20 Nov 2002 */
 /* photometrics  6.5 e-/ADU inverse gain, for high gain, current as of 20 Nov 2002 */
-/* Apogee        1.4 e-/ADU inverse gain, for high gain, current as of 29 Aug 2008*/
+/* Alta        1.4 e-/ADU inverse gain, current as of 29 Aug 2008*/
 
-#define CCDGAIN 1.4   
+#define CCDGAIN 1.4
+
+# define sigp2FwhmAs 1.0 /* conversion from sigma in pixels to fwhm in arcsec */
+
+   
 /********* VARIABLES ***********/
 
 /*moved out of ipGguide.c*/
@@ -89,7 +93,7 @@ STATIC int rvalmean[60];
 STATIC int rvalwt[60];
 
 /* We will find the position of the star by profile fitting on a 9-point 
- *  grid which we move about to find the minimum fittin error; the structures 
+ * grid which we move about to find the minimum fittin error; the structures 
  * which contain the information for these nine points are are these:
  */
 /* STATIC struct gstarfit starfitarr[9]; */
@@ -137,7 +141,7 @@ ph maintain the bin size rather than the number of bins for Alta camera.
 
 #define BINSIZE	16		/*BINSIZE remains constant*/
 
-#define BINTHRESH 100	/* can probably be increased to 500, assuming flat will have values of ~10000 at least*/
+#define BINTHRESH 200	/* can probably be increased to 500, assuming flat will have values of ~10000 at least*/
 
 
 
@@ -151,14 +155,17 @@ ph maintain the bin size rather than the number of bins for Alta camera.
 
 #define MAXFIBERS 20			/* large enough for all possible cartridges */
 
-/* max number of iterations in refining the center; we should not need to walk farter
- * than the range limit of 40 pix radius. */
+/* max number of iterations in refining the center; 
+ * we should not need to walk futher than the range limit of 40 pix radius. */
+
 #define MAXGFSITER 40
 
-/* mirage convention for radial pixel indexing */
-#define NCELL 25
+/* values of 100/sigma^2 used in width fitting, from sigma=10 pix to sigma=1 pix
+ * Alta camera, needed 6 bins to get below sigma=1.41 which was set by max wpg=50 */
+
+#define NCELL 31
 STATIC short int wpg[NCELL] = 
-    {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,24,28,32,36,40,45,50};
+    {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,24,28,32,36,40,45,50,55,60,70,80,90,100};
 
 /********* STRUCTURES **********/
 
@@ -171,30 +178,34 @@ typedef struct platedata{
 } PLATEDATA;
 
 typedef struct ghist_t{
-    int ghist_medn;     /* median (55 percentile) of whole array--essentially the bkgnd */
+    int ghist_medn;     /* median (55 percentile down) of whole array--essentially the bkgnd */
     int ghist_peak;     /* 1.5 th percentile, peak in guide fibers*/
     int ghist_ref;      /* halfway between medn and peak */
     int ghist_refl;     /* 1/3 way between medn and peak */
+    int ghist_refgf;    /* 1/5 way between medn and peak */  
     int ghist_bias;     /* 35thpercentile--poor mans approx overscan*/
     int *ghistarr;      /* histogram array */
 } GHIST;
 
 /* doubles, python will not work properly with floats -ps */
 typedef struct g_fiberdata{    
-    int g_nfibers;         /* number of useful fibers in flat frame */
-    int *g_fid;         /* id's of fibers in list below */
+    int     g_nfibers;   /* number of useful fibers in flat frame */
+    int    *g_fid;       /* id's of fibers in list below */
     double *g_xcen;      /* x centroid of fibers */
     double *g_ycen;      /* y centroid of fibers */
     double *g_fibrad;    /* radii of mask holes */
     double *g_illrad;    /* radii of illuminated portion of fiber */
-    double *g_xs;      /* for data frame, x offset of star from center */
-    double *g_ys;      /* for data frame, y offset of star from center */
-    double *g_mag;       /* for data frame, mag of star */
-    double *g_fwhm;      /* for data frame, fwhm(fullwidth at half maximum) of star */
-    double *g_poserr;    /* for data frame, estimated position error (2d) */
-    double *g_fitbkgrd;
-    double g_readnoise;     /* readnoise in ADU */
-    int   g_npixmask;      /* number of pixels in current mask */
+    double *g_xs;        /* from psf fit, x offset of star from center */
+    double *g_ys;        /* from psf fit, y offset of star from center */
+    double *g_mag;       /* from psf fit, mag of star */
+    double *g_fwhm;      /* from psf fit, fwhm(fullwidth at half maximum) of star */
+    double *g_poserr;    /* from psf fit, estimated position error (2d) */
+    double *g_fitbkgrd;  /* from psf fit  estimated background */ 
+    double *g_fibercts;  /* flux through 2 arc fiber */
+    double *g_skycts;    /* direct sky background measure*/   
+    double *g_rmswidth;  /* rms radius of star */
+    double  g_readnoise; /* readnoise in ADU */
+    int     g_npixmask;  /* number of pixels in current mask */
 } FIBERDATA;
 
 

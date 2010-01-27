@@ -38,8 +38,10 @@
 ******************************************************************************
 */
 
-#define DEBUG 0				/* no debugging info */
+#define DEBUG 0			/* no debugging info */
 //#define DEBUG 1				/* print debugging info */
+
+//#define FINDEBUG
 
 /* ph,ps: currently, many values are hardwired in, we need to create variables for these
    in either header file, or passed in from python. */
@@ -62,7 +64,7 @@
 /*--- Guide camera---
  * Alta camera images are: 1024x1024x13um native, 
  * Alta binned by 2-> 512x512x26um pixels -> 0.428" / pix   
- * Raw data from the Alta camera is 16 bits,
+ * Raw data from the Alta camera is 16 bits but is bit shifted in the gcameraICC,
  * The data regions passed to these C functions is S16 and has been overscan, dark corrected 
  * DMAX = 32767
  */
@@ -118,30 +120,39 @@
 
 /* All data regions passed to this package are assumed to be binned
  * Flats are taken UNBINNED, but are binned in Python
+ * 
+ * All the instrumental signature removal is done in python
+ * Bias subtraction is a kluge because the camera wont give an overscan region
+ * without crashing.
+ * The flats and data images currently (Dec 2009) have a pseudo bias subtracted
+ * which is derived from the histogram. 
  */
  
 /*--- Algorithms ---
  * This module provides code to analyze guider flats and flatten data frames,  
- * locate the guide probe center, centroid stars in the probes, and estimate the
- * focus correction
- * A data frame which comes is first histogrammed, medianed,
- * background subtracted, and 'flattened'.
+ * locate the guide probe center, centroid stars in the probes, and determine
+ * star and sky properties in each probe.
  */
  
-/* The Median is found and assigned to the scattered light level. 
- * The PEAK is defined as the first percentile, the REFERENCE LEVEL halfway
- * between the background and the peak. A mask is made which is 1 for
- * pixels above the reference level and 0 below. This mask is used to construct
- * a flat field, which is the inverse of the flat frame where the mask is 
+/* The flat is histogramed and a series of reference levels are determined
+ * which characterize the flat image 
+ * A pseudbias level 
+ * The MEDIAN is found and assigned to the scattered light level. 
+ * The PEAK is defined near the first percentile, and the PEAK - MEDIAN 
+ * difference (PMD) used to set reference levels   
+ * The reference level REF: halfway between the background and the peak.
+ * Low REFL LEVEL one third of PMD above median
+ * Gfindfibers REFGF one fifth of PMS above the median, is needed because 
+ * the larger pixels of the Alta camera result in peak height of the fibers
+ * in the 16x16 binned flat can be lower than REFL, which was used previously.
+ * There is too much reflected/scattered light to use the median. 
+ *    
+ * A mask is made which is 1 for pixels above the reference level and 0 below. 
+ * This mask is used to construct a flattener
+ * which is the inverse of the flat frame where the mask is 
  * nonzero and zero outside. 
  * 
  * All this stuff is stored in internal static arrays and variables.
-
-
-
- * A data frame which comes is first fitted with the dark template for
- * subtraction and dark subtracted. It is then histogrammed, medianed,
- * background subtracted, and 'flattened'.
  * 
  * Stars are found in the processed frame by running a parabolic cap 
  * corresponding to about 1.5 arcsecond seeing through the fiber images.
@@ -170,7 +181,7 @@
 /******************** DATA DECLARATIONS AND DEFINITIONS ******************/
 
 /* flags for existence of flattener, mask, template dark frame */
-/*ph,ps: probably ok to leave in C code, as we only run once per image */
+/*ph,ps: deal with this in the python routines */
 STATIC int havemask = 0;
 STATIC int havedark = 0;
 STATIC int havehist = 0;
@@ -180,6 +191,7 @@ STATIC int haveflatdata = 0;
 #if 0
 STATIC float gdnorm = 0.;
 #endif
+
 
 /*******************************************************************
  *
@@ -208,13 +220,6 @@ ipFiberstatNew(void)
  * structure; these levels are defined above.
  */
  
-
-/* ph,ps
- * Look at histograms of new guider and tweak percentile values. 
- *Should reflect fraction of image covered by guide fibers,
- *   but not large aquisition fibers
- */
-
 int
 gmakehist(
     REGION *dataReg,        /* the data region */
@@ -236,36 +241,15 @@ gmakehist(
     S16 **data; 
 	
 
-	assert(dataReg->rows_s16 != NULL);
+    assert(dataReg->rows_s16 != NULL);
     data = dataReg->rows_s16;
    
     
-   #ifdef FINDBUG
-   /*old testing*/
-	printf("ghist->mean: %d\n",gptr->ghist_medn);
-
-	printf("%d, %d, %d\n",data,data[0],gptr->ghistarr);
-
-	printf("ghist val: %d\n",gptr->ghistarr[0]);
-	printf("ghist val: %d\n",gptr->ghistarr[10]);
-	printf("ghist val: %d\n",gptr->ghistarr[100]);
-	printf("ghist val: %d\n",gptr->ghistarr[200]);
-   #endif
     /* clear histogram */
     /* This sets the array pointed to by gptr->ghistarr to zero, */
     /* doing so one byte at a time. */
     memset(gptr->ghistarr,0,DMAX*sizeof(int));    
 
-   #ifdef FINDBUG
-   /*old testing*/
-	printf("post memset sizeof(int)=%d\n",sizeof(int));
-	printf("ghist val: %d\n",gptr->ghistarr[0]);
-	printf("ghist val: %d\n",gptr->ghistarr[10]);
-	printf("ghist val: %d\n",gptr->ghistarr[100]);
-	printf("ghist val: %d\n",gptr->ghistarr[200]);
-
-	printf("%d, %x, %d\n",dataReg->rows_s16,data[0],gptr->ghistarr);
-   #endif
     /* make histogram */
     ptr2 = gptr->ghistarr;
     
@@ -294,10 +278,10 @@ gmakehist(
     }
 
     /* run through histogram from the TOP and find peak and median
-    * we look for 1.5th percentile to define peak 
+    * we look for first percentile to define peak 
     * and down 55% of the data to find median, 
-    * and down 70% for the pseudo bias estimate
-    * The fibers contain about 5 percent of the area;
+    * and down 65% for the pseudo bias estimate
+    * The fibers contain about 10 percent of the area;
     * The scattered light is about 20 percent
     *ph values updated for alta camera*/
     
@@ -327,12 +311,15 @@ gmakehist(
 
         }
     }
-    /* set the reference level halfway between median and peak */
-    gptr->ghist_ref = (gptr->ghist_peak + gptr->ghist_medn)/2;
-    /* and the 'low' reference level a third of the way up */
+    /* set the reference level halfway between median and peak      */
+    gptr->ghist_ref  = (gptr->ghist_peak + gptr->ghist_medn)/2;
+    /* and the 'low' reference level a third of the way up          */
     gptr->ghist_refl = (2*gptr->ghist_medn + gptr->ghist_peak)/3;
-    printf("\n peak,medn,ref,refl,bias=%d %d %d %d %d\n",
-           gptr->ghist_peak,gptr->ghist_medn,gptr->ghist_ref,gptr->ghist_refl,gptr->ghist_bias);
+    /* and the 'gfindfiber' reference level 5th of the way up       */
+    gptr->ghist_refgf =(4*gptr->ghist_medn + gptr->ghist_peak)/5;
+
+    printf("\n peak,medn,ref,refl,refgf,bias=%d %d %d %d %d %d\n",
+           gptr->ghist_peak,gptr->ghist_medn,gptr->ghist_ref,gptr->ghist_refl,gptr->ghist_refgf,gptr->ghist_bias);
 
     // Error handling temporarily disabled
     if(gptr->ghist_peak < FNORM/8){		//changed
@@ -432,7 +419,7 @@ gmakeflat(
 int
 gextendmask(
     REGION *flattenReg,     /* mask (flattener) to be extended */
-    MASK *maskReg,         /* new mask, extended and negated */
+    MASK *maskReg,          /* new mask, extended and negated */
     int fringe              /* distance to extend (pixels) */
     )
 {
@@ -444,9 +431,11 @@ gextendmask(
     int ncirc = 0;
     int midflg;
     int ncross;
+    int nmaskedin = 0;
+    int nmaskedout = 0;
 
     assert(flattenReg->rows_s16 != NULL);
-	maskin = flattenReg->rows_s16;
+    maskin = flattenReg->rows_s16;
 
     if ( (flattenReg->nrow != maskReg->nrow) || \
 	 (flattenReg->ncol != maskReg->ncol) ) {
@@ -462,8 +451,7 @@ gextendmask(
 	
         }
     }
-    
-	//havemask = 1;
+    //havemask = 1;
     //if(havemask == 0) shError("GEXTENDMASK: no mask");
         
     /* make arrays for circumference */
@@ -524,39 +512,42 @@ gextendmask(
         ybase[k] =  ybase[2*ncirc-k];
     }
     ncirc=2*ncirc;
-    #ifdef FINDBUG
 
+#ifdef FINDBUG
     printf("\nxbase,ybase,ncirc,midflg=%d %d %d %d\n",xbase,ybase,ncirc,midflg);
-	#endif
+#endif
     /* ok, have array which describes periphery. Now apply. Note that for
        simplicity we do not consider points closer to the picture boundary
        than `fringe'. If that is not good enough, tough. */
     
 
-
-
     /* set up output mask -- NEGATIVE */
     for(i=fringe;i < maskReg->nrow - fringe;i++){
         for(j=fringe;j < maskReg->ncol - fringe;j++){
-        	
+	    
+	    if(maskin[i][j] !=0) nmaskedin++ ;
             ncross = 0;
             for(k=0;k<ncirc;k++){
             	
                 if(maskin[i+ybase[k]][j+xbase[k]] !=0) ncross++ ;
             }
             if(ncross > MASKPTS){
-            	
                 maskout[i][j] = 0;
+                nmaskedout++;
             }
        }
     }
+    //#ifdef FINDBUG
+	printf("npoints masked in,out = %d %d \n",nmaskedin, nmaskedout);
+    //#endif
+
     free(xbase);
     free(ybase); 
     havemask = 2;
     return(SH_SUCCESS);
 }
 
-#define FINDEBUG
+
  
 /******************* GFINDFIBERS() ***************************************
  * This routine deals with BOSS and Marvels cartridges.
@@ -566,7 +557,7 @@ gextendmask(
  *
  * The routine therefore works by 
  * 1. binning the input frame to 32x32 
- * 2. finding maxima above the ghist reference level
+ * 2. finding maxima above the ghist reference level refgf
  * 3. rejecting adjacent maxima
  * 4. quadratically interpolate to find maxima in original picture, which
  *    we identify with fiber centers
@@ -586,7 +577,7 @@ gfindfibers(
     REGION *flatReg,           /* the flat region */
     MASK *maskPtr,             /* pointer to the mask structure */
     struct g_fiberdata *ptr,   /* pointer to output struct */
-    struct ghist_t *gptr,       /* histogram struct pointer */
+    struct ghist_t *gptr,      /* histogram struct pointer */
     PLATEDATA *plptr
     )
 {
@@ -625,20 +616,20 @@ gfindfibers(
     int ymaxpk;
     int dx, dy;
     int sumi, sumj, sump;
-    double sum, sumx, sumy;
-    double fiberx[MAXFIB + 1];		/* fibre numbers are 1-indexed */
+    double sum, sumx, sumy, wgt;
+    double fiberx[MAXFIB + 1];		/* fiber numbers are 1-indexed */
     double fibery[MAXFIB + 1];
     int fiberid[MAXFIB + 1];
 	int nfib = 0;
 
-	for(nfib = i = 0;i<MAXFIB;i++){
-		if (plptr->exists[i]){
-		   
-			fiberx[nfib]=(plptr->xcen)[i];
-			fibery[nfib]=(plptr->ycen)[i];
-			fiberid[nfib]=(plptr->gProbeId)[i];
-		
-			nfib++;
+    /* convert input fiber arrays from 1 to zero indexed, only use fibers that exist */
+    for(nfib = i = 0;i<MAXFIB;i++){
+        if (plptr->exists[i]){
+	
+	    fiberx[nfib]=(plptr->xcen)[i];
+	    fibery[nfib]=(plptr->ycen)[i];
+	    fiberid[nfib]=(plptr->gProbeId)[i];
+	    nfib++;
 			
 		}
 	}
@@ -813,8 +804,12 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
 	*/
     }
 
-    /*interpolate maxima and translate back to original picture coords
-      dont understand this interpolation */
+
+    /*location of max n0 = n + (X[n+1] - X[n-1])/(2*(2*X[n] - X[n-1] - X[n+1])) 
+     *value at max X(n0) = X[n] + (2*X[n] - X[n-1] - X[n+1])/2 * (n0-n)^2 
+     *inverse quardatic interpolation to fine maxima, 
+     *scaled (by binsize) back to original picture coords */
+
     for(k=0;k<npk;k++){
         x = xpk[k];
         y = ypk[k];
@@ -838,18 +833,19 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
     /* Find the shift to the canonical list: the idea here is 
      * that the coordinate differences for each
      * pair of peaks in the `real' list and the `found' list are computed,
-     * and the largest cluster is identified as the true offset. We search
-     * over a range of +/- 48 pixels in the original frame, but do so
-     * on data binned down by 8.
-     * basically, finds how much object center is off from  the fiber center
-     * with an error of +/- 8 pixels.
+     * and the largest cluster is identified as the true offset. 
+     * We bin the data so that there is a clear peak. 
+     * With MBINSIZE=8 search over a range of +/- 48 pixels in the original frame, 
+     * which is +- 6 bins to avoid overlaps.
+     * Bin with maximum counts gives offset with an error of +/- 8 pixels. 
+'    * Good enough to uniquely identify fibers.
      */    
      /*CHANGE THIS NOW*/
     for(i=0;i<14;i++){
         dxarr[i] = dyarr[i] = 0;
     }
     for(i=0;i<npk;i++){
-        for(j=0;j<nfib;j++){		/*ph,ps: cant use 11 here, nfibers  must be passed in*/
+        for(j=0;j<nfib;j++){		
             if(abs(dx = (xpk[i] - fiberx[j])) < 48 && 		/*ph,ps: 48 also needs to change, depending on old bundles or new bundles*/
                     abs(dy = (ypk[i] - fibery[j])) < 48){
                 dxarr[(dx+56)/8]++;			/*ph,ps: 56 is 7*8, size of dxarr is 14. */
@@ -860,9 +856,8 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
     }
 
    
-    /* dxarr and dyarr are histograms. Smooth with a 121 filter and 
-     * find the maxima.
-       actualy smooths over 24 pixals (?)
+    /* dxarr and dyarr are histograms of peak to fiber distances in binned pixels 
+     * Smooth with a 1,2,1 filter and find the maxima.
      */
     xmaxpk=0;
     ymaxpk=0;
@@ -906,10 +901,10 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
             dx = xpk[i] - fiberx[j] - xpkoff;
             dy = ypk[i] - fibery[j] - ypkoff;
            
-            /* ph,ps: below muest change with CCD size and fiber spacing */
-            if(dx*dx + dy*dy < 512){                /*ph This is still ok at 256*/
-                fid[i] = fiberid[j];		    /* this makes sure the object is
-						       less than 16 pixals away from center of fiber? */
+            /* ph,ps: below must change with CCD size and fiber spacing */
+            if(dx*dx + dy*dy < 512){                /* min BOSS fiber separation: dx~69, dy~34 */
+                fid[i] = fiberid[j];		    /* this makes sure the object is less than 16 */
+						    /* pixels for both axes away from center of fiber? */
                 nid++;				     
             }
         //}
@@ -1040,10 +1035,13 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
      	for(i=ypk[k] - firad[k]; i <= ypk[k] + firad[k]; i++){
             for(j=xpk[k] - firad[k]; j <= xpk[k] + firad[k]; j++){
                 val = (flat[i][j] - medn);
-                sumy += i * val;
-                sumx += j * val;
-                sum  += val;
-                if(val > thresh) sump++;   /* #of pix above thresh */
+		//                wgt  = val>0 ? sqrt(sqrt(val)) : 0;
+                wgt  = val>0 ? val : 0;
+                sumy += i * wgt;
+                sumx += j * wgt;
+                sum  += wgt;
+
+                if(val > thresh) sump++;   /* #of pix above thresh, NEEDS to be the same as thresh for pyflat  */
                 
             }
         }
@@ -1092,7 +1090,7 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
     "Gguider found %d fibers, peak ct %d:",npk,peak-medn);  
     shDebug(DEBUG, pbuf);
     for(i=0;i<npk;i++){ 
-      sprintf(pbuf,"Gguider fiber %2d xcen=%5.1f, ycen=%5.1f",
+      sprintf(pbuf,"Gguider fiber %2d xcen=%6.2f, ycen=%6.2f",
 	      ptr->g_fid[i],
 	      ptr->g_xcen[i],
 	      ptr->g_ycen[i]); 
@@ -1140,7 +1138,7 @@ ginitseq(void)
  * We will use the square of the radius as the variable, and evaluate
  * the filter only on even pixel centers, finding the maximum in the
  * end by quadratic interpolation. To this end, we construct a table
- * of 3600 (MAXR2) entries in the function (was 3600 for photometrics ~3sig =20 pix)
+ * of 3600 (MAXR2) entries in the function (for photometrics ~3sig =20 pix)
  * ph: keep same for now but its bigger than it needs to be
  * 
  * exp(-s/2) + 0.1*exp(-s/8) - exp(-18) - 0.1*exp(-4.5)/(same at s=0)
@@ -1150,49 +1148,51 @@ ginitseq(void)
  *  outside of which it is zero. 
  * Since r^2 is always an integer, this table look-up is
  * exact if 100*r^2/sigma^2 is an integer for any r^2, or 100/sigma^2
- * is an integer. Since sigma is typically about 3, this allows for a 
- * granularity in sigma^2 of about 10 percent, or in sigma of about 5 
- * percent, which is fine. One can certainly linearly interpolate if required.
+ * is an integer. Since sigma is typically about 2 pix or less for the alta
+ * camera, this allows for a granularity in sigma^2 of about 3%, qnd 1.5% in sigma. 
+ * This is good enough. One can certainly linearly interpolate if required.
+ * (photometrics values were sigma ~3 pix, 10 and 5 % granualarity 
+ *  for sigma**2 and sig respectivels) 
  *
  * For a small-gaussian sigma of sig and a radus of r, enter this table
  * with the value 100*r^2/sig^2. If you do not wish to interpolate,
  * with r^2 integral, 100/sig^2 must be an integer. If we use a rounded
  * value, should be OK (see above). A coarse search grid might be
- *       old photometrics              alta
- *   100/sig^2 sig(pix) fwhm(")        fwhm(")   
- *      1      10.0     7.0           10.0   
- *      2       7.0     4.9            7.0
- *      3       5.7     4.0            5.7
- *      5       4.5     3.1            4.5
- *      8       3.5     2.5            3.5
- *     13       2.8     1.9            2.8
- *     20       2.2     1.6            2.2
- *     30       1.8     1.3            1.8
- *     50       1.4     1.0            1.4
- *    100       1.0     0.7            1.0
+ *                              alta      old photometrics
+ *   100/sig^2 sig(pix)         fwhm(")   fwhm(")
+ *      1      10.0            10.0       7.0     
+ *      2       7.0             7.0	  4.9    
+ *      3       5.7             5.7	  4.0    
+ *      5       4.5             4.5	  3.1    
+ *      8       3.5             3.5	  2.5    
+ *     13       2.8             2.8	  1.9    
+ *     20       2.2             2.2	  1.6    
+ *     30       1.8             1.8	  1.3    
+ *     50       1.4             1.4	  1.0    
+ *    100       1.0             1.0	  0.7
+ *     
  * 
  * Note for alta camera the conversion from sigma in pixels to fwhm in arcsec is
- *   0.428(arcec/pix) * 2.354*(sigma/fwhm) = 1.0
+ *   0.428(arcec/pix) * 2.354*(sigma/fwhm) = 1.0 = sigp2FwhmAs (0.69 for the photometrics)
  *
- * We begin by finding the maximum in the frame as defined by a 21-pixel
- * core based on 1.8 arcsecond seeing. (*ph* 21 pix= With that center as a first guess,
+ * We begin by finding the maximum in the frame as defined by a 
+ * ~3*(sigmalarge) ~15-pixel core (was 21 for photometrics) 
+ * based on 1.8 arcsecond seeing. With that center as a first guess,
  * a radial profile is extracted and a sigma is found for a profile fit,
  * which is used to refine the center. This is repeated and the center
  * interpolated quadratically if it is not on the edge.
  *
- 
- this is wrong, .28 is actualy .426 arcsec/pixel, so 6.9->10.56
- * The half-power half-width of this is 1.234*sig = 12.34/sqrt(wp), where
- * wp is the width parameter 100/sig^2. The pixels are .28 arcsec, so
- * the fwhm is 6.90/sqrt(wp) in arcsec.
+ * The half-power half-width of this is 1.234*sig = 10*1.234/sqrt(wp), where
+ * wp is the width parameter 100/sig^2 so sigma=10/sqrt(wp). 
+ * With 0.428 arcsec pixels, the fwhm is 1*10/sqrt(wp) in arcsec.
  *
  * The equivalent width^2 of a profile displaced by d from its center
  * is sig^2 + d^2/2, so we need to SUBTRACT d^2/2 from an offcenter
  * extracted profile to get the true width^2, or equivalently, multiply
  * by (1-d^2/2sig^2). The corrected width is the measured one multiplied
  * by (1-d^2/4sig^2) if d << sig. The relation between fwhm in arcsec and
- * sig in pixels is fwhm" = 0.691*sig_p, so sig^2 ~ 2*fwhm"^2, and the
- * correction is 1-d^2/8fwhm"^2)
+ * sig in pixels is fwhm" = 1.0*sig_pix, so sig^2 ~ fwhm"^2, and the
+ * correction is 1-d^2/4fwhm"^2)
  */
 
 /****************** GMAKEFIBERSTAT() ************************************
@@ -1365,7 +1365,7 @@ seeprofr(
  * amplitude, and background. returns sum square error 
  */
 
-/*#define GPROFDEBUG*/
+/* #define GPROFDEBUG */
 
 
     
@@ -1376,7 +1376,10 @@ gproffit(
     int npt,                 /* number of points in extracted profile */
     int firstguess,          /* first guess at closest INDEX in wpg for
                               * width parameter; if none, use 0, which
-                              * starts iteration with index 6, 2 arcsec 
+                              * will start iteration with index 18 
+                              * which has value of 24 which represents
+                              * 2.0 arcsec [sigtoFWHM * sqrt(100/24)]
+                              * for the alta camera.
                               */
     struct gstarfit *ptr     /* pointer to output struct */
     )                          
@@ -1391,7 +1394,7 @@ gproffit(
     int diff;
     int sumerr ;
     int w,f,p;
-    int wpdex = (firstguess != 0 ? firstguess : 9);
+    int wpdex = (firstguess != 0 ? firstguess : 18);
     double ampl;
     double bkgnd;
     double disc; 
@@ -1401,6 +1404,11 @@ gproffit(
     double wpmin;
     int wp;
     
+/* defined in ipGguide.h reproduced here for clarity
+NCELL = 31
+wpg[NCELL] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,24,28,32,36,40,45,50,55,60,70,80,90,100} 
+*/
+
     for(i=0;i<NCELL;i++) err[i] = 0;
 
     iter = 0;
@@ -1422,10 +1430,10 @@ gproffit(
             sumfp += w*f*p;
             sumw  += w;
 
-#ifdef GPROFDEBUG            
-            printf("GP:f,p,w,s:f,f2,p,fp,w:%4d %2d %2d %d %d %d %d %d\n",
-                f,p,w,sumf,sumf2,sump,sumfp,sumw);
-#endif
+	    //#ifdef GPROFDEBUG            
+            //printf("GP:f,p,w,s:f,f2,p,fp,w:%4d %2d %2d %d %d %d %d %d\n",
+            //    f,p,w,sumf,sumf2,sump,sumfp,sumw);
+	    //#endif
                 
         }
         disc = (double)sumw*(double)sumf2 - (double)sumf*(double)sumf ;
@@ -1487,7 +1495,7 @@ gproffit(
     /* populate output struct */
     ptr->gsampl  = ampl*PMAX;       /*ph does this have to change */ 
     ptr->gsbkgnd = bkgnd;
-    ptr->gswparam = 10.56/sqrt(wpmin); /* fwhm in arcsec */
+    ptr->gswparam = 10.0*sigp2FwhmAs/sqrt(wpmin); /* fwhm in arcsec */
     ptr->gserror = minerr;
     return (minerr);
 }
@@ -1583,8 +1591,8 @@ gprofext(
 int 
 gfindstar(  
     short int **data,           /* data picture, dedarked and flattened */
-    int fk,                     /* fiber index in g_fiberdata array; not a fiber name */
-    struct g_fiberdata *ptr    /* ptr to fiberdata struct */
+    int fk,                     /* fiber index in g_fiberdata array; NOT a fiber name */
+    struct g_fiberdata *ptr     /* ptr to fiberdata struct */
     )    
 {
     int i,j,k,ii,jj;
@@ -1606,17 +1614,18 @@ gfindstar(
     int maxi;
     int maxj;
     int d;
+    int maxwalk2;
     double errmin;
     double ax, bx, ay, by;
     double xs,ys;
     double dx,dy;
     float xoff;
     float yoff;
-    float fwhm;
-    float fwhm0;
+    float fwhm;        /* fwhm arcsec */ 
+    float fwhm0;       /* fwhm corrected for calc on integer pixels */
     float pixnoise;
     float flux;
-    float sigw;
+    float sigp;        /* sigma in pixels */
     float sigmax;
     float fudge;
     float rsq;
@@ -1650,7 +1659,7 @@ gfindstar(
     /* init maxi, maxj to fiber center xc,yc so they will always be valid */
     maxi = yc;
     maxj = xc;
-    /* I think this is WRONG--we should use illrad, not fibrad */
+    /* rc (mask radius) but only data within ri (illum radius) are non zero */
     for(i= -rc+2;i<=rc-2;i++){
         ii = yc + i;
         for(j= -rc+2;j <= rc-2;j++){
@@ -1702,9 +1711,9 @@ gfindstar(
                 (void)gproffit(radprof,radcnt,npt,0,&istarfit); 
 #ifdef FSTDB1
                 printf(
-        "\njj=%d ii=%d err=%6.0f ampl=%5.1f bkgnd=%4.1f fwhm=%4.2f, sig=%4.2f\n\n",
+        "\njj=%d ii=%d err=%6.0f ampl=%5.1f bkgnd=%4.1f fwhm_arcsec=%4.2f, sig_pix=%4.2f\n\n",
                     jj,ii,err2d,istarfit.gsampl,istarfit.gsbkgnd,
-                    istarfit.gswparam, istarfit.gswparam/0.69);
+                    istarfit.gswparam, istarfit.gswparam/sigp2FwhmAs);
 #endif
 
             }
@@ -1735,17 +1744,29 @@ gfindstar(
 	 * out to r^2=MAXR2 (3600) pixels, so we have to limit the 
 	 * distance of the extraction center from the fiber center. 
 	 * the arithmetic works out that the extraction center must at a 
-	 * distance less than 40 pixels from the center of the fiber.
-	 * that is 2 fiber radii of the large guide fibers.
-	 * but at the moment the fiber radii are limited at 30 pix not 20,
-	 * so we will be vile and hard-code the 40 pixels.   
-	 * as of now, the code walks at most one pixel in 
-	 * each coord so the decision is binary. if the resulting radius is 
-	 * >= 2 fibrad, do not walk and bail out of this loop */
-	
-        if((ii != 0 || jj != 0)&& \
+	 * distance less than 40 (alta) pixels from the center of the fiber.
+	 * that is 1.4 acquisition fiber radii, 4.4 guide fiber radii
+         * 2.8 large guide radii. 
 
-	   (((maxi+ii-yc)*(maxi+ii-yc)+(maxj+jj-xc)*(maxj+jj-xc))<1600)&&(niter<MAXGFSITER)) {
+	 * As of now, the code walks at most one pixel in 
+	 * each coord so the decision is binary. The walk was limited to match
+         * the 40 pixel limit above. We should modify this for the BOSS cartridges.
+	 */
+
+        /* PH: The large fibers should let us center up quickly, 
+         * so we don't need to look in the noise for stellar winds in the little fibers.
+         * Thus set the max radius to be fiber dependent.         
+         * Try 1.4 * illum radius, may have to make
+         * if radius >= 1.4 illum rad, do not walk and bail out of this loop 
+         * It turns out that letting the code walk off into never-never land is a good
+         * way of flagging bad fits, so leave it as originally with 1600 */
+        //maxwalk2 = 1.4*1.4*ri*ri;
+
+	maxwalk2 = 40*40; 
+
+	if((ii != 0 || jj != 0)&&		\
+
+	   (((maxi+ii-yc)*(maxi+ii-yc)+(maxj+jj-xc)*(maxj+jj-xc))<maxwalk2)&&(niter<MAXGFSITER)) {
   
 	  /* min at edge--walk */
             shDebug(DEBUG,"*");
@@ -1791,34 +1812,39 @@ gfindstar(
             ptr->g_ys[fk] = ys;
             roff = sqrt(xoff*xoff + yoff*yoff);
             fwhm = fstarfit.gswparam;
-            fwhm0 = fwhm*(1. - (dx*dx + dy*dy)/(8*fwhm*fwhm));
-	    /* flux is 2*pi*1.3*sig^2*amplitude, 
-	     * fwhm = 2.46 sigma, 0.28 arcsec/pix    ph this needs to change*/
+            fwhm0 = fwhm*(1. - (dx*dx + dy*dy)/(4*fwhm*fwhm));
+	    /* flux is 2*pi*1.3*sig^2*amplitude, 6.28 = 2pi */
 	        
 	     	
-            
-            ptr->g_mag[fk] = -2.5*log10(fstarfit.gsampl*1.3*6.28*fwhm*fwhm/(2.46*2.46*0.428*0.428)) + 20.;  
-                /* in some units--want mags?*/
-            if(roff > (float)ri) ptr->g_mag[fk] = 99.99;
-            ptr->g_fwhm[fk]  = fwhm;         /* sig in arcsec */
+            /* in some units--want mags?*/            
+            sigp = fwhm/sigp2FwhmAs; 
+            flux = fstarfit.gsampl * 6.28 * sigp * sigp ; /*in ADU, gaussaprx*/
+            ptr->g_mag[fk] = -2.5*log10(fstarfit.gsampl*1.3*flux) + 20.;  
+
+            ptr->g_fwhm[fk]  = fwhm;         /* fwhm in arcsec */
+
+            if(roff > (float)ri) {           /* peak off fiber edge */
+		ptr->g_mag[fk] = 99.99;   
+                ptr->g_fwhm[fk] = 99.99;      /* don't use bad vals for focusing */
+	    }
 
             /* error calculation--this was added later, so we have not
              * been very clever about the input quantities--we have to
              * take what we can get. We approximate the star by a gaussian
              * with the derived sigma.
              */
-            sigw = fwhm/0.69; 
-            flux = fstarfit.gsampl * 6.28 * sigw * sigw ; /*in ADU, gaussaprx*/
+
             /* average pixnoise for the centroid calc is the RSS of the 
              * readvariance and 2/9 the peak poisson variance--but
              * evidently wrong--simulations suggest about 1.0 */
+
             pixnoise = ( ptr->g_readnoise * ptr->g_readnoise + 
                                 1.0 * fstarfit.gsampl/CCDGAIN );
             pixnoise = pixnoise > 0. ? sqrt(pixnoise) : 99.;
             /* 5.01 is 2sqrt(2pi), 0.428 is arcsec/pix; the error estimate is
              * in arcseconds
              */
-            sigmax = pixnoise * sigw * 5.01 * 0.428 / flux ;
+            sigmax = pixnoise * sigp * 5.01 * 0.428 / flux ;
 
             /* the error estimate is quintupled at the center and mpy'd
              * by 25 at the edge, and varies like r^6, which may be too slow.
@@ -1843,7 +1869,7 @@ gfindstar(
 
             sprintf(pbuf,
 		    "Gguide fwhm=%4.2f sig=%4.2f fwhm0=%4.2f",
-		    fwhm, fwhm/0.69, fwhm0); 
+		    fwhm, fwhm/sigp2FwhmAs, fwhm0); 
             shDebug(DEBUG,pbuf);
 
             sprintf(pbuf,

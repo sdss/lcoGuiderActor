@@ -8,6 +8,7 @@
 #endif
 #define u_short unsigned short int
 
+
 #ifdef PI
 #undef PI
 #endif
@@ -31,8 +32,8 @@
 
 void 
 cextract(p,cp,xc,yc,r,cpsiz)
-    u_short **p;      /* parent picture */
-    u_short **cp;     /* patch (square) */
+    short **p;      /* parent picture */
+    short **cp;     /* patch (square) */
     int cpsiz;        /* edge length of patch (odd) */
     int xc;                 
     int yc;           /* extraction center of patch */
@@ -94,8 +95,8 @@ void
 grot(			   /* general array rotator; puts zeros where 
                                  data are not generated */
      float theta,              /* angle in degrees */
-     u_short **p,              /* source array */
-     u_short **dp,             /* destination array */
+     short **p,              /* source array */
+     short **dp,             /* destination array */
      int xsz, int ysz)              /* sizes */
 {
     int sthet;
@@ -187,19 +188,19 @@ maskrot(theta,p,dp,xsz,ysz)   /* general byte-sized mask rotator puts zeros
 
 int 
 cexrot(p, cp, cpsiz, xc, yc, r, theta)
-    unsigned short **p;      /* parent picture */
-    unsigned short **cp;     /* patch (square) */
+    short **p;      /* parent picture */
+    short **cp;     /* patch (square) */
     int cpsiz;               /* edge length of patch (odd) */
     int xc;                  
     int yc;                  /* extraction center of patch */
     int r;                   /* extraction radius; <= cpsize/2 */
     double theta;            /* rotation angle in degrees */
 {
-    u_short **p1;     /* intermediate array */
+    short **p1;     /* intermediate array */
     int i;
     
-    p1 = (u_short **)malloc(cpsiz * (sizeof(u_short*) + cpsiz*sizeof(u_short)));
-    if(p1 == (u_short **)NULL){
+    p1 = (short **)malloc(cpsiz * (sizeof(short*) + cpsiz*sizeof(short)));
+    if(p1 == (short **)NULL){
         ERROR("\ncexrot:Cannot allocate memory for intermediate patch storage\n");
         return (1);
     }
@@ -208,7 +209,7 @@ cexrot(p, cp, cpsiz, xc, yc, r, theta)
     
     /* make line pointers */
     for( i=0 ; i < cpsiz; i++){
-        p1[i] = (u_short *)((char *)p1 + cpsiz*(sizeof(u_short *) + i*sizeof(u_short)));
+        p1[i] = (short *)((char *)p1 + cpsiz*(sizeof(short *) + i*sizeof(short)));
     }
     /*printf("\np1=%u,p1[0]=%u,p1[cpsiz-1]=%u\n",p1,p1[0],p1[cpsiz-1]); debug*/
     cextract(p,p1,xc,yc,r,cpsiz);

@@ -131,6 +131,7 @@ class FrameInfo(object):
         self.guideCameraScale = numpy.nan
         self.plugPlateScale = numpy.nan
         self.seeing = numpy.nan
+        self.guideRMS= numpy.nan
         
 def postscriptDevice(psPlotDir, frameNo, prefix=""):
     """Return the SM device to write the postscript file for guide frame frameNo"""
@@ -220,7 +221,7 @@ def main(actor, queues):
                 for key in gState.pid.keys():
                     gState.pid[key].reset()
 
-                guideCmd.respond("guideState=starting")
+                guideCmd.respond("guideState=on")
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
 
             elif msg.type == Msg.EXPOSURE_FINISHED:
@@ -268,7 +269,10 @@ def main(actor, queues):
                             imageObj.makeFinal(correction=correction)
                             fibers, stars = imageObj.finalData()
                         else:
-                            fibers, stars = imageObj.runAllSteps()
+                            #this is where the fibers are found in the flat and stars measured
+                            #the order in fibers and stars is the order they we found by c code
+                            fibers, stars = imageObj.runAllSteps() 
+
                         for gcamFiber in fibers:
                             try:
                                 fiber = gState.gprobes[gcamFiber.fiberid]
@@ -311,6 +315,10 @@ def main(actor, queues):
                         dRA_np = numpy.zeros(size)
                         dDec_np = numpy.zeros(size)
 
+                    guideRMS    = 0.0
+                    nguideRMS   = 0
+                    guideFitRMS = 0.0 
+
                     starInfos = {}
                     for star in stars:
                         starInfo = StarInfo(star)
@@ -334,6 +342,8 @@ def main(actor, queues):
                         #
                         dx = guideCameraScale*(star.xs - (fiber.info.xCenter - fiber.info.xFerruleOffset))
                         dy = guideCameraScale*(star.ys - (fiber.info.yCenter - fiber.info.yFerruleOffset))
+                        
+                        #incorporate coord errors
                         poserr = star.xyserr
                         
                         starInfo.dx = dx
@@ -350,6 +360,8 @@ def main(actor, queues):
                                           qstr("position error is 0 for gprobe %d star=(%g, %g) fiber=(%g, %g)" % (
                                 star.fiberid, star.xs, star.ys, fiber.info.xCenter, fiber.info.yCenter)))
                             continue
+
+                                                
                         #
                         # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
                         #
@@ -359,7 +371,7 @@ def main(actor, queues):
 #                            print "RHL + - + -Sp   %d %.0f %0.f " % (star.fiberid,
 #                                                                 fiber.info.rotation, fiber.info.phi)
 
-                        theta = 90                 # allow for 90 deg rot of camera view  
+                        theta = 90                   # allow for 90 deg rot of camera view, should be -90 
                         theta += fiber.info.rotation # allow for intrinsic fibre rotation
                         theta -= fiber.info.phi      # allow for orientation of alignment hole
 
@@ -412,6 +424,10 @@ def main(actor, queues):
                         if not fiber.enabled:
                             continue
 
+                        #accumulate guiding errors for good stars used in fit
+                        guideRMS += dx**2 + dy**2
+                        nguideRMS += 1
+
                         b[0] += dRA
                         b[1] += dDec
                         b[2] += raCenter*dDec - decCenter*dRA
@@ -434,6 +450,7 @@ def main(actor, queues):
                     nStar = A[0, 0]
                     if nStar == 0:
                         guideCmd.warn('text="No stars are available for guiding"')
+                        guideRMS = 99.99
 
                         imageObj.writeFITS(actorState.models, guideCmd, frameInfo, starInfos)
 
@@ -456,6 +473,7 @@ def main(actor, queues):
 
                             x = b
                             x[2, 0] = 0 # no rotation
+                            guideRMS = 99.99
                         else:
                             x = numpy.linalg.solve(A, b)
 
@@ -465,6 +483,7 @@ def main(actor, queues):
                         dDec = x[1, 0]/gState.plugPlateScale
                         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
+                        #motion of star in fiber
                         frameInfo.dRA = dRA
                         frameInfo.dDec = dDec
                         frameInfo.dRot = dRot
@@ -490,6 +509,13 @@ def main(actor, queues):
                         guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetRaArcsec,
                                                                         -3600*offsetDec, -3600*offsetRot,
                                                                         "enabled" if gState.guideAxes else "disabled"))
+#
+                        #compare the pre and post correction rms                        
+                        try:
+                            guideRMS = math.sqrt(guideRMS/nguideRMS) 
+                        except:
+                            guideRMS = 99.99
+#                                               
 #                        import pdb; pdb.set_trace()
 
                         if gState.guideAxes:
@@ -593,6 +619,11 @@ def main(actor, queues):
                             queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
                                                     expTime=gState.expTime))
                         continue
+
+                    # RMS guiding error 
+                    print "RMS guiding error= %4.3f, n stars= %d" %(guideRMS, nguideRMS) 
+                    guideCmd.inform('text=" guideRMS =%g"' % (guideRMS))
+                    
                     #
                     # Scale
                     #
@@ -651,6 +682,9 @@ def main(actor, queues):
                         except AttributeError:
                             rms = star.fwhm/sigmaToFWHM
 
+                        if rms != rms:
+                            continue
+
                         micronsPerArcsec = 1/3600.0*gState.plugPlateScale*1e3 # convert arcsec to microns
                         rms *= micronsPerArcsec # in microns
 
@@ -698,7 +732,7 @@ def main(actor, queues):
                         frameInfo.dFocus = dFocus
                         frameInfo.filtFocus = offsetFocus
                         frameInfo.offsetFocus = offsetFocus if gState.guideFocus else 0.0
-                        frameInfo.seeing = rms0*sigmaToFWHM
+                        frameInfo.seeing = rms0*sigmaToFWHM   #in arc sec
                         
                         guideCmd.respond("seeing=%g" % (rms0*sigmaToFWHM))
                         guideCmd.respond("focusError=%g" % (dFocus))
