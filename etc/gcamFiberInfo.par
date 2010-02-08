@@ -11,7 +11,7 @@
 #Note in the old photometrics version of cartridgeInfo.par the 
 #value of radius entered was the diameter and coords were unbinned 
 #************************************************************
-#Last updated Nov09 1pm PH
+#Last updated Feb 8 7pm PH
 #
 #OLD CARTERIDGES 1-9  (MARVELS CARTRIDGES)
 #The x,y values have been transformed from photometrics values
@@ -27,7 +27,7 @@
 ##NEW CARTRIDGES 10-17  (BOSS CARTRIDGES)
 #The xcen,ycen coords are measured directly on the CCD on the binned picture
 #
-#--xcen,ycen Need to be added for 14-17.
+#--xcen,ycen Need to be addded for Cart 15
 #
 #--gProbeId Is the from Larry's V1
 #
@@ -336,20 +336,20 @@ GPROBE  16 14 0  293.5  82.5  8.5  260.0    0.0   0.0   0.0 -400.0  GUIDE
 GPROBE  16 15 1  428.0 313.0  8.5  295.0    0.0   0.0   0.0    0.0  GUIDE
 GPROBE  16 16 1  293.5 428.0  8.5  250.0    0.0   0.0   0.0  400.0  GUIDE
 GPROBE  16 17 1  119.5 391.0  1.0    0.0    0.0   0.0   0.0    0.0  TRITIUM
-GPROBE  17  1 1  216.0 428.0  8.5    0.0    0.0   0.0   0.0  400.0  GUIDE
-GPROBE  17  2 1  149.5 289.5  8.5    0.0    0.0   0.0   0.0    0.0  GUIDE
-GPROBE  17  3 1  119.5 119.5 28.5    0.0    0.0   0.0   0.0    0.0  ACQUIRE
-GPROBE  17  4 1  216.0  82.5  8.5    0.0    0.0   0.0   0.0 -400.0  GUIDE
-GPROBE  17  5 1  216.0 255.5  8.5    0.0    0.0   0.0   0.0    0.0  GUIDE
-GPROBE  17  6 1  216.0 168.5  8.5    0.0    0.0   0.0   0.0 -400.0  GUIDE
-GPROBE  17  7 1   82.5 223.0  8.5    0.0    0.0   0.0   0.0    0.0  GUIDE
-GPROBE  17  8 1  216.0 342.0  8.5    0.0    0.0   0.0   0.0  400.0  GUIDE
-GPROBE  17  9 1  293.5 342.0  8.5    0.0    0.0   0.0   0.0  400.0  GUIDE
-GPROBE  17 10 1  293.5 255.5  8.5    0.0    0.0   0.0   0.0    0.0  GUIDE
-GPROBE  17 11 1  391.0 119.5 28.5    0.0    0.0   0.0   0.0    0.0  ACQUIRE
-GPROBE  17 12 1  293.5 168.5  8.5    0.0    0.0   0.0   0.0 -400.0  GUIDE
-GPROBE  17 13 1  361.0 380.5  8.5    0.0    0.0   0.0   0.0    0.0  GUIDE
-GPROBE  17 14 1  293.5  82.5  8.5    0.0    0.0   0.0   0.0 -400.0  GUIDE
-GPROBE  17 15 1  428.0 313.0  8.5    0.0    0.0   0.0   0.0    0.0  GUIDE
-GPROBE  17 16 1  293.5 428.0  8.5    0.0    0.0   0.0   0.0  400.0  GUIDE
+GPROBE  17  1 1  216.0 428.0  8.5  302.0    0.0   0.0   0.0  400.0  GUIDE
+GPROBE  17  2 1  149.5 289.5  8.5  225.0    0.0   0.0   0.0    0.0  GUIDE
+GPROBE  17  3 1  119.5 119.5 28.5  220.0    0.0   0.0   0.0    0.0  ACQUIRE
+GPROBE  17  4 1  216.0  82.5  8.5  120.0    0.0   0.0   0.0 -400.0  GUIDE
+GPROBE  17  5 1  216.0 255.5  8.5  286.0    0.0   0.0   0.0    0.0  GUIDE
+GPROBE  17  6 1  216.0 168.5  8.5   77.0    0.0   0.0   0.0 -400.0  GUIDE
+GPROBE  17  7 1   82.5 223.0  8.5  348.0    0.0   0.0   0.0    0.0  GUIDE
+GPROBE  17  8 1  216.0 342.0  8.5   49.0    0.0   0.0   0.0  400.0  GUIDE
+GPROBE  17  9 1  293.5 342.0  8.5  310.0    0.0   0.0   0.0  400.0  GUIDE
+GPROBE  17 10 1  293.5 255.5  8.5  182.0    0.0   0.0   0.0    0.0  GUIDE
+GPROBE  17 11 1  391.0 119.5 28.5  255.0    0.0   0.0   0.0    0.0  ACQUIRE
+GPROBE  17 12 1  293.5 168.5  8.5  243.0    0.0   0.0   0.0 -400.0  GUIDE
+GPROBE  17 13 1  361.0 380.5  8.5   36.0    0.0   0.0   0.0    0.0  GUIDE
+GPROBE  17 14 1  293.5  82.5  8.5  325.0    0.0   0.0   0.0 -400.0  GUIDE
+GPROBE  17 15 1  428.0 313.0  8.5   81.0    0.0   0.0   0.0    0.0  GUIDE
+GPROBE  17 16 1  293.5 428.0  8.5  117.0    0.0   0.0   0.0  400.0  GUIDE
 GPROBE  17 17 1  119.5 391.0  1.0    0.0    0.0   0.0   0.0    0.0  TRITIUM
