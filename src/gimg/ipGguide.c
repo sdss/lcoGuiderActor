@@ -38,10 +38,10 @@
 ******************************************************************************
 */
 
-#define DEBUG 0			/* no debugging info */
-//#define DEBUG 1				/* print debugging info */
+//#define DEBUG 0			/* no debugging info */
+#define DEBUG 1				/* print debugging info */
 
-//#define FINDEBUG
+#define FINDBUG
 
 /* ph,ps: currently, many values are hardwired in, we need to create variables for these
    in either header file, or passed in from python. */
@@ -537,9 +537,9 @@ gextendmask(
             }
        }
     }
-    //#ifdef FINDBUG
+#ifdef FINDBUG
 	printf("npoints masked in,out = %d %d \n",nmaskedin, nmaskedout);
-    //#endif
+#endif
 
     free(xbase);
     free(ybase); 
@@ -1035,8 +1035,8 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
      	for(i=ypk[k] - firad[k]; i <= ypk[k] + firad[k]; i++){
             for(j=xpk[k] - firad[k]; j <= xpk[k] + firad[k]; j++){
                 val = (flat[i][j] - medn);
-		//                wgt  = val>0 ? sqrt(sqrt(val)) : 0;
-                wgt  = val>0 ? val : 0;
+		wgt  = val>0 ? sqrt(sqrt(val)) : 0;
+                //wgt  = val>0 ? val : 0;
                 sumy += i * wgt;
                 sumx += j * wgt;
                 sum  += wgt;
@@ -1493,9 +1493,9 @@ wpg[NCELL] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,24,28,32,36,40,45,50,
     if(wpdex == NCELL) wpmin = wpg[NCELL -1];  /* at end */
 
     /* populate output struct */
-    ptr->gsampl  = ampl*PMAX;       /*ph does this have to change */ 
+    ptr->gsampl  = ampl*PMAX;       /*ph does this have to change, NO */ 
     ptr->gsbkgnd = bkgnd;
-    ptr->gswparam = 10.0*sigp2FwhmAs/sqrt(wpmin); /* fwhm in arcsec */
+    ptr->gswparam = 10.0*sigp2FwhmAs/sqrt(wpmin); /* fwhm in arcsec, 10 is  */
     ptr->gserror = minerr;
     return (minerr);
 }

@@ -131,7 +131,7 @@ STATIC int nbadpix = 0;
    The 14 guide fibers occupy 1% 
    Wings of fibers bring the total fiber area up to near 5%
 */
-#define PEAK_PERCENTILE 0.015
+#define PEAK_PERCENTILE 0.010
 #define MEDIAN_PERCENTILE 0.55
 #define   BIAS_PERCENTILE 0.70
 
@@ -141,7 +141,7 @@ ph maintain the bin size rather than the number of bins for Alta camera.
 
 #define BINSIZE	16		/*BINSIZE remains constant*/
 
-#define BINTHRESH 200	/* can probably be increased to 500, assuming flat will have values of ~10000 at least*/
+#define BINTHRESH 500	/* can probably be increased to 500, assuming flat will have values of ~10000 at least*/
 
 
 
