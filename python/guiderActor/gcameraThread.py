@@ -23,21 +23,33 @@ def main(actor, queues):
                 #
                 # Take exposure
                 #
-                timeLim = msg.expTime + 15     # allow for readout time
+                try:
+                    expType = msg.expType
+                except:
+                    expType = "expose" 
 
+                timeLim = msg.expTime + 15     # allow for readout time
+                
                 filenameKey = guiderActor.myGlobals.actorState.models["gcamera"].keyVarDict["filename"]
 
-                cmdVar = actor.cmdr.call(actor="gcamera", cmdStr="expose time=%f" % (msg.expTime),
+                cmdStr="%s time=%f" % (expType, msg.expTime)
+                if expType == "flat":
+                    cmdStr += " cartridge=%s" % (msg.cartridge)
+                    responseMsg = Msg.FLAT_FINISHED
+                else:
+                    responseMsg = Msg.EXPOSURE_FINISHED
+
+                cmdVar = actor.cmdr.call(actor="gcamera", cmdStr=cmdStr, 
                                          keyVars=[filenameKey], timeLim=timeLim, forUserCmd=msg.cmd)
                 if cmdVar.didFail:
                     msg.cmd.warn('text="Failed to take exposure"')
-                    msg.replyQueue.put(Msg(Msg.EXPOSURE_FINISHED, cmd=msg.cmd, success=False))
+                    msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, success=False))
                     continue
 
                 filename = cmdVar.getLastKeyVarData(filenameKey)[0]
 
                 print "Sending EXPOSURE_FINISHED to", msg.replyQueue
-                msg.replyQueue.put(Msg(Msg.EXPOSURE_FINISHED, cmd=msg.cmd, filename=filename, success=True))
+                msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, success=True))
 
             elif msg.type == Msg.ABORT_EXPOSURE:
                 if not msg.quiet:

@@ -2,17 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-/* use ours */
-#ifdef u_short
-#undef u_short
-#endif
-#define u_short unsigned short int
-
-
-#ifdef PI
-#undef PI
-#endif
-#define PI 3.1415926
+#include "ipGguide.h"
 
 #define ERROR puts /* you may want to change this to some other error
                         logging routine */
@@ -110,7 +100,7 @@ grot(			   /* general array rotator; puts zeros where
     int xrm = (xsz-1)*8192;
     int yrm = (ysz-1)*8192;
     int xrem,yrem,xrem1,yrem1;
-    double thetrad = PI * theta / 180.;
+    double thetrad = M_PI * theta / 180.;
     
     cthet = 8192.*cos(thetrad);
     sthet = 8192.*sin(thetrad);
@@ -157,7 +147,7 @@ maskrot(theta,p,dp,xsz,ysz)   /* general byte-sized mask rotator puts zeros
     int yroff = y2*256;
     int xrm = (xsz-1)*256;
     int yrm = (ysz-1)*256;
-    double thetrad = PI * theta / 180.;
+    double thetrad = M_PI * theta / 180.;
     
     cthet = 256.*cos(thetrad);
     sthet = 256.*sin(thetrad);

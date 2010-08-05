@@ -15,11 +15,12 @@
 ** AUTHOR:
 **	Creation date:  2002-03-31
 **	Jim Gunn
-**      Imported into Derish: 2003-01-07
+**      Imported into Dervish: 2003-01-07
 **      Eric Neilsen
 ** Mods
 **      New Apogee camera:   2009-07-29
 **      Paul Harding      
+**      Dustin Lang
 ******************************************************************************
 ******************************************************************************
 */
@@ -31,7 +32,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "shLegacy.h"
-
 
 #define STATIC static
 #define DOUBLE double
@@ -96,16 +96,8 @@ STATIC int rvalwt[60];
  * grid which we move about to find the minimum fittin error; the structures 
  * which contain the information for these nine points are are these:
  */
-/* STATIC struct gstarfit starfitarr[9]; */
-/* STATIC struct gstarfit *starfit[3] = 
-            {starfitarr, starfitarr + 3, starfitarr + 6}; */
-
 STATIC struct gstarfit istarfit ;  /* initial answer */            
 STATIC struct gstarfit fstarfit;  /* final answer */
-STATIC int pgs2derr[9];
-
-/* 2d fitting error matrix */
-STATIC int *gs2derr[3] = {pgs2derr,pgs2derr+3,pgs2derr+6};  
 
 /* print buffer */
 STATIC char pbuf[256];
@@ -224,6 +216,28 @@ typedef struct gstarfit{
 
 /********** FUNCTION PROTOTYPES ************/
 
+// defined in gutils.c, used in ipGguide.c
+void  
+grot(			   /* general array rotator; puts zeros where 
+                                 data are not generated */
+     float theta,              /* angle in degrees */
+     short **p,              /* source array */
+     short **dp,             /* destination array */
+     int xsz, int ysz);              /* sizes */
+
+void  
+maskrot(
+		float theta,              /* angle in degrees */
+		char **p,                 /* source mask array */
+		char **dp,                /* destination mask array */
+		int xsz, int ysz);              /* sizes */
+
+
+void rotate_region(const REGION* regin, REGION* regout, float theta);
+
+void rotate_mask(const MASK* maskin, MASK* maskout, float theta);
+
+
 //GHIST *ipGhistNew(void);
 //RET_CODE ipGhistDel(GHIST *obj);
 
@@ -232,6 +246,10 @@ typedef struct gstarfit{
 
 //GSTARFIT *ipGstarfitNew(void);
 //RET_CODE ipGstarfitDel(GSTARFIT *obj);
+
+
+FIBERDATA* fiberdata_new(int nfibers);
+void fiberdata_free(FIBERDATA* f);
 
 int gbin(
      REGION *inputReg,       /* the input region */

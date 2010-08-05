@@ -21,6 +21,8 @@ class Msg(object):
     class EXIT(): pass
     class EXPOSE(): pass
     class EXPOSURE_FINISHED(): pass
+    class TAKE_FLAT(): pass
+    class FLAT_FINISHED(): pass
     class ENABLE_FIBER(): pass
     class FAIL(): pass
     class LOAD_CARTRIDGE(): pass

@@ -381,8 +381,6 @@ class GuideTest(object):
                 procname = procdir + prefix + "-" + "%(num)s.fits" %{'num':imagenum}
                 hdu = pyfits.PrimaryHDU(array)
                 hdu.writeto(procname, clobber = True)
-                
-               
 	
 	def makeMask(self):
                   
@@ -774,8 +772,10 @@ class GuideTest(object):
 
 		try:
 			imageHDU.header.update("OBJECT", os.path.splitext(filename)[0], "")
-			imageHDU.header.update("GCAMSCAL", frameInfo.guideCameraScale, "guide camera plate scale (mm/pixel)")
-			imageHDU.header.update("PLATSCAL", frameInfo.plugPlateScale, "plug plate scale (mm/degree)")
+			imageHDU.header.update("GCAMSCAL", frameInfo.guideCameraScale, 
+					       "guide camera plate scale (mm/pixel)")
+			imageHDU.header.update("PLATSCAL", frameInfo.plugPlateScale, 
+					       "plug plate scale (mm/degree)")
 			tccCards = actorFits.tccCards(models, cmd=cmd)
 			actorFits.extendHeader(cmd, imageHDU.header, tccCards)
 
