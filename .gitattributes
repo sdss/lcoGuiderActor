@@ -11,12 +11,16 @@ python/guiderActor/PID.py -text
 python/guiderActor/__init__.py -text
 python/guiderActor/gcameraThread.py -text
 python/guiderActor/gimg/__init__.py -text
+python/guiderActor/gimg/guiderImage.py -text
+python/guiderActor/gimg/guiderImagePlots.py -text
 python/guiderActor/gimg/procimg.py -text
 python/guiderActor/gimg/protoGcamFITS.py -text
 python/guiderActor/gimg/pyGuide_test.py -text
 python/guiderActor/guiderActor_main.py -text
 python/guiderActor/masterThread.py -text
 python/guiderActor/myGlobals.py -text
+python/guiderActor/test_flat.py -text
+python/guiderActor/tests.py -text
 /setup.py -text
 src/Makefile -text
 src/gimg/Makefile -text

@@ -34,14 +34,13 @@
 **	Jim Gunn
 **      Mods for Python: 2009-07-
 **      Phoebe Stierhoff, Paul Harding, Craig Loomis
+**      Dustin Lang
 ******************************************************************************
 ******************************************************************************
 */
 
-//#define DEBUG 0			/* no debugging info */
-#define DEBUG 1				/* print debugging info */
-
-#define FINDBUG
+#define DEBUG 0			/* no debugging info */
+//#define FINDEBUG
 
 /* ph,ps: currently, many values are hardwired in, we need to create variables for these
    in either header file, or passed in from python. */
@@ -192,6 +191,13 @@ STATIC int haveflatdata = 0;
 STATIC float gdnorm = 0.;
 #endif
 
+void rotate_region(const REGION* regin, REGION* regout, float theta) {
+	grot(theta, regin->rows_s16, regout->rows_s16, regin->ncol, regin->nrow);
+}
+
+void rotate_mask(const MASK* maskin, MASK* maskout, float theta) {
+	maskrot(theta, (char**)maskin->rows, (char**)maskout->rows, maskin->ncol, maskin->nrow);
+}
 
 /*******************************************************************
  *
@@ -537,9 +543,9 @@ gextendmask(
             }
        }
     }
-#ifdef FINDBUG
+    //#ifdef FINDBUG
 	printf("npoints masked in,out = %d %d \n",nmaskedin, nmaskedout);
-#endif
+    //#endif
 
     free(xbase);
     free(ybase); 
@@ -547,7 +553,40 @@ gextendmask(
     return(SH_SUCCESS);
 }
 
+FIBERDATA* fiberdata_new(int N) {
+	FIBERDATA* f = calloc(1, sizeof(FIBERDATA));
+	f->g_nfibers = N;
+	f->g_fid = malloc(N * sizeof(int));
+	f->g_xcen = malloc(N * sizeof(double));
+	f->g_ycen = malloc(N * sizeof(double));
+	f->g_fibrad = malloc(N * sizeof(double));
+	f->g_illrad = malloc(N * sizeof(double));
+	f->g_xs = malloc(N * sizeof(double));
+	f->g_ys = malloc(N * sizeof(double));
+	f->g_mag = malloc(N * sizeof(double));
+	f->g_fwhm = malloc(N * sizeof(double));
+	f->g_poserr = malloc(N * sizeof(double));
+	f->g_fitbkgrd = malloc(N * sizeof(double));
+	return f;
+}
 
+void fiberdata_free(FIBERDATA* f) {
+	free(f->g_fid);
+	free(f->g_xcen);
+	free(f->g_ycen);
+	free(f->g_fibrad);
+	free(f->g_illrad);
+	free(f->g_xs);
+	free(f->g_ys);
+	free(f->g_mag);
+	free(f->g_fwhm);
+	free(f->g_poserr);
+	free(f->g_fitbkgrd);
+	free(f);
+}
+
+
+#define FINDEBUG
  
 /******************* GFINDFIBERS() ***************************************
  * This routine deals with BOSS and Marvels cartridges.
@@ -793,8 +832,9 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
 #endif
 
     if(npk > nfib){
-        shError("GFINDFIBERS: Bad frame; too many fibers");
-	return(SH_GENERIC_ERROR);
+        sprintf(pbuf,"GFINDFIBERS: Bad frame: too many fibers: %i > %i", npk, nfib);
+        shError(pbuf);
+		return(SH_GENERIC_ERROR);
     }
     if(npk < nfib-1){
         sprintf(pbuf,"GFINDFIBERS: Only %d fibers found",npk);
@@ -1035,8 +1075,8 @@ printf("i,j,xi,xj,yi,yj,npt= %d %d %d %d %d %d %d\n",i,j,xpk[i],xpk[j],ypk[i],
      	for(i=ypk[k] - firad[k]; i <= ypk[k] + firad[k]; i++){
             for(j=xpk[k] - firad[k]; j <= xpk[k] + firad[k]; j++){
                 val = (flat[i][j] - medn);
-		wgt  = val>0 ? sqrt(sqrt(val)) : 0;
-                //wgt  = val>0 ? val : 0;
+		//                wgt  = val>0 ? sqrt(sqrt(val)) : 0;
+                wgt  = val>0 ? val : 0;
                 sumy += i * wgt;
                 sumx += j * wgt;
                 sum  += wgt;
@@ -1306,7 +1346,7 @@ gmakeseeprof(void)
     
     rvalmean[0] = 0;
     rvalwt[0] = 1;
-    
+
     radtable[0] = 0;
     radtable[1] = 1;
     radtable[2] = 2;
@@ -1493,9 +1533,9 @@ wpg[NCELL] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,24,28,32,36,40,45,50,
     if(wpdex == NCELL) wpmin = wpg[NCELL -1];  /* at end */
 
     /* populate output struct */
-    ptr->gsampl  = ampl*PMAX;       /*ph does this have to change, NO */ 
+    ptr->gsampl  = ampl*PMAX;       /*ph does this have to change */ 
     ptr->gsbkgnd = bkgnd;
-    ptr->gswparam = 10.0*sigp2FwhmAs/sqrt(wpmin); /* fwhm in arcsec, 10 is  */
+    ptr->gswparam = 10.0*sigp2FwhmAs/sqrt(wpmin); /* fwhm in arcsec */
     ptr->gserror = minerr;
     return (minerr);
 }
@@ -1548,10 +1588,10 @@ gprofext(
             d = data[ii][jj];
             
             if(d != 0){
-	        int const k = (ii-yc)*(ii-yc) + (jj-xc)*(jj-xc);
-		if (k >= MAXR2 - 1) {
-		   continue;
-		}
+				int const k = (ii-yc)*(ii-yc) + (jj-xc)*(jj-xc);
+				if (k >= MAXR2 - 1) {
+					continue;
+				}
 		
                 ir = radtable[k];
 
@@ -1568,7 +1608,7 @@ gprofext(
         if(radcnt[k] != 0){
         	
             r2prof[k] = r2prof[k] - 
-                        (double)radprof[k]*(double)radprof[k]/(double)radcnt[k];
+				(double)radprof[k]*(double)radprof[k]/(double)radcnt[k];
             
             *perr2d += (float)r2prof[k];
             radprof[k] /= radcnt[k];
@@ -1604,10 +1644,10 @@ gfindstar(
     float err2d;
     int err = 0;
     short int smcap[6];
-    int xc = (int) (ptr->g_xcen[fk] + 0.5) ;    /* fiber xcen */
-    int yc = (int) (ptr->g_ycen[fk] + 0.5) ;    /* fiber ycen */
-    int rc = (int) (ptr->g_fibrad[fk] + 0.5);   /* mask radius */
-    int ri = (int) (ptr->g_illrad[fk] + 0.5);   /* illum fiber radius */
+    const int xc = (int) (ptr->g_xcen[fk] + 0.5) ;    /* fiber xcen */
+    const int yc = (int) (ptr->g_ycen[fk] + 0.5) ;    /* fiber ycen */
+    const int rc = (int) (ptr->g_fibrad[fk] + 0.5);   /* mask radius */
+    const int ri = (int) (ptr->g_illrad[fk] + 0.5);   /* illum fiber radius */
     
     int sum, sumcap;
     int max = 0;
@@ -1630,7 +1670,8 @@ gfindstar(
     float fudge;
     float rsq;
     float roff;
-    
+
+	float gs2derr[3][3];
     
     if(seeprofile == NULL){
         err = gmakeseeprof();
@@ -1644,12 +1685,14 @@ gfindstar(
      * corresponds to a parabolic representation of a gaussian with sigma
      * about 1.8 alta pixels, or 1.8 arcsecond seeing
      */
-     
     //smcap[k] = 4096 - 270*k;    Original, triangular but not parabolic? k**2 *ph*
     //for now scale 4096/270   PMAX    
 
     for(k=0;k<6;k++) smcap[k] = PMAX - (PMAX/15.1)*k;    
     sumcap = smcap[0] + 4*smcap[1] + 4*smcap[2] + 4*smcap[4] + 8*smcap[5];
+
+	//printf("xc,yc %g,%g\n", ptr->g_xcen[fk], ptr->g_ycen[fk]);
+	//printf("rc %g, ri %g\n", ptr->g_fibrad[fk], ptr->g_illrad[fk]);
     
     /* first smooth the picture in the neighborhood of the fiber with
      * this cap and find the maximum. we do not deal properly with edge
@@ -1704,8 +1747,18 @@ gfindstar(
                 jj = maxj + j;
                 npt = sqrt((double)((jj-xc)*(jj-xc)+(ii-yc)*(ii-yc))) + rc + 2;
                  
+				if (rc >= sizeof(radprof)/2) {
+					sprintf(pbuf, "GFINDSTAR: Guider Fiber %d has radius %d, limit is %d.\n",
+							fk, rc, (int)sizeof(radprof)/2);
+					shError(pbuf);
+					return -1;
+				}
+				memset(radprof, 0, sizeof(radprof));
+				memset(radcnt, 0, sizeof(radcnt));
+				memset(r2prof, 0, sizeof(r2prof));
+
                 (void)gprofext(data, radprof, radcnt, r2prof, 
-                    maxj + j, maxi + i, xc, yc, rc, &err2d);
+							   maxj + j, maxi + i, xc, yc, rc, &err2d);
                 gs2derr[i+1][j+1] = err2d;
                 
                 (void)gproffit(radprof,radcnt,npt,0,&istarfit); 
@@ -1715,7 +1768,6 @@ gfindstar(
                     jj,ii,err2d,istarfit.gsampl,istarfit.gsbkgnd,
                     istarfit.gswparam, istarfit.gswparam/sigp2FwhmAs);
 #endif
-
             }
         }
         ptr->g_fitbkgrd[fk] = istarfit.gsbkgnd;
@@ -1735,9 +1787,9 @@ gfindstar(
             }
         }
 
-#ifdef FSTDB1
-        printf("jj,ii,errmin:%d %d %5.0f\n",jj,ii,errmin);
-#endif
+		#ifdef FSTDB1
+		printf("jj,ii,errmin:%d %d %5.0f\n",jj,ii,errmin);
+		#endif
 
 
 	/* do not walk too far.  we only have the profile arrays
@@ -1763,12 +1815,12 @@ gfindstar(
         //maxwalk2 = 1.4*1.4*ri*ri;
 
 	maxwalk2 = 40*40; 
-
-	if((ii != 0 || jj != 0)&&		\
-
-	   (((maxi+ii-yc)*(maxi+ii-yc)+(maxj+jj-xc)*(maxj+jj-xc))<maxwalk2)&&(niter<MAXGFSITER)) {
-  
-	  /* min at edge--walk */
+	//printf("dist from starting point: %g\n", sqrt((maxi+ii-yc)*(maxi+ii-yc)+(maxj+jj-xc)*(maxj+jj-xc)));
+	//printf("iter %i / %i\n", niter, MAXGFSITER);
+	if((ii != 0 || jj != 0) &&
+	   (niter<MAXGFSITER) &&
+	   (((maxi+ii-yc)*(maxi+ii-yc)+(maxj+jj-xc)*(maxj+jj-xc))<maxwalk2)) {
+		/* min at edge--walk */
             shDebug(DEBUG,"*");
        
             /* now we could save a lot of work if we just moved the good
@@ -1776,23 +1828,43 @@ gfindstar(
              * just a little bookkeeping, but skip it for now--just update
              * and go on
              */
-	    /* but do not walk too far.  we only have the profile arrays
-	     * out to r^2=MAXR2 (3600) pixels.  if we limit the center for the 
-	     * extraction to +/- 2 fiber radii, we are safe, as fibrad<30
-	     * as of now, the code walks at most one pixel in 
-	     * each coord, so if the resulting radius is >= 2 fibrad, go
-	     * back and then bail out of this loop.  iop will do quality
-	     * control and reject bad fits.   
-	     */
-	    maxi += ii;
-	    maxj += jj;
-	    niter++;
+			/* but do not walk too far.  we only have the profile arrays
+			 * out to r^2=MAXR2 (3600) pixels.  if we limit the center for the 
+			 * extraction to +/- 2 fiber radii, we are safe, as fibrad<30
+			 * as of now, the code walks at most one pixel in 
+			 * each coord, so if the resulting radius is >= 2 fibrad, go
+			 * back and then bail out of this loop.  iop will do quality
+			 * control and reject bad fits.   
+			 */
+			maxi += ii;
+			maxj += jj;
+			niter++;
+			//printf("Walked to %i,%i\n", maxj, maxi);
         } else {   /* have minimum or at edge of range. Get out and go home */
-        
+			//printf("Quitting, at %i,%i\n", maxj, maxi);
+			//printf("Middle was: %g\n", gs2derr[1][1]);
+		if (rc >= sizeof(radprof)/2) {
+			sprintf(pbuf, "GFINDSTAR: Guider Fiber %d has radius %d, limit is %d.\n",
+					fk, rc, (int)sizeof(radprof)/2);
+			shError(pbuf);
+			return -1;
+		}
+		memset(radprof, 0, sizeof(radprof));
+		memset(radcnt, 0, sizeof(radcnt));
+		memset(r2prof, 0, sizeof(r2prof));
+
             (void)gprofext(data, radprof, radcnt, r2prof, 
                     maxj, maxi, xc, yc, rc, &err2d);
             gs2derr[1][1] = err2d;
             (void)gproffit(radprof,radcnt,npt,0,&fstarfit);
+
+			/*
+			 printf("gprofext: j=%i, i=%i, err=%g\n", maxj, maxi, err2d);
+			 printf("jj=%d ii=%d err=%6.0f ampl=%5.1f bkgnd=%4.1f fwhm=%4.2f, sig=%4.2f\n",
+			 maxj,maxi,err2d,fstarfit.gsampl,fstarfit.gsbkgnd,
+			 fstarfit.gswparam, fstarfit.gswparam/0.69);
+			 printf("Middle is: %g\n", gs2derr[1][1]);
+			 */
         
             bx = 0.5*(gs2derr[1][2] - gs2derr[1][0]);
             ax = 0.5*(gs2derr[1][2] - 2.*gs2derr[1][1]
@@ -1802,6 +1874,8 @@ gfindstar(
                         + gs2derr[0][1]);
             dx = -0.5*bx/ax;
             dy = -0.5*by/ay;
+
+			//printf("dx, dy %g,%g\n", dx,dy);
            
             xs = maxj + dx;
             ys = maxi + dy; 

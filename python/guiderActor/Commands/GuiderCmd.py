@@ -71,6 +71,9 @@ class GuiderCmd(object):
                                         keys.Key("psPlot", help="Save copy of plots"),
                                         keys.Key("display", types.String(), help="DISPLAY variable to use"),
                                         keys.Key("spiderInstAng", types.Float(), help="Value to use for spiderInstAng"),
+
+                                        keys.Key("raDec", help=""),
+
                                         )
         #
         # Declare commands
@@ -84,6 +87,7 @@ class GuiderCmd(object):
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
             ("loadCartridge", "[<cartridge>] [<pointing>] [<plate>] [<mjd>] [<fscanId>] [force]", self.loadCartridge),
             ("showCartridge", "", self.showCartridge),
+            ("flat", "[<time>]", self.flat),
             ('ping', '', self.ping),
             ('restart', '', self.restart),
             ('axes', '(on|off)', self.axes),
@@ -123,6 +127,11 @@ class GuiderCmd(object):
 
         expTime = cmd.cmd.keywords["time"].values[0]
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
+
+    def flat(self, cmd):
+        expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 0.5
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_FLAT, cmd=cmd,
+                                                                start=True, expTime=expTime))
 
     def setPID(self, cmd):
         """Set something's PID coefficients"""
@@ -327,12 +336,7 @@ that isn't actually mounted (unless you specify force)
     def ping(self, cmd):
         """ Top-level 'ping' command handler. Query the actor for liveness/happiness. """
 
-        try:
-            keyName, verString = self.actor.versionString(cmd)
-            cmd.respond("%s=%s" % (keyName, verString))
-        except:
-            cmd.warn("text='could not fetch version'")
-
+        self.actor.sendVersionKey(cmd)
         cmd.finish('text="pong"')
 
     def restart(self, cmd):
@@ -383,6 +387,7 @@ that isn't actually mounted (unless you specify force)
     def status(self, cmd, full=True):
         """Return guide status status"""
 
+        self.actor.sendVersionKey(cmd)
         if "geek" in cmd.cmd.keywords:
             for t in threading.enumerate():
                 cmd.inform('text="%s"' % t)

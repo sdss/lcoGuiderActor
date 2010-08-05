@@ -8,7 +8,6 @@ import opscore.actor.model
 import opscore.actor.keyvar
 
 import actorcore.Actor
-import actorcore.CmdrConnection
 
 import actorkeys
 
@@ -32,12 +31,11 @@ class State(object):
     def __init__(self, actor):
         self.actor = actor
         self.dispatcher = self.actor.cmdr.dispatcher
-        self.reactor = self.dispatcher.reactor
         self.models = {}
         self.restartCmd = None
 
     def __str__(self):
-        msg = "%s %s %s" % (self.actor, self.actor.cmdr.dispatcher, self.dispatcher.reactor)
+        msg = "%s %s" % (self.actor, self.actor.cmdr.dispatcher)
 
         return msg
 
@@ -60,17 +58,13 @@ class Guider(actorcore.Actor.Actor):
         self.logger.setLevel(debugLevel)
         #self.logger.propagate = True
 
-        self.cmdr = actorcore.CmdrConnection.Cmdr(name, self)
-        self.cmdr.connectionMade = self.connectionMade
-        self.cmdr.connect()
-
         guiderActor.myGlobals.actorState = State(self)
         actorState = guiderActor.myGlobals.actorState
         #
         # Load other actor's models so we can send it commands
         # And ours: we use the models to generate the FITS cards.
         #
-        for actor in ["gcamera", "mcp", "platedb", "tcc", "guider"]:
+        for actor in ["gcamera", "mcp", "platedb", "sop", "tcc", "guider"]:
             actorState.models[actor] = opscore.actor.model.Model(actor)
         #
         # spawn off the threads that sequence actions (e.g. take an exposure; move telescope)
@@ -87,8 +81,6 @@ class Guider(actorcore.Actor.Actor):
         #
         # Handle the hated ini file
         #
-        import ConfigParser
-        
         try:
             expTime = float(self.config.get('gcamera', "exposureTime"))
         except ConfigParser.NoOptionError:
@@ -121,9 +113,6 @@ class Guider(actorcore.Actor.Actor):
         #
         self.run()
 
-    def connectionMade(self):
-        self.bcast.warn("Guider is connected.")
-        
     @staticmethod
     def startThreads(actorState, cmd=None, restartQueues=False, restart=False):
         """Start or restart the worker threads and queues"""
