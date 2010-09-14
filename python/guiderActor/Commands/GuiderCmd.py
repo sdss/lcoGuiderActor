@@ -71,9 +71,9 @@ class GuiderCmd(object):
                                         keys.Key("psPlot", help="Save copy of plots"),
                                         keys.Key("display", types.String(), help="DISPLAY variable to use"),
                                         keys.Key("spiderInstAng", types.Float(), help="Value to use for spiderInstAng"),
-
-                                        keys.Key("raDec", help=""),
-
+                                        keys.Key("cartfile", types.String(), help="cartridge file"),
+                                        keys.Key("plugfile", types.String(), help="plugmap file"),
+                                        keys.Key("file", types.String(), help="guider file"),
                                         )
         #
         # Declare commands
@@ -87,6 +87,8 @@ class GuiderCmd(object):
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
             ("loadCartridge", "[<cartridge>] [<pointing>] [<plate>] [<mjd>] [<fscanId>] [force]", self.loadCartridge),
             ("showCartridge", "", self.showCartridge),
+            ("loadPlateFiles", "<cartfile> <plugfile>", self.loadPlateFiles),
+            ("reprocessFile", "<file>", self.reprocessFile),
             ("flat", "[<time>]", self.flat),
             ('ping', '', self.ping),
             ('restart', '', self.restart),
@@ -180,6 +182,19 @@ class GuiderCmd(object):
         """Turn guiding off"""
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=False))
+
+    def reprocessFile(self, cmd):
+        """Reprocess a single file."""
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.REPROCESS_FILE, cmd=cmd, 
+                                                                filename=cmd.cmd.keywords["filename"].values[0]))
+
+    def loadPlateFiles(self, cmd):
+        """Read in cartridge and plugmap files. """
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.READ_PLATE_FILES, cmd=cmd,
+                                                                plugfile=cmd.cmd.keywords["plugfile"].values[0],
+                                                                cartfile=cmd.cmd.keywords["cartfile"].values[0]))
 
     def loadCartridge(self, cmd):
         """Load a cartridge

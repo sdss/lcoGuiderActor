@@ -30,6 +30,8 @@ TARGETS = $(GIMG_TARGET)
 all : $(TARGETS)
 
 $(GIMG_TARGET): $(OBJECTS)
+	@echo "If you're on a Mac you might want to try:"
+	@echo "	gcc -shared -bundle -undefined dynamic_lookup -o ../../lib/libguide.so *.o"
 	$(LD) -shared -o $(GIMG_TARGET) $(OBJECTS) -lm
 
 clean :

@@ -13,14 +13,14 @@ import actorkeys
 
 import gcameraThread
 import masterThread
-        
+
 from guiderActor import *
 import guiderActor.myGlobals
 #
 # Import sdss3logging before logging if you want to use it
 #
-if False:
-    import opscore.utility.sdss3logging as sdss3logging
+#if False:
+import opscore.utility.sdss3logging as sdss3logging
 import logging
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -64,7 +64,7 @@ class Guider(actorcore.Actor.Actor):
         # Load other actor's models so we can send it commands
         # And ours: we use the models to generate the FITS cards.
         #
-        for actor in ["gcamera", "mcp", "platedb", "sop", "tcc", "guider"]:
+        for actor in ["gcamera", "ecamera", "mcp", "platedb", "sop", "tcc", "guider"]:
             actorState.models[actor] = opscore.actor.model.Model(actor)
         #
         # spawn off the threads that sequence actions (e.g. take an exposure; move telescope)

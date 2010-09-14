@@ -33,6 +33,10 @@ class Msg(object):
     class SET_SCALE(): pass
     class SET_SPECIAL_GPROBES(): pass
     class SET_TIME(): pass
+    class REPROCESS_FILE(): pass
+    class READ_PLATE_FILES(): pass
+    class TCC_EXPOSURE(): pass
+    class TCC_EXPOSURE_FINISHED(): pass
 
     def __init__(self, type, cmd, **data):
         self.type = type

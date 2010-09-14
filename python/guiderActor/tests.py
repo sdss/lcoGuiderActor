@@ -74,6 +74,8 @@ def getGprobes(fiberinfofn, plugmapfn, cartridge):
 			info.yFocal = ghole.yFocal
 			info.phi = 90 - math.atan2(ahole.yFocal - ghole.yFocal,
 									   ahole.xFocal - ghole.xFocal) * 180/math.pi
+			info.mag = ghole.mag
+
 		else:
 			info.ra = 0
 			info.dec = 0
@@ -82,10 +84,29 @@ def getGprobes(fiberinfofn, plugmapfn, cartridge):
 			info.phi = 0
 			info.rotStar2Sky = numpy.nan
 
+
 		gprobes[p.gProbeId] = info
 	return gprobes
 
 
+def getModels():
+	models = {}
+	tcc = ducky()
+	tcc.keyVarDict = {}
+	models['tcc'] = tcc
+	mcp = ducky()
+	mcp.keyVarDict = {'ffsStatus':[[8,0]]}
+	models['mcp'] = mcp
+	return models
+
+
+def getCommand():
+	cmd = ducky()
+	cmd.inform = myinform
+	cmd.warn = mywarn
+	cmd.fail = myfail
+	cmd.respond = myrespond
+	return cmd
 
 if __name__ == '__main__':
 	os.environ['GUIDERACTOR_DIR'] = '..'
@@ -104,22 +125,12 @@ if __name__ == '__main__':
 
 	myGlobals.actorState = ducky()
 	myGlobals.actorState.timeout = 0
-	myGlobals.actorState.models = {}
-	tcc = ducky()
-	tcc.keyVarDict = {}
-	myGlobals.actorState.models['tcc'] = tcc
-	mcp = ducky()
-	mcp.keyVarDict = {'ffsStatus':[[8,0]]}
-	myGlobals.actorState.models['mcp'] = mcp
+	myGlobals.actorState.models = getModels()
 	myGlobals.actorState.tccState = ducky()
 	myGlobals.actorState.tccState.halted = False
 	myGlobals.actorState.tccState.goToNewField = False
 
-	cmd = ducky()
-	cmd.inform = myinform
-	cmd.warn = mywarn
-	cmd.fail = myfail
-	cmd.respond = myrespond
+	cmd = getCommand()
 
 	# Simple test
 	#m = Msg(Msg.EXIT, cmd)
