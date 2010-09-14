@@ -23,9 +23,9 @@ class fiber(object):
 		self.xyserr = numpy.nan
 		self.fwhm = numpy.nan
 		self.sky = numpy.nan
+		self.skymag = numpy.nan
+		self.flux = numpy.nan
 		self.mag = numpy.nan
-
-		# self.rms ?  Used by masterThread.py
 
 		self.fwhmErr = numpy.nan
 		self.dx = numpy.nan
@@ -66,12 +66,15 @@ class FIBERDATA(ctypes.Structure):
 				("g_illrad", ctypes.POINTER(ctypes.c_double)),
 				("g_xs", ctypes.POINTER(ctypes.c_double)),
 				("g_ys", ctypes.POINTER(ctypes.c_double)),
-				("g_mag", ctypes.POINTER(ctypes.c_double)),
-				("g_fwhm", ctypes.POINTER(ctypes.c_double)),
-				("g_poserr", ctypes.POINTER(ctypes.c_double)),
-				("g_fitbkgrd", ctypes.POINTER(ctypes.c_double)),
+				("flux", ctypes.POINTER(ctypes.c_double)),
+				("sky", ctypes.POINTER(ctypes.c_double)),
+				("fwhm", ctypes.POINTER(ctypes.c_double)),
+				("poserr", ctypes.POINTER(ctypes.c_double)),
 				("g_readnoise", ctypes.c_double),
 				("g_npixmask", ctypes.c_int)]
+
+# Must match ipGguide.h
+FWHM_BAD = 99.99
 
 def numpy_array_to_REGION(A):
 	H, W = A.shape
@@ -125,6 +128,9 @@ class GuiderImageAnalysis(object):
 			self.warnFunc = None
 			self.debugFunc = None
 
+		# Print debugging?
+		self.printDebug = False
+
 		# "Big" (acquisition) fibers are bigger than this pixel
 		# radius.  The older SDSS cartridges don't declare (in the
 		# gcamFiberInfo.par file) the larger fibers to be ACQUIRE,
@@ -142,6 +148,22 @@ class GuiderImageAnalysis(object):
 		# That is, unbinned (flat) images are this factor bigger in
 		# each dimension.
 		self.binning = 2
+
+		# The pixel scale of the guider camera, when binned by "binning"
+		# In arcsec/pixel
+		self.pixelscale = 0.428
+
+		# The photometric zero-point for (g + r)/2 band
+		# This was calibrated vs MJD 55246, with AZ~=73 deg, airmass~=1.046
+		self.zeropoint = 25.34
+		
+	def pixels2arcsec(self, pix):
+		return pix * self.pixelscale
+
+	def flux2mag(self, flux, exptime, fiber):
+		if exptime == 0:
+			return -99
+		return -2.5 * log10(flux / exptime) + self.zeropoint
 
 	def ensureLibraryLoaded(self):
 		# Load C library "ipGguide.c"
@@ -260,8 +282,9 @@ class GuiderImageAnalysis(object):
 		cards = []
 		for name, fitsName, comment in defs:
 			try:
-				val = getattr(frameInfo,name)
-				if val != val:
+				val = None
+				val = getattr(frameInfo, name)
+				if isnan(val):
 					val = -99999.9 # F.ing F.TS
 				c = actorFits.makeCard(cmd, fitsName, val, comment)
 				cards.append(c)
@@ -291,7 +314,7 @@ class GuiderImageAnalysis(object):
 			stamps.append(numpy.flipud(rstamp))
 			# Rotate the mask image...
 			stamp = mask[yc-r:yc+r+1, xc-r:xc+r+1].astype(uint8)
-			print 'stamp values:', unique(stamp.ravel())
+			#print 'stamp values:', unique(stamp.ravel())
 			# Replace zeros by 255 so that after rotate_region (which puts
 			# zeroes in the "blank" regions) we can replace them.
 			stamp[stamp == 0] = 255
@@ -303,7 +326,7 @@ class GuiderImageAnalysis(object):
 			rstamp[rstamp == 0] = GuiderImageAnalysis.mask_masked
 			# Reinstate the zeroes.
 			rstamp[rstamp == 255] = 0
-			print 'rotated stamp values:', unique(rstamp.ravel())
+			#print 'rotated stamp values:', unique(rstamp.ravel())
 			maskstamps.append(numpy.flipud(rstamp))
 
 		# Stack the stamps into one image.
@@ -380,18 +403,20 @@ class GuiderImageAnalysis(object):
 				('flags',          'L',   None),
 						]
 			gpinfofields = [
-				# FITScol,      FITStype, unit
-				('exists',         'L',   None),
-				('xFocal',         'E',   'plate mm'),
-				('yFocal',         'E',   'plate mm'),
-				('radius',         'E',   pixunit),
-				('xFerruleOffset', 'E',   None),
-				('yFerruleOffset', 'E',   None),
-				('rotation',       'E',   None),
-				('rotStar2Sky',    'E',   None),
-				('focusOffset',    'E',   'micrometers'),
-				('fiber_type',     'A20', None),
+				# python attr, FITScol (if diff), FITStype, NIL val, unit
+				('exists',         None,    'L',   numpy.nan,     None),
+				('xFocal',         None,    'E',   numpy.nan,     'plate mm'),
+				('yFocal',         None,    'E',   numpy.nan,     'plate mm'),
+				('radius',         None,    'E',   numpy.nan,     pixunit),
+				('xFerruleOffset', None,    'E',   numpy.nan,     None),
+				('yFerruleOffset', None,    'E',   numpy.nan,     None),
+				('rotation',       None,    'E',   numpy.nan,     None),
+				('rotStar2Sky',    None,    'E',   numpy.nan,     None),
+				('focusOffset',    None,    'E',   numpy.nan,     'micrometers'),
+				('fiber_type',     None,    'A20', numpy.nan,     None),
+				('mag',            'ugriz', '5E',  [numpy.nan]*5, 'mag'),
 				]
+
 			ffields = [
 				# FITScol,  variable, FITStype, unit
 				('fiberid', None,     'I', None),
@@ -404,7 +429,11 @@ class GuiderImageAnalysis(object):
 				('dRA',     None,     'E', 'residual in mm, plate frame'),
 				('dDec',    None,     'E', 'residual in mm, plate frame'),
 				('fwhm',    None,     'E', 'arcsec'),
-				('poserr',  'xyserr', 'E', None),
+				('flux',    None,     'E', 'total DN'),
+				('mag',     None,     'E', '(g+r)/2 mag'),
+				('sky',     None,     'E', 'DN/pixel'),
+				('skymag',  None,     'E', 'mag/(arcsec^2)'),
+				('poserr',  'xyserr', 'E', pixunit),
 				]
 
 			# FIXME -- rotStar2Sky -- should check with "hasattr"...
@@ -412,10 +441,11 @@ class GuiderImageAnalysis(object):
 			for name,fitstype,units in gpfields:
 				cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
 										  array=numpy.array([getattr(f.gprobe, name) for f in fibers])))
-			for name,fitstype,units in gpinfofields:
-				# Tritium stars have no {xy}Focal...
-				cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
-										  array=numpy.array([getattr(f.gprobe.info, name, numpy.nan) for f in fibers])))
+			for name,fitsname,fitstype,nilval,units in gpinfofields:
+				if fitsname is None:
+					fitsname = name
+				cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
+										  array=numpy.array([getattr(f.gprobe.info, name, nilval) for f in fibers])))
 			for name,atname,fitstype,units in ffields:
 				cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
 										  array=numpy.array([getattr(f, atname or name) for f in fibers])))
@@ -507,9 +537,15 @@ class GuiderImageAnalysis(object):
 			return fibers
 
 		self.debug('Using flat image %s' % flatfn)
-		(flat, mask, fibers) = self.analyzeFlat(flatfn, cartridgeId, gprobes)
-		
+		X = self.analyzeFlat(flatfn, cartridgeId, gprobes)
+		if X is None:
+			return None
+		(flat, mask, fibers) = X
 		fibers = [f for f in fibers if not f.is_fake()]
+
+		exptime = hdr.get('EXPTIME', 0)
+
+		print 'Exposure time', exptime
 
 		# FIXME -- presumably we want to mask pixels that are saturated?
 
@@ -562,25 +598,33 @@ class GuiderImageAnalysis(object):
 			c_fibers[0].g_fibrad[i] = f.radius
 			# FIXME ??
 			c_fibers[0].g_illrad[i] = f.radius
+		# FIXME --
+		#c_fibers.readnoise = ...
 
 		# mode=1: data frame; 0=spot frame
 		mode = 1
 		res = self.libguide.gfindstars(ctypes.byref(c_image), c_fibers, mode)
 		# SH_SUCCESS is this following nutty number...
-		if res == int(numpy.uint32(0x8001c009)):
+		if numpy.uint32(res) == numpy.uint32(0x8001c009):
 			self.debug('gfindstars returned successfully.')
 		else:
-			self.warn('gfindstars() returned an error code: %08x' % res)
+			self.warn('gfindstars() returned an error code: %08x (%08x; success=%08x)' % (res, numpy.uint32(res), numpy.uint32(0x8001c009)))
 
 		# pull star positions out of c_fibers, stuff outputs...
 		for i,f in enumerate(goodfibers):
 			f.xs     = c_fibers[0].g_xs[i]
 			f.ys     = c_fibers[0].g_ys[i]
-			f.xyserr = c_fibers[0].g_poserr[i]
-			f.fwhm   = c_fibers[0].g_fwhm[i]
-			f.sky    = c_fibers[0].g_fitbkgrd[i]
-			f.mag    = c_fibers[0].g_mag[i]
-
+			f.xyserr = c_fibers[0].poserr[i]
+			fwhm     = c_fibers[0].fwhm[i]
+			if fwhm != FWHM_BAD:
+				f.fwhm = self.pixels2arcsec(fwhm)
+			# else leave fwhm = nan.
+			# FIXME -- figure out good units -- mag/(pix^2)?
+			f.sky    = c_fibers[0].sky[i]
+			f.flux = c_fibers[0].flux[i]
+			if f.flux > 0:
+				f.mag    = self.flux2mag(f.flux, exptime, f)
+			# else leave f.mag = nan.
 		self.libguide.fiberdata_free(c_fibers)
 
 		self.fibers = fibers
@@ -671,6 +715,8 @@ class GuiderImageAnalysis(object):
 
 		# FIXME -- we KNOW the area (ie, the number of pixels) of the
 		# fibers -- we could choose the threshold appropriately.
+		# NOTE, that's not always true, we sometimes lose fibers, even
+		# acquisition fibers which are pretty big.
 
 		# HACK -- find threshold level inefficiently.
 		# This is the threshold level that was used in "gfindfibers".
@@ -735,6 +781,10 @@ class GuiderImageAnalysis(object):
 				self.inform('Rejecting fiber at (%i,%i) in unbinned pixel coords, with radius %g: too far from expected radii %s' %
 						  (f.xcen, f.ycen, f.radius, '{' + ', '.join(['%g'%r for r in proberads]) + '}'))
 		fibers = keepfibers
+
+		if len(fibers) == 0:
+			self.warn('Failed to find any fibers in guider flat!')
+			return None
 
 		# Find a single x,y offset by testing possibly corresponding
 		# pairs of fibers/probes and checking how many fibers are

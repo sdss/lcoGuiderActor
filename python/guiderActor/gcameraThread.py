@@ -19,6 +19,11 @@ def main(actor, queues):
                 return
             
             elif msg.type == Msg.EXPOSE:
+                try:
+                    camera = msg.camera
+                except:
+                    camera = "gcamera"
+
                 msg.cmd.respond('text="starting exposure"')
                 #
                 # Take exposure
@@ -30,7 +35,12 @@ def main(actor, queues):
 
                 timeLim = msg.expTime + 15     # allow for readout time
                 
-                filenameKey = guiderActor.myGlobals.actorState.models["gcamera"].keyVarDict["filename"]
+                filenameKey = guiderActor.myGlobals.actorState.models[camera].keyVarDict["filename"]
+
+                try:
+                    forTCC = msg.forTCC
+                except:
+                    forTCC = False
 
                 cmdStr="%s time=%f" % (expType, msg.expTime)
                 if expType == "flat":
@@ -39,17 +49,17 @@ def main(actor, queues):
                 else:
                     responseMsg = Msg.EXPOSURE_FINISHED
 
-                cmdVar = actor.cmdr.call(actor="gcamera", cmdStr=cmdStr, 
+                cmdVar = actor.cmdr.call(actor=camera, cmdStr=cmdStr, 
                                          keyVars=[filenameKey], timeLim=timeLim, forUserCmd=msg.cmd)
                 if cmdVar.didFail:
                     msg.cmd.warn('text="Failed to take exposure"')
-                    msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, success=False))
+                    msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, success=False, forTCC=forTCC))
                     continue
 
                 filename = cmdVar.getLastKeyVarData(filenameKey)[0]
 
                 print "Sending EXPOSURE_FINISHED to", msg.replyQueue
-                msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, success=True))
+                msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, success=True, forTCC=forTCC))
 
             elif msg.type == Msg.ABORT_EXPOSURE:
                 if not msg.quiet:

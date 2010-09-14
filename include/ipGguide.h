@@ -36,6 +36,9 @@
 #define STATIC static
 #define DOUBLE double
 
+// Error code; must match guiderImage.py:FWHM_BAD
+#define FWHM_BAD 99.99
+
 /*the Alta guider is 16 bit, but bitshifted in GCAM */
 /* max value of guider data*/
 #define DMAX 32767
@@ -65,9 +68,6 @@
 
 #define CCDGAIN 1.4
 
-# define sigp2FwhmAs 1.0 /* conversion from sigma in pixels to fwhm in arcsec */
-
-   
 /********* VARIABLES ***********/
 
 /*moved out of ipGguide.c*/
@@ -102,17 +102,6 @@ STATIC struct gstarfit fstarfit;  /* final answer */
 /* print buffer */
 STATIC char pbuf[256];
 
-/* arrays for holding x,y vals of bad pixels we want to mask.  
- * limited to 2000 entries as we have bigger problems if more than 2%
- * of the pixels are above our threshold for badness 
- */
-#define MAXBADPIX 2000
-
-
-STATIC S16 badrowval[MAXBADPIX];
-STATIC S16 badcolval[MAXBADPIX];
-STATIC int nbadpix = 0;
-
 /* run through histogram from the top and find peak and median 
    peak of guider fibers is ~1.5% down due to acquisition fibers
    which transmit more than guide fibers. 
@@ -127,24 +116,6 @@ STATIC int nbadpix = 0;
 #define MEDIAN_PERCENTILE 0.55
 #define   BIAS_PERCENTILE 0.70
 
-/*jeg set bin size on photometrics to break image into 16 bins
-ph maintain the bin size rather than the number of bins for Alta camera.
-*/ 
-
-#define BINSIZE	16		/*BINSIZE remains constant*/
-
-#define BINTHRESH 500	/* can probably be increased to 500, assuming flat will have values of ~10000 at least*/
-
-
-
-#define NBINS CCD_SIZE/BINSIZE		/* should be an integer */
-
-#define MAXPEAKS 50
-
-#define MAXFIB (17 + 1)                 /* Fibre IDs are sometimes 1-indexed */
-
-#define SPOTID (MAXFIB-2)		/*fiber alignment spot lives in, zero indexed */
-
 #define MAXFIBERS 20			/* large enough for all possible cartridges */
 
 /* max number of iterations in refining the center; 
@@ -152,12 +123,13 @@ ph maintain the bin size rather than the number of bins for Alta camera.
 
 #define MAXGFSITER 40
 
-/* values of 100/sigma^2 used in width fitting, from sigma=10 pix to sigma=1 pix
- * Alta camera, needed 6 bins to get below sigma=1.41 which was set by max wpg=50 */
-
-#define NCELL 31
+// values of 100/sigma^2 used in width fitting, from sigma=10 pix to sigma~=0.707 pix
+#define NCELL 41
+#define WPG_NUMERATOR 100
 STATIC short int wpg[NCELL] = 
-    {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,24,28,32,36,40,45,50,55,60,70,80,90,100};
+	{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,24,28,32,36,40,45,50,55,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200};
+
+
 
 /********* STRUCTURES **********/
 
@@ -189,13 +161,16 @@ typedef struct g_fiberdata{
     double *g_illrad;    /* radii of illuminated portion of fiber */
     double *g_xs;        /* from psf fit, x offset of star from center */
     double *g_ys;        /* from psf fit, y offset of star from center */
-    double *g_mag;       /* from psf fit, mag of star */
-    double *g_fwhm;      /* from psf fit, fwhm(fullwidth at half maximum) of star */
-    double *g_poserr;    /* from psf fit, estimated position error (2d) */
-    double *g_fitbkgrd;  /* from psf fit  estimated background */ 
-    double *g_fibercts;  /* flux through 2 arc fiber */
-    double *g_skycts;    /* direct sky background measure*/   
-    double *g_rmswidth;  /* rms radius of star */
+	// from PSF fit:
+	// total star flux, in DN
+	double *flux;
+	// total sky flux, in DN ?
+	double *sky;
+	// full-width at half-max of the star, in (binned guidecam) pixels.
+	double *fwhm;
+	// error in g_xs and g_ys, in (binned guidecam) pixels.
+	double *poserr;
+	
     double  g_readnoise; /* readnoise in ADU */
     int     g_npixmask;  /* number of pixels in current mask */
 } FIBERDATA;
@@ -210,7 +185,7 @@ typedef struct gfiberstat{
 typedef struct gstarfit{
     float gsampl;       /* profile amplitude; template has ampl DMAX at org */
     float gsbkgnd;      /* mean background level */
-    float gswparam;     /* width parameter--100/sigmasq */
+    float sigma;        // width (sigma) in pixels
     float gserror;      /* 1d fitting error to profile */
 } GSTARFIT;
 
@@ -237,17 +212,6 @@ void rotate_region(const REGION* regin, REGION* regout, float theta);
 
 void rotate_mask(const MASK* maskin, MASK* maskout, float theta);
 
-
-//GHIST *ipGhistNew(void);
-//RET_CODE ipGhistDel(GHIST *obj);
-
-//FIBERDATA *ipFiberdataNew(void);
-//RET_CODE ipFiberdataDel(FIBERDATA *obj);
-
-//GSTARFIT *ipGstarfitNew(void);
-//RET_CODE ipGstarfitDel(GSTARFIT *obj);
-
-
 FIBERDATA* fiberdata_new(int nfibers);
 void fiberdata_free(FIBERDATA* f);
 
@@ -273,14 +237,6 @@ int gextendmask(
     int fringe              /* distance to extend (pixels) */
     );
 
-int gfindfibers(
-    REGION *flatReg,           /* the flat region */
-    MASK *maskPtr,             /* pointer to the mask structure */
-    struct g_fiberdata *ptr,   /* pointer to output struct */
-    struct ghist_t *gptr,       /* histogram struct pointer */
-    struct platedata *plptr
-    );
-
 int
 gfixdark(
     REGION *darkInReg, /* input average dark frame; it has the mean
@@ -291,11 +247,6 @@ gfixdark(
     float hotthresh
     );
 
-int ginitseq(void);                      
-                        /* sets flats upon a restart after flat processing
-                         * data have been reread from disk
-                         */
-    
 int 
 gsubdark(
     REGION *dataReg,       /* data frame from which dark is to be subtr.*/
@@ -333,14 +284,6 @@ double gproffit(
     struct gstarfit *ptr     /* pointer to output struct */
     );
 
-#if 0
-int gfitparams(
-    double dx,              /* x position of min in square: -.5 < dx < .5 */
-    double dy,              /* y  "                "         "    dy   "  */
-    struct gstarfit *ptr    /* output interpolated structure */ 
-    );
-#endif
-
 int gprofext(
     short int **data,       /* picture */
     int *radprof,           /* int profile array */
@@ -365,24 +308,6 @@ int gfindstars(
     struct g_fiberdata *ptr,
     int mode     /* ptr to fiberdata struct */
     );
-    
-int gtranspose(
-     REGION *inputReg,       /* the input region */
-     REGION *outputReg       /* the output region */
-    );
-
-/* these are not, as of this moment, sent out to tcl */
-
-int hotthresh(int xs,       /* x size (pixels) */
-	      int ys,       /* y size (pixels) */
-	      S16 **pic,    /* pointer to line pointer array */
-	      int thresh   /* threshold */
-	      );
-void
-hotfix( int xs,              /* x size */
-        int ys,              /* y size */
-        S16 **pic     /* pointer to line pointer array */
-        );
     
 /************************* END, GUIDSTAR.H *********************************/
 
