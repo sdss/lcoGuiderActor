@@ -6,12 +6,58 @@ import os, re, sys
 import time
 import numpy
 import threading
+import pyfits
 
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 
 from opscore.utility.qstr import qstr
 
+# I hate this global stuff...
+from guiderActor import Msg
+import guiderActor
+import guiderActor.myGlobals as myGlobals
+
+import gimg.findsinglestar as findstar
+reload(findstar)
+
+cameraNames = {3:'ecamera',
+               6:'gcamera'}
+
+class TCCShimState(object):
+    def __init__(self):
+        self.reset()
+
+
+        ###### HACK CAMID=3 UNTIL TCC FIX
+    def reset(self, camID=3, lastFileNum='nan'):
+        # The ID the TCC expects us to be. We pick up the real value
+        # from the setcam N command
+        self.gImCamID = camID
+        self.camera = cameraNames[camID]
+        self.gImName = "AltaE6ISwear+%s" % (self.camera)
+        self.ccdSize = [1024, 1024]
+
+        self.doreadFilename = None
+        self.lastFileNum = lastFileNum
+
+        self.itime = 1.0
+        self.binX = self.binY = 2
+        self.ctrX = (self.ccdSize[0]+0.5)/self.binX / 2
+        self.ctrY = (self.ccdSize[1]+0.5)/self.binY / 2
+        self.sizeX = self.ccdSize[0] / self.binX
+        self.sizeY = self.ccdSize[1] / self.binY
+
+    def startExposure(self, itime, binX, binY, ctrX, ctrY, sizeX, sizeY):
+        self.doreadFilename = None
+        self.itime = itime
+        self.binX = binX
+        self.binY = binY
+        self.ctrX = ctrX
+        self.ctrY = ctrY
+        self.sizeX = sizeX if (sizeX > 0) else self.ccdSize[0]/binX
+        self.sizeY = sizeY if (sizeY > 0) else self.ccdSize[1]/binY
+        
 class TCCCmd(object):
     '''
  For commands from the tcc, we need to support:
@@ -48,14 +94,9 @@ doread       8.00     3     3      171.0      171.0     1024.0     1024.0
                             doread=self.doTccDoread,
                             showstatus=self.doTccShowstatus,
                             findstars=self.doTccFindstars)
-
-        # The ID the TCC expects us to be. We pick up the real value
-        # from the setcam N command
-        self.GCamId = -1
-
-        self.GImName = "AltaE6ISwear"
-        self.size = [1024, 1024]
         
+        self.tccState = TCCShimState()
+
     def echoToTcc(self, cmd, ret):
         """ Pass all the ret lines back to the tcc. """
 
@@ -88,18 +129,24 @@ doread       8.00     3     3      171.0      171.0     1024.0     1024.0
         self.echoCmdToTcc(cmd)
         self.tccCmds[tccCmd](cmd)
         
-    def OK(self, cmd):
+    def OK(self, cmd, fail=False):
         """ A TOTAL hack, for recovering after we fail in the middle of a TCC command. This
         merely generates a fake completion for the TCC. Even though we say OK, the command 
         has certainly failed, and the TCC will recognize this -- because it has not 
         seen the expected command response. 
         """
-        
+    
+        if fail:
+            cmd.warn('text=%s' % (qstr(fail)))
         cmd.finish('txtForTcc=" OK"')
+    
+    def notOK(self, cmd, why):
+        self.OK(cmd, fail=why)
     
     def doTccInit(self, cmd):
         """ Clean up/stop/initialize ourselves. """
 
+        self.tccState.reset()
         cmd.finish('txtForTcc="OK"')
         
     def doTccSetcam(self, cmd):
@@ -117,14 +164,14 @@ doread       8.00     3     3      171.0      171.0     1024.0     1024.0
         # Parse off the camera number:
         tccCmd = self.splitTccCmd(cmd)
         gid = int(tccCmd[-1])
-        self.GImCamID = gid
-        
-        lastImageNum = 'nan' # self.camera.lastImageNum() # 'nan'
+
+        tccState = self.tccState
+        tccState.reset(camID=gid)
         
         cmd.respond('txtForTcc=%s' % (qstr('%d "%s" %d %d %d nan %s "%s"' % \
-                                           (gid, self.GImName,
-                                            self.size[0], self.size[1], 16,
-                                            lastImageNum,
+                                           (gid, self.tccState.gImName,
+                                            tccState.ccdSize[0], tccState.ccdSize[1], 16,
+                                            tccState.lastFileNum,
                                             "camera: ID# name sizeXY bits/pixel temp lastFileNum"))))
         cmd.finish('txtForTcc=" OK"')
 
@@ -138,14 +185,18 @@ doread       8.00     3     3      171.0      171.0     1024.0     1024.0
         tccCmd = self.splitTccCmd(cmd)
         try:
             itime = float(tccCmd[1])
-            xbin, ybin, xCtr, yCtr, xSize, ySize = tccCmd[2:]
+            binX, binY = map(int, tccCmd[2:4])
+            ctrX, ctrY, sizeX, sizeY = map(float, tccCmd[4:])
         except Exception, e:
             cmd.warn('text="doTccRead barfed on %s: %s"' % (tccCmd, e))
             self.OK(cmd)
             return
 
-        cmd.warn('text="doTccDoRead itime=%01.f"' % (itime))
-        self.OK(cmd)
+        self.tccState.startExposure(itime, binX, binY, ctrX, ctrY, sizeX, sizeY)
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TCC_EXPOSURE, cmd=cmd,
+                                                                expTime=itime,
+                                                                forTCC=self.tccState, 
+                                                                camera=self.tccState.camera))
 
     def doTccFindstars(self, cmd):
         """ findstars N Xctr Yctr Xsize Ysize XpredFWHM YpredFWHM
@@ -163,15 +214,40 @@ i RawText="3 3   213.712 144.051   5.73 4.90 77.5   192.1 5569.1 328.0   0.008 0
         tccCmd = self.splitTccCmd(cmd)
         try:
             itime = float(tccCmd[1])
-            xCtr, yCtr, xSize, ySize, xPred, yPred = map(float(tccCmd[2:]))
+            ctrX, ctrY, sizeX, sizeY, predX, predY = map(float, tccCmd[2:])
         except Exception, e:
-            cmd.warn('text="doTccRead barfed on %s: %s"' % (tccCmd, e))
-            self.OK(cmd)
+            self.notOK(cmd, "doTccRead barfed on %s: %s" % (tccCmd, e))
+            return
+        
+        tccState = self.tccState
+        if not tccState.doreadFilename:
+            self.notOK(cmd, "no doread file available to process!")
             return
 
-        cmd.warn('text="doTccFindstars not really implemented"')
+        cmd.warn('text="doTccFindstars processing %s"' % (tccState.doreadFilename))
+
+        try:
+            img = pyfits.getdata(tccState.doreadFilename)
+        except Exception, e:
+            self.notOK(cmd, "could not read image file %s: %s" % (tccState.doreadFilename, e))
+            return
+
+        try:
+            # Subframe before sending -- CPL
+            star = findstar.find_single_star(img)
+        except Exception, e:
+            self.notOK(cmd, "could not find a star in %s: %s" % (tccState.doreadFilename, e))
+            return
+
+        if not star:
+            self.notOK(cmd, "could not find a star in %s" % (tccState.doreadFilename))
+            return
+
+        starX, starY = star['centroid']
         cmd.warn('txtForTcc="%d %d %0.3f %0.3f %0.2f %0.2f %0.1f %0.1f %0.1f %0.1f %0.3f %0.3f %d' % \
-                     (3, 3,   213.712, 144.051,   5.73, 4.90, 77.5,   192.1, 5569.1, 328.0,   0.008, 0.008,   0))
+                     (tccState.binX, tccState.binY,
+                      starX, starY,  
+                      2.5, 2.5, 77.5,   192.1, 5569.1, 328.0,   0.008, 0.008,   0))
         self.OK(cmd)
         
     def doTccShowstatus(self, cmd):
@@ -184,18 +260,23 @@ showstatus
  OK
 
         '''
+
+        tccState = self.tccState
         temp = 0.0    # self.camera.cam.read_TempCCD(),
-        cmd.respond("txtForTcc=%s" % (qstr('%d "%s" %d %d %d %0.2f nan "%s"' % \
-                                           (self.GImCamID, self.GImName,
-                                            self.size[0], self.size[1], 16,
-                                            temp,
+        cmd.respond("txtForTcc=%s" % (qstr('%d "%s" %d %d %d %0.2f %s "%s"' % \
+                                           (tccState.gImCamID, tccState.gImName,
+                                            tccState.ccdSize[0], tccState.ccdSize[1], 16,
+                                            temp, tccState.lastFileNum,
                                             "camera: ID# name sizeXY bits/pixel temp lastFileNum"))))
-        time.sleep(0.1)
-        cmd.respond('txtForTcc=%s' % (qstr('%d %d %d %d %d %d nan 0 nan "%s"' % \
-                                           (1, 1, 0, 0, 0, 0,
-                                            "image: binXY begXY sizeXY expTime camID temp"))))
-        time.sleep(0.1)
-        cmd.respond('txtForTcc=%s' % (qstr('8.00 1000 "%s"' % \
+#        time.sleep(0.4)
+        cmd.respond('txtForTcc=%s' % (qstr('%d %d %0.1f %0.1f %0.1f %0.1f %d %0.1f "%s"' % \
+                                               (tccState.binX, tccState.binY,
+                                                tccState.ctrX, tccState.ctrY,
+                                                tccState.sizeX, tccState.sizeY,
+                                                tccState.gImCamID, temp,
+                                                "image: binXY begXY sizeXY expTime camID temp"))))
+#        time.sleep(0.4)
+        cmd.respond('txtForTcc=%s' % (qstr('8.00 9999 "%s"' % \
                                            ("params: boxSize (FWHM units) maxFileNum"))))
         self.OK(cmd)
         
