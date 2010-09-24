@@ -58,7 +58,7 @@ def writeGProbe(cartInfo, probeInfo):
     print "    %0.1f %0.1f" % (pcen[0], pcen[1])
     print "    %0.1f %0.1f" % (pcen[0]-prad, pcen[1]-prad)
     print "    %0.1f %0.1f" % (pcen[0]+prad, pcen[1]+prad)
-    print "    %0.9f %0.9f" % (probeInfo.xFocal * mmToDeg, probeInfo.yFocal * mmToDeg)
+    print "    %0.9f %0.9f" % (-probeInfo.yFocal * mmToDeg, probeInfo.xFocal * mmToDeg)
     print "    0.0 ! the 25m guider code handles the fiber rotation"
     print ""
 
