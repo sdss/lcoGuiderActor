@@ -93,6 +93,7 @@
 #
 #**************************************************************************
 
+version $Revision$             # SVN revision for this file 
 
 typedef enum {
         GUIDE,
