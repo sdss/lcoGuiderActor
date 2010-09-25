@@ -68,11 +68,16 @@ def cvtPlugMap(plugFile):
 
     gfibers = pm[numpy.where((pm.holeType == "GUIDE") & (pm.objType == "NA"))]
 
-    print instblock_template
-    print
-
     cartId = ypm.vars['cartridgeId'].value
     cartInfo = getCartInfo(cartId)
+
+    # Find the best acquisition probe. CPL
+    ptErrProbe = 11
+    #import pdb; pdb.set_trace()
+    print "PtErrProbe %d" % (ptErrProbe)
+    print
+
+
     print "! cart = %d; plate = %d" % (cartId, ypm.vars['plateId'].value)
     print "! n(map probes) = %d; n(cart probes) = %d" % (len(gfibers), len(cartInfo))
 
