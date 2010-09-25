@@ -246,7 +246,7 @@ i RawText="3 3   213.712 144.051   5.73 4.90 77.5   192.1 5569.1 328.0   0.008 0
         starX, starY = star['centroid']
         cmd.warn('txtForTcc="%d %d %0.3f %0.3f %0.2f %0.2f %0.1f %0.1f %0.1f %0.1f %0.3f %0.3f %d' % \
                      (tccState.binX, tccState.binY,
-                      starX, starY,  
+                      starX*tccState.binX, starY*tccState.binY,  
                       2.5, 2.5, 77.5,   192.1, 5569.1, 328.0,   0.008, 0.008,   0))
         self.OK(cmd)
         
