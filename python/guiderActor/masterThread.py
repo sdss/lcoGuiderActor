@@ -247,8 +247,8 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         #
         # dx, dy are the offsets on the ALTA guider image
         #
-        fiber.dx = guideCameraScale*(fiber.xs - fiber.xcen)
-        fiber.dy = guideCameraScale*(fiber.ys - fiber.ycen)
+        fiber.dx = guideCameraScale*(fiber.xs - fiber.xcen) + (probe.xFerruleOffset / 1000.)
+        fiber.dy = guideCameraScale*(fiber.ys - fiber.ycen) + (probe.yFerruleOffset / 1000.)
         poserr = fiber.xyserr
 
         isnan = numpy.isnan
