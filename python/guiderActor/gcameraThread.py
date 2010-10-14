@@ -49,8 +49,15 @@ def main(actor, queues):
                 else:
                     responseMsg = Msg.EXPOSURE_FINISHED
 
-                cmdVar = actor.cmdr.call(actor=camera, cmdStr=cmdStr, 
-                                         keyVars=[filenameKey], timeLim=timeLim, forUserCmd=msg.cmd)
+                actor.bcast.diag('text="%s %s with timeLim=%s"' % (camera, cmdStr, timeLim))
+                try:
+                    cmdVar = actor.cmdr.call(actor=camera, cmdStr=cmdStr, 
+                                             keyVars=[filenameKey], timeLim=timeLim, forUserCmd=msg.cmd)
+                    actor.bcast.diag('text="%s %s didFail=%s"' % (camera, cmdStr, cmdVar.didFail))
+                except Exception, e:
+                    actor.bcast.diag('text="%s %s raised %s"' % (camera, cmdStr, e))
+                    continue
+
                 if cmdVar.didFail:
                     msg.cmd.warn('text="Failed to take exposure"')
                     msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, success=False, forTCC=forTCC))
