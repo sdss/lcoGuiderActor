@@ -365,7 +365,7 @@ that isn't actually mounted (unless you specify force)
             actorState.restartCmd.finish("text=\"Nunc dimittis servum tuum Domine\"")
             actorState.restartCmd = None
 
-        actorState.actor.startThreads(actorState, cmd, restart=True)
+        actorState.actor.startThreads(actorState, cmd, restart=True, restartQueues=True)
         #
         # We can't finish this command now as the threads may not have died yet,
         # but we can remember to clean up _next_ time we restart
