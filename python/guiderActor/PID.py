@@ -1,25 +1,44 @@
+import numpy
+
 class PID(object):
     """A class to handle PID loops"""
-    def __init__(self, dt, Kp, Ti, Td, Imax=-1):
+    def __init__(self, dt, Kp, Ti, Td, Imax=-1, nfilt=1):
         self.dt = dt                    # Time between PID updates
         self.Kp = Kp                    # Proportional term
         self.Ti = Ti                    # Integral time
         self.Td = Td                    # Derivative time
 
-        self.Imax = Imax
-
+        self.Imax = Imax                # limit to abs(.Ix)
+        self.nfilt = nfilt              # number of inputs to smooth over.
+        self.histlen = 0
+        
         self._x = None                  # previous value of the error, x
         
     def __str__(self):
         return "K_P = %g  T_i = %g  T_d = %g" % (self.Kp, self.Ti, self.Td)
 
+    def filterX(self, x):
+        """ Apply some smoothing/predictive filter to inputs. Dumb median now; kalman maybe later.
+        No adjustements being made to dt/Ti/Td.
+        """ 
+
+        if len(self._xhist) > 1:
+            self._xhist[:-1] = self._xhist[1:]
+        self._xhist[-1] = x
+
+        self.histlen = min(self.histlen+1, len(self._xhist))
+        return numpy.median(self._xhist[-self.histlen:])
+    
     def update(self, x):
         """GIven a new sample of the error, x, return the PID update"""
         
         if self._x is None:
             self.Dx = 0
             self.Ix = 0
+            self._xhist = numpy.zeros(self.nfilt, dtype='f4')
+            x = self.filterX(x)
         else:
+            x = self.filterX(x)
             self.Dx = (x - self._x)/self.dt
             self.Ix += self.dt*x
 
@@ -34,9 +53,11 @@ class PID(object):
             
         return self.Kp*correction
 
-    def reset(self):
-        """Reset the PID loop, in particular the I term"""
+    def reset(self, dt=None):
+        """Reset the PID loop, in particular the I term. Optionally reset the sampling rate. """
         self._x = None
+        if dt:
+            self.dt = dt
 
     def ZieglerNichols(self, Kpc, Pc, loopType="PID"):
         """Perform Ziegler-Nichols tuning of a PID loop; Kpc is the critical proportional
@@ -58,7 +79,10 @@ class PID(object):
         else:
             raise RuntimeError, ("I don't know how to tune a %s loop" % loopType)
 
-    def setPID(self, dt=None, Kp=None, Ti=None, Td=None, Imax=-1):
+    def setPID(self, dt=None, Kp=None, Ti=None, Td=None, Imax=None, nfilt=None):
+
+        needReset = dt != None or Imax != None or nfilt != None
+
         if dt is not None:
             try:
                 1/dt
@@ -78,3 +102,9 @@ class PID(object):
             
         if Imax is not None:
             self.Imax = Imax
+
+        if nfilt:
+            self.nfilt = nfilt
+
+        if needReset:
+            self.reset()
