@@ -74,7 +74,9 @@ class GuiderCmd(object):
                                         keys.Key("cartfile", types.String(), help="cartridge file"),
                                         keys.Key("plugfile", types.String(), help="plugmap file"),
                                         keys.Key("file", types.String(), help="guider file"),
-                                        )
+                                        keys.Key("scale", types.Float(), help="Current scale from \"tcc show scale\""),
+                                        keys.Key("delta", types.Float(), help="Delta scale (percent)"),
+                                       )
         #
         # Declare commands
         #
@@ -96,6 +98,9 @@ class GuiderCmd(object):
             ('focus', '(on|off)', self.focus),
             ('scale', '(on|off)', self.scale),
             ('status', "[geek]", self.status),
+            ("setScale", "<delta>|<scale>", self.setScale),
+            ("scaleChange", "<delta>|<scale>", self.scaleChange),
+
             ]
     #
     # Define commands' callbacks
@@ -398,6 +403,15 @@ that isn't actually mounted (unless you specify force)
         """Reveal the identity of the current cartridge"""
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd=cmd, full=False, finish=True))
+
+    def scaleChange(self, cmd):
+        """Alias for setScale """
+        self.setScale(cmd)
+
+    def setScale(self, cmd):
+        """Change telescope scale by a factor of (1 + 0.01*delta), or to scale """
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.CHANGE_SCALE, cmd=cmd, finish=True))
 
     def status(self, cmd, full=True):
         """Return guide status status"""

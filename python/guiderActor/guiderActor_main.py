@@ -104,9 +104,9 @@ class Guider(actorcore.Actor.Actor):
 
         for what in self.config.options("PID"):
             what = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")[what.upper()]
-            Kp, Ti, Td, Imax = [float(v) for v in self.config.get('PID', what).split()]
+            Kp, Ti, Td, Imax, nfilt = [float(v) for v in self.config.get('PID', what).split()]
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, None, what=what,
-                                                          Kp=Kp, Ti=Ti, Td=Td, Imax=Imax))
+                                                          Kp=Kp, Ti=Ti, Td=Td, Imax=Imax, nfilt=int(nfilt)))
 
         #
         # Finally start the reactor

@@ -1,3 +1,4 @@
+import numpy
 import Queue
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -33,6 +34,7 @@ class Msg(object):
     class SET_SCALE(): pass
     class SET_SPECIAL_GPROBES(): pass
     class SET_TIME(): pass
+    class CHANGE_SCALE(): pass
     class REPROCESS_FILE(): pass
     class READ_PLATE_FILES(): pass
     class TCC_EXPOSURE(): pass
@@ -69,4 +71,22 @@ def flushQueue(queue):
         except Queue.Empty:
             return
 
-__all__ = ["MASTER", "GCAMERA", "Msg"]
+class GprobeInfo(object):
+	"""Capture information about a guider probe"""
+	def __init__(self, exists, enabled, xCenter, yCenter, radius, rotation,
+				 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type, flags):
+		self.exists = exists
+		self.enabled = enabled
+		self.xCenter = xCenter
+		self.yCenter = yCenter
+		self.radius = radius
+		self.xFerruleOffset = xFerruleOffset
+		self.yFerruleOffset = yFerruleOffset
+		self.rotation = rotation
+		self.focusOffset = focusOffset
+		self.fiber_type = fiber_type
+		self.rotStar2Sky = numpy.nan
+		self.flags = flags
+
+__all__ = ["MASTER", "GCAMERA", "Msg", "GprobeInfo"]
+
