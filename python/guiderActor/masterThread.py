@@ -2,6 +2,7 @@ import Queue, threading
 import math, numpy, re
 
 from guiderActor import *
+import loadGprobes
 import guiderActor.myGlobals
 from opscore.utility.qstr import qstr
 import opscore.utility.tback as tback
@@ -43,7 +44,8 @@ class GuiderState(object):
         self.plate = -1
         self.pointing = "?"
         self.expTime = 0
-
+        self.inMotion = False
+        
         self.fscanMJD = self.fscanID = -1
 
         self.deleteAllGprobes()
@@ -183,7 +185,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         return
 
     if flatcart != gState.cartridge:
-        if True:
+        if False:
             guideCmd.fail("text=%s" % qstr("Guider flat is for cartridge %d but %d is loaded" % (
                 flatcart, gState.cartridge)))
             guideCmd = None
@@ -299,7 +301,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
                 pass
 
         if True:
-            guideCmd.inform("star=%d,%2d, %7.2f,%7.2f, %7.2f,%7.2f, %6.1f,%6.1f,  %6.1f,%6.1f, %6.1f,%6.1f,%4.1f, %7.3f,%4.0f" % (
+            guideCmd.inform("probe=%d,%2d, %7.2f,%7.2f, %7.2f,%7.2f, %6.1f,%6.1f,  %6.1f,%6.1f, %6.1f,%6.1f,%4.1f, %7.3f,%4.0f" % (
                 frameNo, fiber.fiberid, fiber.dRA, fiber.dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, 
                 #probe.xCenter, probe.yCenter,
                 fiber.xcen, fiber.ycen, probe.xFocal, probe.yFocal, probe.rotStar2Sky,
@@ -309,7 +311,6 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
                 frameNo,
                 fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
                 probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, probe.focusOffset)
-
 
         if not enabled:
             continue
@@ -339,8 +340,8 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         b3 += raCenter*dRA + decCenter*dDec
 
     nStar = A[0, 0]
-    if nStar == 0:
-        guideCmd.warn('text="No stars are available for guiding"')
+    if nStar == 0 or gState.inMotion:
+        guideCmd.warn('text="No stars are available for guiding or guiding is deferred"')
         guideRMS = 99.99
 
         GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
@@ -353,7 +354,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         if guidingIsOK(cmd, actor, force=force):
             queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
                                     expTime=gState.expTime))
-            return
+        return
         
     A[2, 0] = A[0, 2]
     A[2, 1] = A[1, 2]
@@ -812,14 +813,18 @@ def main(actor, queues):
                     continue
 
                 if not guideCmd:    # exposure already finished
+                    gState.inMotion = False
                     continue
 
                 if not msg.success:
+                    gState.inMotion = False
                     queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
                     continue
-                    
+
+                
                 guideStep(actor, queues, msg.cmd, guideCmd, msg.filename, oneExposure,
                           plot=plot, psPlot=psPlot, sm=sm)
+                gState.inMotion = False
                 if not guideCmd:    # something fatal happened in guideStep
                     continue
 
@@ -911,7 +916,7 @@ def main(actor, queues):
                 queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
                 
             elif msg.type == Msg.SET_PID:
-                gState.pid[msg.what].setPID(Kp=msg.Kp, Ti=msg.Ti, Td=msg.Td, Imax=msg.Imax)
+                gState.pid[msg.what].setPID(Kp=msg.Kp, Ti=msg.Ti, Td=msg.Td, Imax=msg.Imax, nfilt=msg.nfilt)
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
@@ -929,6 +934,35 @@ def main(actor, queues):
                     continue
                 
                 gState.setGprobeState(msg.fiber, enable=msg.enable)
+
+            elif msg.type == Msg.CHANGE_SCALE:
+                """ Change telescope scale by a factor of (1 + 0.01*delta), or to scale
+                    We want to do this here, in the guider, so that we can readily track
+                    when to ignore new exposures.
+                """
+
+                cmd = msg.cmd
+
+                scale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
+                if "delta" in cmd.cmd.keywords:
+                    delta = float(cmd.cmd.keywords["delta"].values[0])
+
+                    newScale = (1 + 0.01*delta)*scale
+                else:
+                    newScale = float(cmd.cmd.keywords["scale"].values[0])
+
+                gState.inMotion = True  # Alert the end of exposure processing to skip one.
+                cmd.inform('text="currentScale=%g  newScale=%g"' % (scale, newScale))
+                cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
+                                                    cmdStr="set scale=%.6f" % (newScale))
+                if cmdVar.didFail:
+                    gState.inMotion = False
+                    cmd.fail('text="Failed to set scale"')
+                else:
+                    gState.pid['focus'].reset()
+                    gState.pid['scale'].reset()
+                    cmd.finish('text="scale change completed"')
+
             elif msg.type == Msg.SET_SCALE:
                 gState.plugPlateScale = msg.plugPlateScale
                 gState.gcameraMagnification = msg.gcameraMagnification
