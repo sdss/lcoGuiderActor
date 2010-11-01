@@ -66,6 +66,7 @@ class GuiderCmd(object):
                                         keys.Key("Ti", types.Float(), help="Integral time"),
                                         keys.Key("Td", types.Float(), help="Derivative time"),
                                         keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
+                                        keys.Key("nfilt", types.Int(), help="number of input readings to filter with."),
                                         keys.Key("geek", help="Show things that only some of us love"),
                                         keys.Key("plot", help="Plot things"),
                                         keys.Key("psPlot", help="Save copy of plots"),
@@ -84,7 +85,7 @@ class GuiderCmd(object):
             ("on", "[<time>] [force] [oneExposure] [plot] [psPlot] [<display>] [<spiderInstAng>]", self.guideOn),
             ("off", "", self.guideOff),
             ("setExpTime", "<time>", self.setExpTime),
-            ("setPID", "(raDec|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>]", self.setPID),
+            ("setPID", "(raDec|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>] [nfilt]", self.setPID),
             ("disable", "<fibers>|<gprobes>", self.disableFibers),
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
             ("loadCartridge", "[<cartridge>] [<pointing>] [<plate>] [<mjd>] [<fscanId>] [force]", self.loadCartridge),
@@ -156,9 +157,11 @@ class GuiderCmd(object):
         Ti = cmd.cmd.keywords["Ti"].values[0] if "Ti" in cmd.cmd.keywords else 0
         Td = cmd.cmd.keywords["Td"].values[0] if "Td" in cmd.cmd.keywords else 0
         Imax = cmd.cmd.keywords["Imax"].values[0] if "Imax" in cmd.cmd.keywords else 0
+        nfilt = cmd.cmd.keywords["nfilt"].values[0] if "nfilt" in cmd.cmd.keywords else 0
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, cmd=cmd, what=what,
-                                                                Kp=Kp, Ti=Ti, Td=Td, Imax=Imax))
+                                                                Kp=Kp, Ti=Ti, Td=Td, Imax=Imax,
+                                                                nfilt=nfilt))
 
     def guideOn(self, cmd):
         """Turn guiding on"""
