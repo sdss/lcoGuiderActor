@@ -195,11 +195,11 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
                 flatcart, gState.cartridge)))
 
     try:
-        guideCmd.inform("text=GuiderImageAnalysis()...")
+        guideCmd.inform("text='GuiderImageAnalysis()...'")
         GI = GuiderImageAnalysis(inFile, cmd=guideCmd)
-        guideCmd.inform("text=GuiderImageAnalysis.findFibers()...")
+        guideCmd.inform("text='GuiderImageAnalysis.findFibers()...'")
         fibers = GI.findFibers(gState.gprobes)
-        guideCmd.inform("text=GuiderImageAnalysis.findFibers() got %i fibers" % len(fibers))
+        guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
     except Exception, e:
         tback.tback("GuideTest", e)
         guideCmd.fail("text=%s" % qstr("Error in processing guide images: %s" % e))
@@ -301,16 +301,17 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
                 pass
 
         if True:
-            guideCmd.inform("probe=%d,%2d, %7.2f,%7.2f, %7.2f,%7.2f, %6.1f,%6.1f,  %6.1f,%6.1f, %6.1f,%6.1f,%4.1f, %7.3f,%4.0f" % (
-                frameNo, fiber.fiberid, fiber.dRA, fiber.dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, 
-                #probe.xCenter, probe.yCenter,
-                fiber.xcen, fiber.ycen, probe.xFocal, probe.yFocal, probe.rotStar2Sky,
-                fiber.fwhm/sigmaToFWHM, probe.focusOffset))
+            guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%7.2f,%6.2f" % (
+                frameNo, fiber.fiberid, probe.flags,
+                3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
+                fiber.fwhm/sigmaToFWHM, probe.focusOffset,
+                fiber.flux, fiber.mag, fiber.sky, fiber.skymag))
 
-            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %4.0f" % (
+            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.3f %7.3f %4.0f" % (
                 frameNo,
                 fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
-                probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, probe.focusOffset)
+                probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
+                probe.focusOffset)
 
         if not enabled:
             continue
@@ -351,7 +352,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
             guideCmd = None
             return
 
-        if guidingIsOK(cmd, actor, force=force):
+        if guidingIsOK(cmd, actorState):
             queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
                                     expTime=gState.expTime))
         return
@@ -519,6 +520,24 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                              "enabled" if gState.guideScale else "disabled"))
     guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))
+    curScale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
+
+    if gState.guideScale and abs(offsetScale) > 3e-6:
+        # Clip to the motion we think is too big to apply.
+        offsetScale = max(min(offsetScale, 1e-5), -1e-5)
+        offsetScale += curScale
+        cmd.warn('text="setting scale=%0.6f"' % (offsetScale))
+
+        # Last chance to bailout.
+        if offsetScale < 0.9995 or offsetScale > 1.0005:
+            cmd.warn('text="NOT setting scarily large scale=%0.6f"' % (offsetScale))
+        else:
+            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                     cmdStr="set scale=%f" % (offsetScale))
+            
+            if cmdVar.didFail:
+                guideCmd.warn('text="Failed to issue scale change"')
+    
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
     # in-focus star would be r0, and we are Delta out of focus, we measure
