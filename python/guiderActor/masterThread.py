@@ -304,7 +304,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
             guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%7.2f,%6.2f" % (
                 frameNo, fiber.fiberid, probe.flags,
                 3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
-                fiber.fwhm/sigmaToFWHM, probe.focusOffset,
+                fiber.fwhm, probe.focusOffset,
                 fiber.flux, fiber.mag, fiber.sky, fiber.skymag))
 
             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.3f %7.3f %4.0f" % (
@@ -754,6 +754,7 @@ def main(actor, queues):
                     queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
                     guideCmd.finish("guideState=off")
                     guideCmd = None
+                    msg.cmd.finish()
                     continue
 
                 try:
