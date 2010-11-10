@@ -39,6 +39,7 @@ class Msg(object):
     class READ_PLATE_FILES(): pass
     class TCC_EXPOSURE(): pass
     class TCC_EXPOSURE_FINISHED(): pass
+    class DECENTER(): pass
 
     def __init__(self, type, cmd, **data):
         self.type = type

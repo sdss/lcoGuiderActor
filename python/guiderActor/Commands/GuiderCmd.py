@@ -75,6 +75,10 @@ class GuiderCmd(object):
                                         keys.Key("cartfile", types.String(), help="cartridge file"),
                                         keys.Key("plugfile", types.String(), help="plugmap file"),
                                         keys.Key("file", types.String(), help="guider file"),
+                                        keys.Key("decenter", types.String(), help="apply decenter offsets to guiding"),
+                                        keys.Key("decenterRA", types.Float(), help="Telescope absolute offset for guiding in RA arcsec"),
+                                        keys.Key("decenterDec", types.Float(), help="Telescope absolute offset for guiding in Dec arcsec"),
+                                        keys.Key("decenterRot", types.Float(), help="Telescope absolute offset for guiding in Rot"),
                                         keys.Key("scale", types.Float(), help="Current scale from \"tcc show scale\""),
                                         keys.Key("delta", types.Float(), help="Delta scale (percent)"),
                                        )
@@ -82,7 +86,7 @@ class GuiderCmd(object):
         # Declare commands
         #
         self.vocab = [
-            ("on", "[<time>] [force] [oneExposure] [plot] [psPlot] [<display>] [<spiderInstAng>]", self.guideOn),
+            ("on", "[<time>] [force] [oneExposure] [decenter] [plot] [psPlot] [<display>] [<spiderInstAng>]", self.guideOn),
             ("off", "", self.guideOff),
             ("setExpTime", "<time>", self.setExpTime),
             ("setPID", "(raDec|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>] [nfilt]", self.setPID),
@@ -101,7 +105,7 @@ class GuiderCmd(object):
             ('status', "[geek]", self.status),
             ("setScale", "<delta>|<scale>", self.setScale),
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
-
+            ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter)
             ]
     #
     # Define commands' callbacks
@@ -173,9 +177,14 @@ class GuiderCmd(object):
         display = cmd.cmd.keywords["display"].values[0] if "display" in cmd.cmd.keywords else None
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
         spiderInstAng = cmd.cmd.keywords["spiderInstAng"].values[0] if "spiderInstAng" in cmd.cmd.keywords else None
+        decenter = True if "decenter" in cmd.cmd.keywords else None
 
         if spiderInstAng and not force:
             cmd.fail('text="You may only specify a spiderInstAng with force, for debugging during the day"')
+            return
+
+        if decenter and not force:
+            cmd.fail('text="You must specify decenter with force, its for guider engineering test only "')
             return
 
         if display:
@@ -185,7 +194,7 @@ class GuiderCmd(object):
                                                                 start=True, expTime=expTime,
                                                                 spiderInstAng=spiderInstAng,
                                                                 force=force, oneExposure=oneExposure,
-                                                                plot=plot, psPlot=psPlot))
+                                                                plot=plot, psPlot=psPlot, decenter=decenter))
     def guideOff(self, cmd):
         """Turn guiding off"""
 
@@ -425,3 +434,13 @@ that isn't actually mounted (unless you specify force)
                 cmd.inform('text="%s"' % t)
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd=cmd, finish=True))
+
+    def setDecenter(self, cmd):
+        """guide at an absolute offset location"""
+        #require elsewhere that guiding be run with force to allow decentered guiding
+        #for now Decenter rot is around (RA+decenterRA, Dec+decenterDec)
+        decenterRA  = cmd.cmd.keywords["decenterRA"].values[0] if "decenterRA" in cmd.cmd.keywords else 0
+        decenterDec = cmd.cmd.keywords["decenterDec"].values[0] if "decenterDEC" in cmd.cmd.keywords else 0
+        decenterRot = cmd.cmd.keywords["decenterRot"].values[0] if "decenterRot" in cmd.cmd.keywords else 0
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.DECENTER, cmd=cmd, decenterRA=decenterRA,
+                                                                decenterDec=decenterDec, decenterRot=decenterRot))
