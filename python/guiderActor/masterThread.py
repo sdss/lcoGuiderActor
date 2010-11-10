@@ -58,6 +58,11 @@ class GuiderState(object):
         for what in ["raDec", "rot", "scale", "focus"]:
             self.pid[what] = PID.PID(self.expTime, 0, 0, 0)
 
+        self.setDecenter("decenterRA")       #store in frameInfo
+        self.setDecenter("decenterDec")      
+        self.setDecenter("decenterRot")
+        self.decenter = False                #store in gState
+
     def deleteAllGprobes(self):
         """Delete all fibers """
         self.gprobes = {}
@@ -85,6 +90,16 @@ class GuiderState(object):
             self.guideScale = enabled
         else:
             raise RuntimeError, ("Unknown guide mode %s" % what)
+
+    def setDecenter(self, what, value=0):
+        if what == "decenterRA":
+            self.decenterRA = value
+        elif what == "decenterDec":
+            self.decenterDec = value
+        elif what == "decenterRot":
+            self.decenterRot = value
+        else:
+            raise RuntimeError, ("Unknown decenter axis name %s" % what)
 
 try:
     gState
@@ -117,7 +132,10 @@ class FrameInfo(object):
         self.plugPlateScale = numpy.nan
         self.seeing = numpy.nan
         self.guideRMS= numpy.nan
-        
+        self.decenterRA = numpy.nan
+        self.decenterDec = numpy.nan
+        self.decenterRot = numpy.nan
+
 def postscriptDevice(psPlotDir, frameNo, prefix=""):
     """Return the SM device to write the postscript file for guide frame frameNo"""
     return "postencap %s%d.eps" % (prefix, frameNo)
@@ -163,8 +181,10 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
     Args: (TOOOO MANY!!)
         actor      - 
 """
-    sigmaToFWHM = 2.35 # approximate conversion for a Gaussian
+    sigmaToFWHM = 2.35 # approximate conversion for a Gaussian, PH needs to be JEG value
     psPlotDir  = "/data/gcam/scratch/"
+    minStarFlux = 2000 #ADU, avoid guiding on noise spikes during acquisitions
+                       #should be in photons, based on RON, Dark residual, SKY   
 
     actorState = guiderActor.myGlobals.actorState
     guideCmd.respond("processing=%s" % inFile)
@@ -234,8 +254,14 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         dDec_np = numpy.zeros(size)
 
     guideRMS    = 0.0
+    guideXRMS   = 0.0
+    guideYRMS   = 0.0
     nguideRMS   = 0
-    guideFitRMS = 0.0 
+    guideRaDecRMS = 0.0
+    guideRaRMS = 0.0
+    guideDecRMS = 0.0
+    nguideRaDec = 0
+    guideFitRMS = 0.0        #not calculated at present
 
     for fiber in fibers:
         # necessary?
@@ -258,6 +284,12 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
             guideCmd.warn("text=%s" %
                           qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber measured=(%g, %g), nominal=(%g,%g)" % (
                               fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
+            continue
+        if False:
+        #if fiber.flux < minStarFlux:
+            guideCmd.warn("text=%s" %
+                          qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
+                              fiber.fiberid, fiber.flux, minStarFlux)))
             continue
         if poserr == 0:
             guideCmd.warn("text=%s" %
@@ -283,6 +315,22 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         dRA   =  fiber.dx*ct + fiber.dy*st
         dDec  = -fiber.dx*st + fiber.dy*ct
         dDec *= -1
+
+        # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
+        # The guiderRMS will be calculated around the new effective fiber centers
+      
+        if gState.decenter: 
+            #convert decenter offset to mm on guider
+            frameInfo.decenterRA  = gState.decenterRA*gState.plugPlateScale/3600
+            frameInfo.decenterDec = gState.decenterDec*gState.plugPlateScale/3600
+            frameInfo.decenterRot = gState.decenterRot*gState.plugPlateScale/3600            
+            dRA  += frameInfo.decenterRA
+            dDec += frameInfo.decenterDec
+            #decenterRot applied after guide solution
+        else:
+            frameInfo.decenterRA = 0.0
+            frameInfo.decenterRA = 0.0
+            frameInfo.decenterRot = 0.0
 
         fiber.dRA = dRA
         fiber.dDec = dDec
@@ -318,6 +366,8 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
 
         #accumulate guiding errors for good stars used in fit
         guideRMS += fiber.dx**2 + fiber.dy**2
+        guideXRMS += fiber.dx**2
+        guideYRMS += fiber.dy**2        
         nguideRMS += 1
 
         b[0] += dRA
@@ -344,6 +394,8 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
     if nStar == 0 or gState.inMotion:
         guideCmd.warn('text="No stars are available for guiding or guiding is deferred"')
         guideRMS = 99.99
+        guideXRMS = 99.99
+        guideYRMS = 99.99
 
         GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
 
@@ -365,6 +417,8 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
             x = b
             x[2, 0] = 0 # no rotation
             guideRMS = 99.99
+            guideXRMS = 99.99
+            guideYRMS = 99.99
         else:
             x = numpy.linalg.solve(A, b)
 
@@ -372,6 +426,10 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         dRA = x[0, 0]/gState.plugPlateScale
         dDec = x[1, 0]/gState.plugPlateScale
         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
+
+        #add the decenter guiding rotation offset here for now
+        if gState.decenter:
+            dRot += frameInfo.decenterRot
 
         frameInfo.dRA  = dRA
         frameInfo.dDec = dDec
@@ -394,11 +452,15 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetRa, -3600*offsetDec, -3600*offsetRot,
                                                         "enabled" if gState.guideAxes else "disabled"))
 
-        #compare the pre and post correction rms                        
+        #rms position error prior to this frames ccrrection                       
         try:
             guideRMS = math.sqrt(guideRMS/nguideRMS) 
+            guideXRMS = math.sqrt(guideXRMS/nguideRMS)
+            guideYRMS = math.sqrt(guideYRMS/nguideRMS)
         except:
             guideRMS = 99.99
+            guideXRMS = 99.99
+            guideYRMS = 99.99
 
         if gState.guideAxes:
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
@@ -502,7 +564,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         return
 
     # RMS guiding error 
-    print "RMS guiding error= %4.3f, n stars= %d" %(guideRMS, nguideRMS) 
+    print "RMS guiding error= %4.3f, n stars= %d RMS_X= %4.3f, RMS_Y=%4.3f" %(guideRMS, nguideRMS, guideXRMS, guideYRMS) 
     guideCmd.inform('text=" guideRMS =%g"' % (guideRMS))
 
     #
@@ -729,6 +791,9 @@ def main(actor, queues):
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
     
     guideCmd = None                     # the Cmd that started the guide loop
+    minStarFlux = 2000 #ADU, avoid guiding on noise spikes during acquisitions
+                       #FIXME defined here and in GIA
+
 
     while True:
         try:
@@ -797,6 +862,11 @@ def main(actor, queues):
                     gState.pid[key].reset()
 
                 guideCmd.respond("guideState=on")
+                if msg.decenter: 
+                    gState.decenter = True 
+                else: 
+                    gState.decenter = False
+
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
 
             elif msg.type == Msg.REPROCESS_FILE:
@@ -851,6 +921,17 @@ def main(actor, queues):
                 #
                 # Is there anything to indicate that we shouldn't be guiding?
                 #
+                #FIXME Is this the best place to clear decenter offsets
+                #Check if offsets were changed during guiding without force
+                if gState.decenter and not force:
+                    cmd.fail('text="Decentred guiding must use force."')
+                    gState.setDecenter("decenterRA")  #reset all to 0
+                    gState.setDecenter("decenterDec")
+                    gState.setDecenter("decenterRot")
+                    gState.decenter = False
+                    queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
+                    continue
+
                 if not guidingIsOK(msg.cmd, actorState, force=force):
                     queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
                     continue
@@ -1000,6 +1081,13 @@ def main(actor, queues):
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+
+                #Allow decenters to be setup prior to guiding
+            elif msg.type == Msg.DECENTER:
+                        gState.setDecenter("decenterRA",msg.decenterRA)
+                        gState.setDecenter("decenterDec",msg.decenterDec)
+                        gState.setDecenter("decenterRot",msg.decenterRot)
+
             elif msg.type == Msg.STATUS:
                 # Try to generate status even after we have failed.
                 cmd = msg.cmd if msg.cmd.alive else actor.bcast
@@ -1017,7 +1105,8 @@ def main(actor, queues):
 
                 cmd.respond("guideState=%s" % ("on" if guideCmd else "off"))
                 cmd.inform('text="The guider is %s"' % ("running" if guideCmd else "off"))
-
+                cmd.inform('text="Decentering is %s"' % ("off" if not gState.decenter else "on"))
+                
                 fiberState = []
                 gprobeBitsDict = {}
                 for f in gState.gprobes.values():
