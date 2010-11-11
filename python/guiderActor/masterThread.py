@@ -181,7 +181,9 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
     Args: (TOOOO MANY!!)
         actor      - 
 """
-    sigmaToFWHM = 2.35 # approximate conversion for a Gaussian, PH needs to be JEG value
+    sigmaToFWHM = 2.354 # conversion for a Gaussian, use this eveywhere but in ipGguide.c
+    #conversion from sigma to FWHM for a JEG double Gaussian is done in ipGguide.c (sigmaToFWHMJEG = 2.468)
+
     psPlotDir  = "/data/gcam/scratch/"
     minStarFlux = 2000 #ADU, avoid guiding on noise spikes during acquisitions
                        #should be in photons, based on RON, Dark residual, SKY   
