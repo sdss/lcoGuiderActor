@@ -285,8 +285,8 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
                           qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber measured=(%g, %g), nominal=(%g,%g)" % (
                               fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
             continue
-        if False:
-        #if fiber.flux < minStarFlux:
+
+        if fiber.flux < minStarFlux:
             guideCmd.warn("text=%s" %
                           qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
                               fiber.fiberid, fiber.flux, minStarFlux)))
@@ -323,7 +323,8 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
             #convert decenter offset to mm on guider
             frameInfo.decenterRA  = gState.decenterRA*gState.plugPlateScale/3600
             frameInfo.decenterDec = gState.decenterDec*gState.plugPlateScale/3600
-            frameInfo.decenterRot = gState.decenterRot*gState.plugPlateScale/3600            
+            frameInfo.decenterRot = gState.decenterRot            
+            # apply decenter offset so that telescope (not the star) moves the decenter amount
             dRA  += frameInfo.decenterRA
             dDec += frameInfo.decenterDec
             #decenterRot applied after guide solution
