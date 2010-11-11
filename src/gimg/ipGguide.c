@@ -184,9 +184,18 @@ STATIC int havehist = 0;
 STATIC float gdnorm = 0.;
 #endif
 
+
+/*/*static double sigma2fwhm(double sig) {
+ *	// about 2.355
+ *	return sig * 2.*sqrt(2.*log(2.));
+ *}
+ */
+/*PH Use the actual conversion factor of sigma to fwhm
+ *   for the double gaussian function used, which has 
+ *   sigma2/sigma1=0.5 and I2/I1 = 0.1
+ */
 static double sigma2fwhm(double sig) {
-	// about 2.35
-	return sig * 2.*sqrt(2.*log(2.));
+	return sig * 2.468;
 }
 
 /*
