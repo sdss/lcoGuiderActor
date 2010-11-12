@@ -45,7 +45,8 @@ class GuiderState(object):
         self.pointing = "?"
         self.expTime = 0
         self.inMotion = False
-        
+        self.guideCmd = None
+		
         self.fscanMJD = self.fscanID = -1
 
         self.deleteAllGprobes()
@@ -91,6 +92,9 @@ class GuiderState(object):
         else:
             raise RuntimeError, ("Unknown guide mode %s" % what)
 
+	def setCmd(self, cmd=None):
+		self.guideCmd = cmd
+		
     def setDecenter(self, what, value=0):
         if what == "decenterRA":
             self.decenterRA = value
@@ -167,14 +171,15 @@ def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None,
     gState.setGuideMode('axes', False)
     gState.setGuideMode('focus', False)
     gState.setGuideMode('scale', False)
-
+	
     if not cmd: cmd = FakeCommand()
     if not guideCmd: guideCmd = FakeCommand()
     if not queues: queues = dict(MASTER=Queue.Queue())
 
+	gState.setCmd(guideCmd)
     guideStep(None, queues, cmd, cmd, guiderFile, True)
 
-def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
+def guideStep(actor, queues, cmd, inFile, oneExposure,
               plot=False, psPlot=False, sm=False):
     """ One step of the guide loop, based on the given guider file. 
 
@@ -189,6 +194,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
                        #should be in photons, based on RON, Dark residual, SKY   
 
     actorState = guiderActor.myGlobals.actorState
+	guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
     frameNo = int(re.search(r"([0-9]+)\.fits$", inFile).group(1))
 
@@ -198,19 +204,19 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
     darkfile = h.get('DARKFILE', None)
     if not flatfile:
         guideCmd.fail("text=%s" % qstr("No flat image available"))
-        guideCmd = None
+		gState.setCmd(None)
         return
     
     if not darkfile:
         guideCmd.fail("text=%s" % qstr("No dark image available"))
-        guideCmd = None
+        gState.setCmd(None)
         return
 
     if flatcart != gState.cartridge:
         if False:
             guideCmd.fail("text=%s" % qstr("Guider flat is for cartridge %d but %d is loaded" % (
                 flatcart, gState.cartridge)))
-            guideCmd = None
+            gState.setCmd(None)
             return
         else:
             guideCmd.warn("text=%s" % qstr("Guider flat is for cartridge %d but %d is loaded" % (
@@ -225,7 +231,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
     except Exception, e:
         tback.tback("GuideTest", e)
         guideCmd.fail("text=%s" % qstr("Error in processing guide images: %s" % e))
-        guideCmd = None
+        gState.setCmd(None)
         return
 
     # Object to gather all per-frame guiding info into.
@@ -352,11 +358,12 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
                 pass
 
         if True:
-            guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%7.2f,%6.2f" % (
+            guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%7.2f,%6.2f, %d" % (
                 frameNo, fiber.fiberid, probe.flags,
                 3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
                 fiber.fwhm, probe.focusOffset,
-                fiber.flux, fiber.mag, fiber.sky, fiber.skymag))
+                fiber.flux, fiber.mag, fiber.sky, fiber.skymag,
+				probe.focusOffset))
 
             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.3f %7.3f %4.0f" % (
                 frameNo,
@@ -404,7 +411,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
 
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
-            guideCmd = None
+            gState.setCmd(None)
             return
 
         if guidingIsOK(cmd, actorState):
@@ -558,7 +565,7 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
     if nStar <= 1:      # don't bother with focus/scale!
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
-            guideCmd = None
+            gState.setCmd(None)
             return
 
         if guidingIsOK(cmd, actorState, force=force):
@@ -587,9 +594,13 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
     guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))
     curScale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
 
-    if gState.guideScale and abs(offsetScale) > 3e-6:
-        # Clip to the motion we think is too big to apply.
-        offsetScale = max(min(offsetScale, 1e-5), -1e-5)
+	# There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
+	# So defer focus changes if we apply a scale change.
+	blockFocusMove = False
+		
+    if gState.guideScale and abs(offsetScale) > 1e-6:
+        # Clip to the motion we think is too big to apply at once.
+        offsetScale = max(min(offsetScale, 5e-6), -5e-6)
         offsetScale += curScale
         cmd.warn('text="setting scale=%0.6f"' % (offsetScale))
 
@@ -597,12 +608,11 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         if offsetScale < 0.9995 or offsetScale > 1.0005:
             cmd.warn('text="NOT setting scarily large scale=%0.6f"' % (offsetScale))
         else:
+			blockFocusMove = True
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                      cmdStr="set scale=%f" % (offsetScale))
-            
-            if cmdVar.didFail:
+			if cmdVar.didFail:
                 guideCmd.warn('text="Failed to issue scale change"')
-    
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
     # in-focus star would be r0, and we are Delta out of focus, we measure
@@ -640,7 +650,6 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
         probe = gp.info
 
                                 # FIXME -- do we want to include ACQUISITION fibers?
-
         rms = fiber.fwhm / sigmaToFWHM
         if isnan(rms):
             continue
@@ -695,8 +704,8 @@ def guideStep(actor, queues, cmd, guideCmd, inFile, oneExposure,
 
         guideCmd.respond("seeing=%g" % (rms0*sigmaToFWHM))
         guideCmd.respond("focusError=%g" % (dFocus))
-        guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if gState.guideFocus else "disabled"))
-        if gState.guideFocus:
+        guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
+        if gState.guideFocus and not blockFocusMove:
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                      cmdStr="set focus=%f/incremental" % (offsetFocus))
 
@@ -793,10 +802,8 @@ def main(actor, queues):
     psPlot = False
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
     
-    guideCmd = None                     # the Cmd that started the guide loop
     minStarFlux = 2000 #ADU, avoid guiding on noise spikes during acquisitions
                        #FIXME defined here and in GIA
-
 
     while True:
         try:
@@ -814,14 +821,14 @@ def main(actor, queues):
                         queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
                         continue
                         
-                    if not guideCmd:
+                    if not gState.guideCmd:
                         msg.cmd.fail('text="The guider is already off"')
                         continue
 
                     msg.cmd.respond("guideState=stopping")
                     queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
-                    guideCmd.finish("guideState=off")
-                    guideCmd = None
+                    gState.guideCmd.finish("guideState=off")
+                    gState.setCmd(None)
                     msg.cmd.finish()
                     continue
 
@@ -840,7 +847,7 @@ def main(actor, queues):
                 psPlot = msg.psPlot
                 fakeSpiderInstAng = msg.spiderInstAng
                 
-                if guideCmd:
+                if gState.guideCmd:
                     errMsg = "The guider appears to already be running"
                     if force:
                         msg.cmd.warn('text="%s; restarting"' % (errMsg))
@@ -858,6 +865,8 @@ def main(actor, queues):
                     continue
 
                 guideCmd = msg.cmd
+				gState.setCmd(guideCmd)
+				
                 #
                 # Reset any PID I terms
                 #
@@ -905,20 +914,19 @@ def main(actor, queues):
                     msg.cmd.finish('txtForTcc=" OK"')
                     continue
 
-                if not guideCmd:    # exposure already finished
+                if not gState.guideCmd:    # exposure already finished
                     gState.inMotion = False
                     continue
 
                 if not msg.success:
                     gState.inMotion = False
-                    queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
+                    queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False))
                     continue
 
-                
-                guideStep(actor, queues, msg.cmd, guideCmd, msg.filename, oneExposure,
+                guideStep(actor, queues, msg.cmd, msg.filename, oneExposure,
                           plot=plot, psPlot=psPlot, sm=sm)
                 gState.inMotion = False
-                if not guideCmd:    # something fatal happened in guideStep
+                if not gState.guideCmd:    # something fatal happened in guideStep
                     continue
 
                 #
@@ -932,20 +940,20 @@ def main(actor, queues):
                     gState.setDecenter("decenterDec")
                     gState.setDecenter("decenterRot")
                     gState.decenter = False
-                    queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
+                    queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False))
                     continue
 
                 if not guidingIsOK(msg.cmd, actorState, force=force):
-                    queues[MASTER].put(Msg(Msg.START_GUIDING, guideCmd, start=False))
+                    queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False))
                     continue
                 #
                 # Start the next exposure
                 #
                 if oneExposure:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
-                    guideCmd = None
+                    gState.setCmd(None)
                 else:
-                    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
+                    queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
                 
             elif msg.type == Msg.TAKE_FLAT:
                 if gState.cartridge <= 0:
@@ -1106,8 +1114,8 @@ def main(actor, queues):
                 except AttributeError:
                     pass
 
-                cmd.respond("guideState=%s" % ("on" if guideCmd else "off"))
-                cmd.inform('text="The guider is %s"' % ("running" if guideCmd else "off"))
+                cmd.respond("guideState=%s" % ("on" if gState.guideCmd else "off"))
+                cmd.inform('text="The guider is %s"' % ("running" if gState.guideCmd else "off"))
                 cmd.inform('text="Decentering is %s"' % ("off" if not gState.decenter else "on"))
                 
                 fiberState = []
@@ -1146,6 +1154,7 @@ def main(actor, queues):
         except Exception, e:
             errMsg = "Unexpected exception %s in guider %s thread" % (e, threadName)
             actor.bcast.warn('text="%s"' % errMsg)
+            gState.setCmd(False)
             # I (dstn) get infinite recursion from this...
             #tback(errMsg, e)
 
@@ -1154,8 +1163,6 @@ def main(actor, queues):
                 print "\n".join(tback.tback(errMsg, e)[0]) # old versions of tback return None
             except:
                 pass
-
-            guideCmd = False
 
             try:
                 msg.replyQueue.put(Msg.EXIT, cmd=msg.cmd, success=False)
