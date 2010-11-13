@@ -92,8 +92,8 @@ class GuiderState(object):
         else:
             raise RuntimeError, ("Unknown guide mode %s" % what)
 
-	def setCmd(self, cmd=None):
-		self.guideCmd = cmd
+    def setCmd(self, cmd=None):
+        self.guideCmd = cmd
 		
     def setDecenter(self, what, value=0):
         if what == "decenterRA":
@@ -176,7 +176,7 @@ def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None,
     if not guideCmd: guideCmd = FakeCommand()
     if not queues: queues = dict(MASTER=Queue.Queue())
 
-	gState.setCmd(guideCmd)
+    gState.setCmd(guideCmd)
     guideStep(None, queues, cmd, cmd, guiderFile, True)
 
 def guideStep(actor, queues, cmd, inFile, oneExposure,
@@ -194,7 +194,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                        #should be in photons, based on RON, Dark residual, SKY   
 
     actorState = guiderActor.myGlobals.actorState
-	guideCmd = gState.guideCmd
+    guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
     frameNo = int(re.search(r"([0-9]+)\.fits$", inFile).group(1))
 
@@ -204,7 +204,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     darkfile = h.get('DARKFILE', None)
     if not flatfile:
         guideCmd.fail("text=%s" % qstr("No flat image available"))
-		gState.setCmd(None)
+        gState.setCmd(None)
         return
     
     if not darkfile:
@@ -596,7 +596,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
 	# There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
 	# So defer focus changes if we apply a scale change.
-	blockFocusMove = False
+    blockFocusMove = False
 		
     if gState.guideScale and abs(offsetScale) > 1e-6:
         # Clip to the motion we think is too big to apply at once.
@@ -608,10 +608,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         if offsetScale < 0.9995 or offsetScale > 1.0005:
             cmd.warn('text="NOT setting scarily large scale=%0.6f"' % (offsetScale))
         else:
-			blockFocusMove = True
+            blockFocusMove = True
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                      cmdStr="set scale=%f" % (offsetScale))
-			if cmdVar.didFail:
+            if cmdVar.didFail:
                 guideCmd.warn('text="Failed to issue scale change"')
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
@@ -865,7 +865,7 @@ def main(actor, queues):
                     continue
 
                 guideCmd = msg.cmd
-				gState.setCmd(guideCmd)
+                gState.setCmd(guideCmd)
 				
                 #
                 # Reset any PID I terms
