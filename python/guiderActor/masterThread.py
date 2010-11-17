@@ -46,7 +46,7 @@ class GuiderState(object):
         self.expTime = 0
         self.inMotion = False
         self.guideCmd = None
-		
+
         self.fscanMJD = self.fscanID = -1
 
         self.deleteAllGprobes()
@@ -94,7 +94,7 @@ class GuiderState(object):
 
     def setCmd(self, cmd=None):
         self.guideCmd = cmd
-		
+
     def setDecenter(self, what, value=0):
         if what == "decenterRA":
             self.decenterRA = value
@@ -171,7 +171,7 @@ def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None,
     gState.setGuideMode('axes', False)
     gState.setGuideMode('focus', False)
     gState.setGuideMode('scale', False)
-	
+
     if not cmd: cmd = FakeCommand()
     if not guideCmd: guideCmd = FakeCommand()
     if not queues: queues = dict(MASTER=Queue.Queue())
@@ -357,14 +357,13 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 #import pdb; pdb.set_trace()
                 pass
 
-         if True:
-			 refmag = numpy.nan
-			 guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
-				 frameNo, fiber.fiberid, probe.flags,
-				 3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
-				 fiber.fwhm, probe.focusOffset,
-				 fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
-			 
+        refmag = numpy.nan
+        guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
+            frameNo, fiber.fiberid, probe.flags,
+            3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
+            fiber.fwhm, probe.focusOffset,
+            fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
+		
             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.3f %7.3f %4.0f" % (
                 frameNo,
                 fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
