@@ -357,8 +357,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 #import pdb; pdb.set_trace()
                 pass
 
-        if True:
-			refmag = numpy.nan
+		if True:
+            refmag = numpy.nan
             guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
                 frameNo, fiber.fiberid, probe.flags,
                 3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
