@@ -364,11 +364,11 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             fiber.fwhm, probe.focusOffset,
             fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
 		
-            print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.3f %7.3f %4.0f" % (
-                frameNo,
-                fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
-                probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
-                probe.focusOffset)
+        print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.3f %7.3f %4.0f" % (
+            frameNo,
+            fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
+            probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
+            probe.focusOffset)
 
         if not enabled:
             continue
