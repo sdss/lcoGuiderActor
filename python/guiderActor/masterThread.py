@@ -229,9 +229,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         fibers = GI.findFibers(gState.gprobes)
         guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
     except Exception, e:
-        tback.tback("GuideTest", e)
         guideCmd.fail("text=%s" % qstr("Error in processing guide images: %s" % e))
         gState.setCmd(None)
+        tback.tback("GuideTest", e)
         return
 
     # Object to gather all per-frame guiding info into.
@@ -358,11 +358,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 pass
 
         if True:
-            guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%7.2f,%6.2f" % (
+			refmag = numpy.nan
+            guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
                 frameNo, fiber.fiberid, probe.flags,
                 3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
                 fiber.fwhm, probe.focusOffset,
-                fiber.flux, fiber.mag, fiber.sky, fiber.skymag))
+                fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
 
             print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.3f %7.3f %4.0f" % (
                 frameNo,
@@ -594,12 +595,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     curScale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
 
 	# There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
-	# So defer focus changes if we apply a scale change.
+	# So for now defer focus changes if we apply a scale change.
     blockFocusMove = False
 		
-    if gState.guideScale and abs(offsetScale) > 1e-6:
+    if gState.guideScale and abs(offsetScale) > 1e-7:
         # Clip to the motion we think is too big to apply at once.
-        offsetScale = max(min(offsetScale, 5e-6), -5e-6)
+        offsetScale = max(min(offsetScale, 1e-6), -1e-6)
         offsetScale += curScale
         cmd.warn('text="setting scale=%0.6f"' % (offsetScale))
 
@@ -1138,12 +1139,12 @@ def main(actor, queues):
                 cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 cmd.respond("expTime=%g" % (gState.expTime))
                 cmd.respond("scales=%g, %g, %g, %g" % (gState.plugPlateScale,
-                                                           gState.gcameraMagnification, gState.gcameraPixelSize,
-                                                           gState.dSecondary_dmm,))
+													   gState.gcameraMagnification, gState.gcameraPixelSize,
+													   gState.dSecondary_dmm,))
                 for w in gState.pid.keys():
-                    cmd.respond("pid=%s, %g, %g, %g, %g" % (w,
-                                                                gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
-                                                                gState.pid[w].Imax))
+                    cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w,
+														   gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
+														   gState.pid[w].Imax, gState.pid[w].nfilt))
                 if msg.finish:
                     cmd.finish()
             else:
