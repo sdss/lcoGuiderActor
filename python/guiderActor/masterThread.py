@@ -567,7 +567,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             gState.setCmd(None)
             return
 
-        if guidingIsOK(cmd, actorState, force=force):
+        if guidingIsOK(cmd, actorState):
             queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
                                     expTime=gState.expTime))
         return
@@ -599,17 +599,17 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 		
     if gState.guideScale and abs(offsetScale) > 1e-7:
         # Clip to the motion we think is too big to apply at once.
-        offsetScale = max(min(offsetScale, 1e-6), -1e-6)
-        offsetScale += curScale
-        cmd.warn('text="setting scale=%0.6f"' % (offsetScale))
+        offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
+        offsetScale *= curScale
+        cmd.warn('text="setting scale=%0.8f"' % (offsetScale))
 
         # Last chance to bailout.
         if offsetScale < 0.9995 or offsetScale > 1.0005:
-            cmd.warn('text="NOT setting scarily large scale=%0.6f"' % (offsetScale))
+            cmd.warn('text="NOT setting scarily large scale=%0.8f"' % (offsetScale))
         else:
-            blockFocusMove = True
+            # blockFocusMove = True
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                     cmdStr="set scale=%f" % (offsetScale))
+                                     cmdStr="set scale=%.9f" % (offsetScale))
             if cmdVar.didFail:
                 guideCmd.warn('text="Failed to issue scale change"')
     #
@@ -1065,7 +1065,7 @@ def main(actor, queues):
                 gState.inMotion = True  # Alert the end of exposure processing to skip one.
                 cmd.inform('text="currentScale=%g  newScale=%g"' % (scale, newScale))
                 cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
-                                                    cmdStr="set scale=%.6f" % (newScale))
+                                                    cmdStr="set scale=%.8f" % (newScale))
                 if cmdVar.didFail:
                     gState.inMotion = False
                     cmd.fail('text="Failed to set scale"')
@@ -1144,6 +1144,7 @@ def main(actor, queues):
                     cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w,
 														   gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
 														   gState.pid[w].Imax, gState.pid[w].nfilt))
+                cmd.diag('text="guideCmd=%s"' % (qstr(gState.guideCmd)))
                 if msg.finish:
                     cmd.finish()
             else:
