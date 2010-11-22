@@ -711,6 +711,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             if cmdVar.didFail:
                 guideCmd.warn('text="Failed to issue focus offset"')
     except numpy.linalg.LinAlgError:
+        guideCmd.respond("focusError=%g" % (numpy.nan))
+        guideCmd.respond("focusChange=%g, %s" % (numpy.nan, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
         guideCmd.warn("text=%s" % qstr("Unable to solve for focus offset"))
         x = None
 
