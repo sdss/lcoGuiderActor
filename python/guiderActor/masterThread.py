@@ -190,7 +190,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     #conversion from sigma to FWHM for a JEG double Gaussian is done in ipGguide.c (sigmaToFWHMJEG = 2.468)
 
     psPlotDir  = "/data/gcam/scratch/"
-    minStarFlux = 2000 #ADU, avoid guiding on noise spikes during acquisitions
+    minStarFlux = 500 #ADU, avoid guiding on noise spikes during acquisitions
                        #should be in photons, based on RON, Dark residual, SKY   
 
     actorState = guiderActor.myGlobals.actorState
@@ -287,6 +287,17 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         fiber.dy = guideCameraScale*(fiber.ys - fiber.ycen) + (probe.yFerruleOffset / 1000.)
         poserr = fiber.xyserr
 
+        #
+        # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
+        #
+        # phi is the orientation of the alignment hole measured clockwise from N
+        # rotation is the anticlockwise rotation from x on the ALTA to the pin
+        #
+        theta = 90                   # allow for 90 deg rot of camera view, should be -90 
+        theta += probe.rotation # allow for intrinsic fibre rotation
+        theta -= probe.phi      # allow for orientation of alignment hole
+        probe.rotStar2Sky = theta # Squirrel the real angle away.
+
         isnan = numpy.isnan
         if isnan(fiber.dx) or isnan(fiber.dy) or isnan(poserr):
             guideCmd.warn("text=%s" %
@@ -305,18 +316,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                               fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
             continue
 
-
-        #
-        # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
-        #
-        # phi is the orientation of the alignment hole measured clockwise from N
-        # rotation is the anticlockwise rotation from x on the ALTA to the pin
-        #
-        theta = 90                   # allow for 90 deg rot of camera view, should be -90 
-        theta += probe.rotation # allow for intrinsic fibre rotation
-        theta -= probe.phi      # allow for orientation of alignment hole
-
-        probe.rotStar2Sky = theta # Squirrel the real angle away.
         theta = math.radians(theta)
         ct, st = math.cos(theta), math.sin(theta)
         # error in guide star position; n.b. still in mm here
@@ -562,6 +561,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideCmd.warn("text=%s" % qstr("Unable to solve for axis offsets"))
 
     if nStar <= 1:      # don't bother with focus/scale!
+        GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.setCmd(None)
@@ -1205,7 +1206,7 @@ def guidingIsOK(cmd, actorState, force=False):
     hgCdLamp = actorState.models["mcp"].keyVarDict["hgCdLamp"]
     neLamp = actorState.models["mcp"].keyVarDict["neLamp"]
     if (any(ffLamp) and not bypassSubsystem.get('ff_lamp', False)) or \
-            (any(hgCdLamp) and not bypassSubstem.get('hgcd_lamp', False)) or \
+            (any(hgCdLamp) and not bypassSubsystem.get('hgcd_lamp', False)) or \
             (any(neLamp) and not bypassSubsystem.get('ne_lamp', False)):
         cmd.warn('text="Calibration lamp on; aborting guiding"')
         return False

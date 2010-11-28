@@ -11,7 +11,10 @@ def main(actor, queues):
     while True:
         try:
             msg = queues[GCAMERA].get(timeout=timeout)
-            
+            qlen = queues[GCAMERA].qsize()
+            if qlen > 0:
+                msg.cmd.diag("gcamera thread has %d items after a .get()" % (qlen))
+                
             if msg.type == Msg.EXIT:
                 if msg.cmd:
                     msg.cmd.inform('text="Exiting thread %s"' % (threading.current_thread().name))

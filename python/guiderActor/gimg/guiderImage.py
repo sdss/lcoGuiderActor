@@ -578,10 +578,11 @@ class GuiderImageAnalysis(object):
 		self.inform('subtracting bias(sky) level: %g' % bias)
 		
 		img = image - bias
-		# Mark negative pixels
-		mask[(img < 0) & (mask == 0)] |= GuiderImageAnalysis.mask_badpixels
-		# Clamp negative pixels
-		img[img < 0] = 0
+		if False:
+			# Mark negative pixels
+			mask[(img < 0) & (mask == 0)] |= GuiderImageAnalysis.mask_badpixels
+			# Clamp negative pixels
+			img[img < 0] = 0
 		# Blank out masked pixels.
 		img[mask > 0] = 0
 		# Convert data types for "gfindstars"...
