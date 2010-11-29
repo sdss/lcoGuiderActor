@@ -301,7 +301,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         probe.rotStar2Sky = theta # Squirrel the real angle away.
 
         isnan = numpy.isnan
-        #FIXME PH -- We should ignore gprobes not present on plugged on plate or not found in flat.
+        #FIXME PH -- We should ignore gprobes not present on plate/pointing (MARVELS dual pointing)
+        #               and ignore fibers not found in flat.
         #            However we probably want to record values of disabled fibers for diagnosis 
         if isnan(fiber.dx) or isnan(fiber.dy) or isnan(poserr):
             guideCmd.warn("text=%s" %
@@ -327,6 +328,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         dRA   =  fiber.dx*ct + fiber.dy*st
         dDec  = -fiber.dx*st + fiber.dy*ct
         dDec *= -1
+
+        #FIXME PH -- calc dAlt and dAz for guiding diagnostics,(output as part of fiber?)
 
         # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
         # The guiderRMS will be calculated around the new effective fiber centers
@@ -375,6 +378,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideXRMS += fiber.dx**2
         guideYRMS += fiber.dy**2        
         nguideRMS += 1
+        #guideAzRMS += fiber.dAz**2
+        #guideAltRMS += fiber.dAlt**2        
+
 
         b[0] += dRA
         b[1] += dDec
