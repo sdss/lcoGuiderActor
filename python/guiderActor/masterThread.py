@@ -59,7 +59,7 @@ class GuiderState(object):
         for what in ["raDec", "rot", "scale", "focus"]:
             self.pid[what] = PID.PID(self.expTime, 0, 0, 0)
 
-        self.setDecenter("decenterRA")       #store in frameInfo
+        self.setDecenter("decenterRA")       
         self.setDecenter("decenterDec")      
         self.setDecenter("decenterRot")
         self.decenter = False                #store in gState
@@ -135,10 +135,11 @@ class FrameInfo(object):
         self.guideCameraScale = numpy.nan
         self.plugPlateScale = numpy.nan
         self.seeing = numpy.nan
-        self.guideRMS= numpy.nan
-        self.decenterRA = numpy.nan
-        self.decenterDec = numpy.nan
-        self.decenterRot = numpy.nan
+        self.guideRMS = numpy.nan
+        self.guideXRMS = numpy.nan
+        self.guideYRMS = numpy.nan
+        self.guideAzRMS = numpy.nan
+        self.guideAltRMS = numpy.nan
 
 def postscriptDevice(psPlotDir, frameNo, prefix=""):
     """Return the SM device to write the postscript file for guide frame frameNo"""
@@ -279,6 +280,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         gp = fiber.gprobe
         probe = gp.info
         enabled = gp.enabled
+        tooFaint = False
 
         #
         # dx, dy are the offsets on the ALTA guider image
@@ -299,17 +301,20 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         probe.rotStar2Sky = theta # Squirrel the real angle away.
 
         isnan = numpy.isnan
+        #FIXME PH -- We should ignore gprobes not present on plugged on plate or not found in flat.
+        #            However we probably want to record values of disabled fibers for diagnosis 
         if isnan(fiber.dx) or isnan(fiber.dy) or isnan(poserr):
             guideCmd.warn("text=%s" %
                           qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber measured=(%g, %g), nominal=(%g,%g)" % (
                               fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
             continue
 
-        if fiber.flux < minStarFlux:
+        if fiber.flux < minStarFlux and enabled:
             guideCmd.warn("text=%s" %
                           qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
                               fiber.fiberid, fiber.flux, minStarFlux)))
-            continue
+            tooFaint = True      #PH should we add an extra bit for this.
+
         if poserr == 0:
             guideCmd.warn("text=%s" %
                           qstr("position error is 0 for gprobe %d star=(%g, %g) fiber=(%g, %g) nominal=(%g,%g)" % (
@@ -327,18 +332,11 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         # The guiderRMS will be calculated around the new effective fiber centers
       
         if gState.decenter: 
-            #convert decenter offset to mm on guider
-            frameInfo.decenterRA  = gState.decenterRA*gState.plugPlateScale/3600
-            frameInfo.decenterDec = gState.decenterDec*gState.plugPlateScale/3600
-            frameInfo.decenterRot = gState.decenterRot            
-            # apply decenter offset so that telescope (not the star) moves the decenter amount
-            dRA  += frameInfo.decenterRA
-            dDec += frameInfo.decenterDec
-            #decenterRot applied after guide solution
-        else:
-            frameInfo.decenterRA = 0.0
-            frameInfo.decenterRA = 0.0
-            frameInfo.decenterRot = 0.0
+            # Convert decenter offset to mm on guider
+            # Apply decenter offset so that telescope moves (not the star).
+            dRA  += gState.decenterRA*gState.plugPlateScale/3600.0
+            dDec += gState.decenterDec*gState.plugPlateScale/3600.0
+            # DecenterRot applied after guide solution
 
         fiber.dRA = dRA
         fiber.dDec = dDec
@@ -362,14 +360,14 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
             fiber.fwhm, probe.focusOffset,
             fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
-		
-        print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.3f %7.3f %4.0f" % (
+                
+        print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
             frameNo,
             fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
             probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
             probe.focusOffset)
 
-        if not enabled:
+        if not enabled or tooFaint:
             continue
 
         #accumulate guiding errors for good stars used in fit
@@ -424,9 +422,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             guideCmd.warn('text="Only one star is usable"')
             x = b
             x[2, 0] = 0 # no rotation
-            guideRMS = 99.99
-            guideXRMS = 99.99
-            guideYRMS = 99.99
         else:
             x = numpy.linalg.solve(A, b)
 
@@ -435,9 +430,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         dDec = x[1, 0]/gState.plugPlateScale
         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
-        #add the decenter guiding rotation offset here for now
+        #add the decenter guiding rotation offset here for now (in degrees)
         if gState.decenter:
-            dRot += frameInfo.decenterRot
+            dRot += gstate.decenterRot/3600.0
 
         frameInfo.dRA  = dRA
         frameInfo.dDec = dDec
@@ -573,9 +568,15 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                                     expTime=gState.expTime))
         return
 
-    # RMS guiding error 
-    print "RMS guiding error= %4.3f, n stars= %d RMS_X= %4.3f, RMS_Y=%4.3f" %(guideRMS, nguideRMS, guideXRMS, guideYRMS) 
-    guideCmd.inform('text=" guideRMS =%g"' % (guideRMS))
+    # RMS guiding error
+    #FIXME---need to calculate Az and Alt RMS correctly 
+    guideAzRMS = float("NaN") ; guideAltRMS = float("NaN")
+    #FIXME---turn RMS arcsec from mm
+    print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f RMS_X= %4.3f, RMS_Y=%4.3f" %(
+        guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS) 
+    guideCmd.inform('guideRMS=" %4d,%4.3f,%2d,%4.3f,%4.3f,%4.3f,%4.3f,"' % (frameNo, guideRMS, nguideRMS,
+                                                                            guideAzRMS, guideAltRMS, 
+                                                                            guideXRMS, guideYRMS))
 
     #
     # Scale
@@ -594,10 +595,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))
     curScale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
 
-	# There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
-	# So for now defer focus changes if we apply a scale change.
+        # There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
+        # So for now defer focus changes if we apply a scale change.
     blockFocusMove = False
-		
+                
     if gState.guideScale and abs(offsetScale) > 1e-7:
         # Clip to the motion we think is too big to apply at once.
         offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
@@ -650,6 +651,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         probe = gp.info
 
                                 # FIXME -- do we want to include ACQUISITION fibers?
+                                # PH -- currently all valid enabled fibers are used so OK.
         rms = fiber.fwhm / sigmaToFWHM
         if isnan(rms):
             continue
@@ -868,7 +870,7 @@ def main(actor, queues):
 
                 guideCmd = msg.cmd
                 gState.setCmd(guideCmd)
-				
+                                
                 #
                 # Reset any PID I terms
                 #
@@ -1141,12 +1143,12 @@ def main(actor, queues):
                 cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 cmd.respond("expTime=%g" % (gState.expTime))
                 cmd.respond("scales=%g, %g, %g, %g" % (gState.plugPlateScale,
-													   gState.gcameraMagnification, gState.gcameraPixelSize,
-													   gState.dSecondary_dmm,))
+                                                           gState.gcameraMagnification, gState.gcameraPixelSize,
+                                                           gState.dSecondary_dmm,))
                 for w in gState.pid.keys():
-                    cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w,
-														   gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
-														   gState.pid[w].Imax, gState.pid[w].nfilt))
+                    cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w, 
+                                                               gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
+                                                               gState.pid[w].Imax, gState.pid[w].nfilt))
                 cmd.diag('text="guideCmd=%s"' % (qstr(gState.guideCmd)))
                 if msg.finish:
                     cmd.finish()
