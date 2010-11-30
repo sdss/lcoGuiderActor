@@ -269,21 +269,36 @@ class GuiderImageAnalysis(object):
                                 ('dRot', 'DRot', 'measured rotator offset, deg'),
                                 ('dFocus', 'DFocus', 'measured focus offset, um '),
                                 ('dScale', 'DScale', 'measured scale offset, %'),
-                                ('filtRA', 'FILTRA', 'filtered offset in RA, deg'),
-                                ('filtDec', 'FILTDec', 'filtered offset in Dec, deg'),
-                                ('filtRot', 'FILTRot', 'filtered rotator offset, deg'),
+                                ('filtRA',    'FILTRA',   'filtered offset in RA, deg'),
+                                ('filtDec',   'FILTDec',  'filtered offset in Dec, deg'),
+                                ('filtRot',   'FILTRot',  'filtered rotator offset, deg'),
                                 ('filtFocus', 'FILTFcus', 'filtered focus offset, um '),
                                 ('filtScale', 'FILTScle', 'filtered scale offset, %'),
                                 ('offsetRA', 'OFFRA', 'applied offset in RA, deg'),
                                 ('offsetDec', 'OFFDec', 'applied offset in Dec, deg'),
                                 ('offsetRot', 'OFFRot', 'applied rotator offset, deg'),
                                 ('offsetFocus', 'OFFFocus', 'applied focus offset, um'),
-                                ('offsetScale', 'OFFScale', 'applied scale offset, %'))
+                                ('offsetScale', 'OFFScale', 'applied scale offset, %'),
+                                ('guideRMS',    'gdRMS',    'RMS guiding error total, arcsec'),
+                                ('nguideRMS',   'ngdRMS',   'N stars used for RMS'),
+                                ('guideXRMS',   'gdXRMS',   'CCD X component of guiding RMS, arcsec'),
+                                ('guideYRMS',   'gdYRMS',   'CCD Y component of guiding RMS, arcsec'),
+                                ('guideAzRMS',  'gdAzRMS',  'Az component of guiding RMS error, arcsec'),
+                                ('guideAltRMS', 'gdAltRMS', 'Alt component of guiding RMS error, arcsec'),
+                                ('guideFitRMS',  'gdFRMS',   'RMS guide star fit, arcsec'),
+                                ('nguideFitRMS', 'ngdFRMS',   'N stars used for fit RMS'),
+                                ('decenterRA',    'dcnRA',    'applied offset in RA, deg'),
+                                ('decenterDec',   'dcnDec',   'applied offset in Dec, deg'),
+                                ('decenterRot',   'dcnRot',   'applied rotator offset, deg'),
+                                ('decenterFocus', 'dcnFcus', 'applied focus offset, um'),
+                                ('decenterScale', 'dcnScle', 'applied scale offset, %' ))
+                                #FIXME PH --- do we change to 1e6 units for scale
                 cards = []
                 for name, fitsName, comment in defs:
                         try:
                                 val = None
                                 val = getattr(frameInfo, name)
+                                print name, val
                                 if isnan(val):
                                         val = -99999.9 # F.ing F.TS
                                 c = actorFits.makeCard(cmd, fitsName, val, comment)
@@ -309,8 +324,8 @@ class GuiderImageAnalysis(object):
                         stamp = image[yc-r:yc+r+1, xc-r:xc+r+1].astype(int16)
                         rstamp = zeros_like(stamp)
                         self.libguide.rotate_region(numpy_array_to_REGION(stamp),
-                                                                                numpy_array_to_REGION(rstamp),
-                                                                                rot)
+                                                       numpy_array_to_REGION(rstamp),
+                                                       rot)
                         stamps.append(numpy.flipud(rstamp))
                         # Rotate the mask image...
                         stamp = mask[yc-r:yc+r+1, xc-r:xc+r+1].astype(uint8)
@@ -439,16 +454,18 @@ class GuiderImageAnalysis(object):
                         # FIXME -- rotStar2Sky -- should check with "hasattr"...
                         cols = []
                         for name,fitstype,units in gpfields:
-                                cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
-                                                                                  array=numpy.array([getattr(f.gprobe, name) for f in fibers])))
+                            cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
+                                                          array=numpy.array([getattr(f.gprobe, name) for f in fibers])))
+
                         for name,fitsname,fitstype,nilval,units in gpinfofields:
-                                if fitsname is None:
-                                        fitsname = name
-                                cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
-                                                                                  array=numpy.array([getattr(f.gprobe.info, name, nilval) for f in fibers])))
+                            if fitsname is None:
+                                fitsname = name
+                            cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
+                                                          array=numpy.array([getattr(f.gprobe.info, name, nilval) for f in fibers])))
+
                         for name,atname,fitstype,units in ffields:
-                                cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
-                                                                                  array=numpy.array([getattr(f, atname or name) for f in fibers])))
+                            cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
+                                                          array=numpy.array([getattr(f, atname or name) for f in fibers])))
 
                         cols.append(pyfits.Column(name='stampSize', format='I', array=numpy.array(stampSizes)))
                         cols.append(pyfits.Column(name='stampIdx', format='I', array=numpy.array(stampInds)))
@@ -516,10 +533,12 @@ class GuiderImageAnalysis(object):
                 #print image >= self.saturationLevel
 
                 # We can't cope with bright pixels. Hack a fix.
+                #FIXME PH --- Make sat 64K and scale data by 2 into and out of gunn code.
                 sat = (image.astype(int) >= self.saturationLevel)
                 if any(sat):
                         self.warn('the exposure has %i saturated pixels' % sum(sat))
                 image[sat] = self.saturationReplacement
+                #FIXME PH --- have to create mask here to keep track of saturated pixels
 
                 # Get dark and flat
                 (darkfn, flatfn) = self.findDarkAndFlat(self.gimgfn, hdr)
@@ -550,43 +569,50 @@ class GuiderImageAnalysis(object):
                 # FIXME -- presumably we want to mask pixels that are saturated?
 
                 # FIXME -- we currently don't apply the flat.
-                if False:
-                        # Subtract background.
-                        image -= median(image.ravel())
-                        # Divide by the flat (avoiding NaN where the flat is zero)
-                        image /= (flat + (flat == 0)*1)
-                        self.debug('After flattening: image range: %g to %g' % (image.min(), image.max()))
 
-                #self.imageBias = median(image[mask > 0].ravel())
+                # Subtract overscan if it exists else a kluged overscan.
+                if False:  # if haveOverscan:
+                    pass
+                else:
+                    # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
+                    ir = image.ravel()
+                    I = argsort(ir)
+                    bias = ir[I[int(0.3 * len(ir))]]
 
-                # Zero out parts of the image that are masked out.
-                # In this mask convention, 0 = good, >0 is bad.
-                #image[mask>0] = 0
+                self.inform('subtracting bias level: %g' % bias)
+                image -= bias
+                self.imageBias = bias                    
 
+                if False:  # if scaleByFlat:
+                    # Divide by the flat (avoiding NaN where the flat is zero)
+                    image /= (flat + (flat == 0)*1)
+                    self.debug('After flattening: image range: %g to %g' % (image.min(), image.max()))
+
+                # Save the processed image
                 self.guiderImage = image
                 self.guiderHeader = hdr
                 self.maskImage = mask
 
+                # Prepare image for Gunn C code PSF fitting
+                img = image[:]
+
+                # Zero out parts of the image that are masked out.
+                # In this mask convention, 0 = good, >0 is bad.
+                if False:
+                    # Mark negative pixels
+                    mask[(img < 0) & (mask == 0)] |= GuiderImageAnalysis.mask_badpixels
+                    # Clamp negative pixels
+                    img[img < 0] = 0
+                # Blank out masked pixels.
+                img[mask > 0] = 0
+
                 goodfibers = [f for f in fibers if not f.is_fake()]
                 #print '%i fibers; %i good.' % (len(fibers), len(goodfibers))
 
-                # FIXME -- do we need to be removing the *bias* or *sky-seen-through-fiber* here?
-                # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
-                ir = image.ravel()
-                I = argsort(ir)
-                bias = ir[int(0.3 * len(ir))]
-                self.inform('subtracting bias(sky) level: %g' % bias)
-                
-                img = image - bias
-                if False:
-                        # Mark negative pixels
-                        mask[(img < 0) & (mask == 0)] |= GuiderImageAnalysis.mask_badpixels
-                        # Clamp negative pixels
-                        img[img < 0] = 0
-                # Blank out masked pixels.
-                img[mask > 0] = 0
                 # Convert data types for "gfindstars"...
                 # The "img16" object must live until after gfindstars() !
+                # FIXME PH---divide by 2 and scale results by 2
+                # something like img16=(rint(image/2.)).astype(int16)
                 img16 = img.astype(int16)
                 #self.inform('Image (i16) range: %i to %i' % (img16.min(), img16.max()))
                 c_image = numpy_array_to_REGION(img16)
@@ -886,6 +912,7 @@ class GuiderImageAnalysis(object):
 
                 flat = GuiderImageAnalysis.binImage(flat, BIN)
 
+                #int16 for the rotation code in C
                 binimg = GuiderImageAnalysis.binImage(img, BIN).astype(int16)
 
                 # Write output file... copy header cards from input image.
