@@ -135,11 +135,23 @@ class FrameInfo(object):
         self.guideCameraScale = numpy.nan
         self.plugPlateScale = numpy.nan
         self.seeing = numpy.nan
+
         self.guideRMS = numpy.nan
+        self.nguideRMS = numpy.nan
         self.guideXRMS = numpy.nan
         self.guideYRMS = numpy.nan
-        self.guideAzRMS = numpy.nan
-        self.guideAltRMS = numpy.nan
+
+        self.guideAzRMS = numpy.nan      #not implemented yet
+        self.guideAltRMS = numpy.nan     
+
+        self.guideFitRMS = numpy.nan     #not implemented yet
+        self.nguideFitRMS = numpy.nan
+
+        self.decenterRA = numpy.nan
+        self.decenterDec = numpy.nan
+        self.decenterRot = numpy.nan
+        self.decenterFocus = numpy.nan
+        self.decenterScale = numpy.nan
 
 def postscriptDevice(psPlotDir, frameNo, prefix=""):
     """Return the SM device to write the postscript file for guide frame frameNo"""
@@ -266,11 +278,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideXRMS   = 0.0
     guideYRMS   = 0.0
     nguideRMS   = 0
-    guideRaDecRMS = 0.0
-    guideRaRMS = 0.0
-    guideDecRMS = 0.0
-    nguideRaDec = 0
-    guideFitRMS = 0.0        #not calculated at present
+    #guideAzRMS  = 0.0
+    #guideAltRMS = 0.0
 
     for fiber in fibers:
         # necessary?
@@ -335,11 +344,20 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         # The guiderRMS will be calculated around the new effective fiber centers
       
         if gState.decenter: 
-            # Convert decenter offset to mm on guider
-            # Apply decenter offset so that telescope moves (not the star).
-            dRA  += gState.decenterRA*gState.plugPlateScale/3600.0
-            dDec += gState.decenterDec*gState.plugPlateScale/3600.0
-            # DecenterRot applied after guide solution
+            #convert decenter offset to mm on guider
+            frameInfo.decenterRA  = gState.decenterRA*gState.plugPlateScale/3600
+            frameInfo.decenterDec = gState.decenterDec*gState.plugPlateScale/3600
+            frameInfo.decenterRot = gState.decenterRot            
+            # apply decenter offset so that telescope moves (not the star)
+            dRA  += frameInfo.decenterRA
+            dDec += frameInfo.decenterDec
+            #decenterRot applied after guide solution
+        else:
+            frameInfo.decenterRA = 0.0
+            frameInfo.decenterDec = 0.0
+            frameInfo.decenterRot = 0.0
+            frameInfo.decenterFocus = 0.0
+            frameInfo.decenterScale = 0.0
 
         fiber.dRA = dRA
         fiber.dDec = dDec
@@ -405,9 +423,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     nStar = A[0, 0]
     if nStar == 0 or gState.inMotion:
         guideCmd.warn('text="No stars are available for guiding or guiding is deferred"')
-        guideRMS = 99.99
-        guideXRMS = 99.99
-        guideYRMS = 99.99
 
         GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
 
@@ -438,7 +453,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
         #add the decenter guiding rotation offset here for now (in degrees)
         if gState.decenter:
-            dRot += gstate.decenterRot/3600.0
+            dRot += frameInfo.decenterRot/3600.0
 
         frameInfo.dRA  = dRA
         frameInfo.dDec = dDec
@@ -461,16 +476,26 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetRa, -3600*offsetDec, -3600*offsetRot,
                                                         "enabled" if gState.guideAxes else "disabled"))
 
-        #rms position error prior to this frames ccrrection                       
+        #rms position error prior to this frames correction
+        #FIXME PH --- Turn RMS from mm to arcsec
         try:
-            guideRMS = math.sqrt(guideRMS/nguideRMS) 
+            guideRMS  = math.sqrt(guideRMS/nguideRMS) 
             guideXRMS = math.sqrt(guideXRMS/nguideRMS)
             guideYRMS = math.sqrt(guideYRMS/nguideRMS)
         except:
-            guideRMS = 99.99
-            guideXRMS = 99.99
-            guideYRMS = 99.99
+            guideRMS = numpy.nan; guideXRMS = numpy.nan; guideYRMS = numpy.nan
 
+        frameInfo.guideRMS  = guideRMS
+        frameInfo.nguideRMS = nguideRMS
+        frameInfo.guideXRMS = guideXRMS
+        frameInfo.guideYRMS = guideYRMS
+
+        #FIXME PH ---Nneed to calculate Az and Alt RMS
+        guideAzRMS  = numpy.nan
+        guideAltRMS = numpy.nan
+        #frameInfo.guideAzRMS = guideAzRMS
+        #frameInfo.guideAltRMS = guideAltRMS     
+     
         if gState.guideAxes:
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                      cmdStr="offset arc %f, %f" % \
@@ -574,16 +599,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                                     expTime=gState.expTime))
         return
 
-    # RMS guiding error
-    #FIXME---need to calculate Az and Alt RMS correctly 
-    guideAzRMS = float("NaN") ; guideAltRMS = float("NaN")
-    #FIXME---turn RMS arcsec from mm
-    print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f RMS_X= %4.3f, RMS_Y=%4.3f" %(
-        guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS) 
-    guideCmd.inform('guideRMS=" %4d,%4.3f,%2d,%4.3f,%4.3f,%4.3f,%4.3f,"' % (frameNo, guideRMS, nguideRMS,
-                                                                            guideAzRMS, guideAltRMS, 
-                                                                            guideXRMS, guideYRMS))
-
     #
     # Scale
     #
@@ -599,6 +614,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                              "enabled" if gState.guideScale else "disabled"))
     guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))
+
     curScale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
 
         # There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
@@ -620,6 +636,19 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                                      cmdStr="set scale=%.9f" % (offsetScale))
             if cmdVar.didFail:
                 guideCmd.warn('text="Failed to issue scale change"')
+
+    #Evaluate RMS on fit over fibers used in fits here
+    guideFitRMS = numpy.nan
+    nguideFitRMS = numpy.nan
+    nguideFitRMS = 0
+
+    # RMS guiding error output has to be after scale extimation so the full fit residual can be reported
+
+    print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f, RMS_X= %4.3f, RMS_Y=%4.3f" %(
+        guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS) 
+    guideCmd.inform('guideRMS=" %4d, %4.3f, %2d, %4.3f, %4.3f, %4.3f, %4.3f, %4.3f, %4d"' % (
+            frameNo, guideRMS, nguideRMS,guideAzRMS, guideAltRMS, guideXRMS, guideYRMS, guideFitRMS, nguideFitRMS))
+
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
     # in-focus star would be r0, and we are Delta out of focus, we measure
@@ -1105,7 +1134,7 @@ def main(actor, queues):
 
                 #Allow decenters to be setup prior to guiding
             elif msg.type == Msg.DECENTER:
-                        gState.setDecenter("decenterRA",msg.decenterRA)
+                        gState.setDecenter("decenterRA", msg.decenterRA)
                         gState.setDecenter("decenterDec",msg.decenterDec)
                         gState.setDecenter("decenterRot",msg.decenterRot)
 
