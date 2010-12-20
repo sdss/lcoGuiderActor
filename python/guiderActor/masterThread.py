@@ -431,9 +431,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             gState.setCmd(None)
             return
 
-        if guidingIsOK(cmd, actorState):
-            queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
-                                    expTime=gState.expTime))
+        #if guidingIsOK(cmd, actorState):
+        #    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
+        #                            expTime=gState.expTime))
         return
         
     A[2, 0] = A[0, 2]
@@ -490,7 +490,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         frameInfo.guideXRMS = guideXRMS
         frameInfo.guideYRMS = guideYRMS
 
-        #FIXME PH ---Nneed to calculate Az and Alt RMS
+        #FIXME PH ---Need to calculate Az and Alt RMS
         guideAzRMS  = numpy.nan
         guideAltRMS = numpy.nan
         #frameInfo.guideAzRMS = guideAzRMS
@@ -594,9 +594,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             gState.setCmd(None)
             return
 
-        if guidingIsOK(cmd, actorState):
-            queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
-                                    expTime=gState.expTime))
+        #if guidingIsOK(cmd, actorState):
+        #    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
+        #                            expTime=gState.expTime))
         return
 
     #
@@ -614,13 +614,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                              "enabled" if gState.guideScale else "disabled"))
     guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))
-
     curScale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
 
-        # There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
-        # So for now defer focus changes if we apply a scale change.
+	# There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
+	# So for now defer focus changes if we apply a scale change.
     blockFocusMove = False
-                
+		
     if gState.guideScale and abs(offsetScale) > 1e-7:
         # Clip to the motion we think is too big to apply at once.
         offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
@@ -848,6 +847,10 @@ def main(actor, queues):
         try:
             msg = queues[MASTER].get(timeout=timeout)
 
+            qlen = queues[MASTER].qsize()
+            if qlen > 0 and msg.cmd:
+                msg.cmd.diag("master thread has %d items after a .get()" % (qlen))
+                
             if msg.type == Msg.EXIT:
                 if msg.cmd:
                     msg.cmd.inform('text="Exiting thread %s"' % (threading.current_thread().name))
@@ -905,7 +908,7 @@ def main(actor, queues):
 
                 guideCmd = msg.cmd
                 gState.setCmd(guideCmd)
-                                
+				
                 #
                 # Reset any PID I terms
                 #
@@ -1134,7 +1137,7 @@ def main(actor, queues):
 
                 #Allow decenters to be setup prior to guiding
             elif msg.type == Msg.DECENTER:
-                        gState.setDecenter("decenterRA", msg.decenterRA)
+                        gState.setDecenter("decenterRA",msg.decenterRA)
                         gState.setDecenter("decenterDec",msg.decenterDec)
                         gState.setDecenter("decenterRot",msg.decenterRot)
 
