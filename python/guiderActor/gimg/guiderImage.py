@@ -139,10 +139,10 @@ class GuiderImageAnalysis(object):
 		#
 		self.bigFiberRadius = 12.
 
-		# Saturation level.
-		self.saturationLevel = 0x8000
+		# Saturation level.  PH..code hacked to all 64k max
+                self.saturationLevel = 0xFFF0    #65520 
 		# The value to replace saturated pixels by.
-		self.saturationReplacement = 0x7fff
+		self.saturationReplacement = 0xFFF0
 
 		# The factor by which guider images are binned down.
 		# That is, unbinned (flat) images are this factor bigger in
@@ -530,8 +530,6 @@ class GuiderImageAnalysis(object):
 		#print 'sat', self.saturationLevel
 		#print image >= self.saturationLevel
 
-		# We can't cope with bright pixels. Hack a fix.
-		#FIXME PH --- Make sat 64K and scale data by 2 into and out of gunn code.
 		sat = (image.astype(int) >= self.saturationLevel)
 		if any(sat):
 			self.warn('the exposure has %i saturated pixels' % sum(sat))
@@ -587,12 +585,15 @@ class GuiderImageAnalysis(object):
 		    self.debug('After flattening: image range: %g to %g' % (image.min(), image.max()))
 
 		# Save the processed image
-		self.guiderImage = image
+		self.guiderImage = image/2.0
 		self.guiderHeader = hdr
 		self.maskImage = mask
 
-		# Prepare image for Gunn C code PSF fitting
-		img = image[:]
+		# Prepare image for Gunn C code PSF fitting in "gfindstars"...
+                # PH..Kluge to conserve full dynamic range, scale image to fit into signed int in C code.
+                # Have to scale up the outputs.  
+		img = image[:]/2.0     #
+		# The "img16" object must live until after gfindstars() !
 
 		# Zero out parts of the image that are masked out.
 		# In this mask convention, 0 = good, >0 is bad.
@@ -603,10 +604,6 @@ class GuiderImageAnalysis(object):
 			img[img < 0] = 0
 		# Blank out masked pixels.
 		img[mask > 0] = 0
-		# Convert data types for "gfindstars"...
-		# The "img16" object must live until after gfindstars() !
-		# FIXME PH---divide by 2 and scale results by 2
-		# something like img16=(rint(image/2.)).astype(int16)
 		img16 = img.astype(int16)
 		#self.inform('Image (i16) range: %i to %i' % (img16.min(), img16.max()))
 		c_image = numpy_array_to_REGION(img16)
@@ -644,8 +641,8 @@ class GuiderImageAnalysis(object):
 				f.fwhm = self.pixels2arcsec(fwhm)
 			# else leave fwhm = nan.
 			# FIXME -- figure out good units -- mag/(pix^2)?
-			f.sky    = c_fibers[0].sky[i]
-			f.flux = c_fibers[0].flux[i]
+			f.sky    = (c_fibers[0].sky[i])*2.0    #correct for image div by 2 for Ggcode 
+			f.flux = (c_fibers[0].flux[i])*2.0     
 			if f.flux > 0:
 				f.mag    = self.flux2mag(f.flux, exptime, f)
 			# else leave f.mag = nan.
