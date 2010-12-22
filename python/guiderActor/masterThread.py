@@ -263,6 +263,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
     frameInfo.guideCameraScale = guideCameraScale
     frameInfo.plugPlateScale = gState.plugPlateScale
+    mmToArcsec = 3600./gState.plugPlateScale   #arcsec per mm
 
     A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
     b = numpy.matrix(numpy.zeros(3).reshape([3,1])); b3 = 0.0
@@ -478,11 +479,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                                                         "enabled" if gState.guideAxes else "disabled"))
 
         #rms position error prior to this frames correction
-        #FIXME PH --- Turn RMS from mm to arcsec
         try:
-            guideRMS  = math.sqrt(guideRMS/nguideRMS) 
-            guideXRMS = math.sqrt(guideXRMS/nguideRMS)
-            guideYRMS = math.sqrt(guideYRMS/nguideRMS)
+            guideRMS  = (math.sqrt(guideRMS/nguideRMS)) *mmToArcsec
+            guideXRMS = (math.sqrt(guideXRMS/nguideRMS))*mmToArcsec
+            guideYRMS = (math.sqrt(guideYRMS/nguideRMS))*mmToArcsec
         except:
             guideRMS = numpy.nan; guideXRMS = numpy.nan; guideYRMS = numpy.nan
 
@@ -491,7 +491,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         frameInfo.guideXRMS = guideXRMS
         frameInfo.guideYRMS = guideYRMS
 
-        #FIXME PH ---Need to calculate Az and Alt RMS
+        #FIXME PH ---Need to calculate Az and Alt RMS in arcsec
         guideAzRMS  = numpy.nan
         guideAltRMS = numpy.nan
         #frameInfo.guideAzRMS = guideAzRMS
