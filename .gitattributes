@@ -25,6 +25,7 @@ python/guiderActor/masterThread.py -text
 python/guiderActor/myGlobals.py -text
 python/guiderActor/test_flat.py -text
 python/guiderActor/tests.py -text
+python/guiderActor/xferBlock.py -text
 /setup.py -text
 src/Makefile -text
 src/gimg/Makefile -text
