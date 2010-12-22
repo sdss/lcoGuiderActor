@@ -1,5 +1,6 @@
 import Queue, threading
 import math, numpy, re
+import subprocess
 
 from guiderActor import *
 import loadGprobes
@@ -645,8 +646,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
     print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f, RMS_X= %4.3f, RMS_Y=%4.3f" %(
         guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS) 
-    guideCmd.inform('guideRMS=" %4d, %4.3f, %2d, %4.3f, %4.3f, %4.3f, %4.3f, %4.3f, %4d"' % (
-            frameNo, guideRMS, nguideRMS,guideAzRMS, guideAltRMS, guideXRMS, guideYRMS, guideFitRMS, nguideFitRMS))
+    guideCmd.inform('guideRMS=%4d,%4.3f,%2d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d' % (
+        frameNo, guideRMS, nguideRMS,guideAzRMS, guideAltRMS, guideXRMS, guideYRMS, guideFitRMS, nguideFitRMS))
 
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
@@ -826,7 +827,37 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             #
     GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
 
+def loadTccBlock(cmd, actorState, gState):
+    try:
+        cmd1 = "catPlPlugMapM -c %s -m %s -p %s -f %s %s" % (gState.cartridge, gState.fscanMJD,
+                                                             gState.pointing, gState.fscanID,
+                                                             gState.plate)
+        scratchFile = '/tmp/v_ca1_%04d.dat' % (gState.plate)
+        cmd1 += " | %s /dev/stdin > %s" % (os.path.join(os.environ['GUIDERACTOR_DIR'],
+                                                        'python/guiderActor',
+                                                        'convertPlPlugMap.py'),
+                                           scratchFile)
+        cmd.diag('text=%s' % (qstr('running: %s' % (cmd1))))
+        
+        cmd2 = " %s %s" % (os.path.join(os.environ['GUIDERACTOR_DIR'],
+                                        'python/guiderActor',
+                                        'xferBlock.py'),
+                           scratchFile)
+        cmd.diag('text=%s' % (qstr('running: %s' % (cmd2))))
+        ret = subprocess.call(cmd1, shell=True)
+        if ret < 0:
+            raise RuntimeError("cat and convert job failed with %s" % (-retcode))
+        ret = subprocess.call(cmd2, shell=True)
+        if ret < 0:
+            raise RuntimeError("xfer job failed with %s" % (-retcode))
 
+        cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
+                                            cmdStr="set inst=spectro/gcview=%s" % (gState.plate))
+        if cmdVar.didFail:
+            cmd.fail('text="Failed to set inst!"')
+    except Exception, e:
+        cmd.warn('text=%s' % (qstr("could not load a per-cartridge instrument block: %s" % (e))))
+        
 def main(actor, queues):
     """Main loop for master thread"""
 
@@ -1064,6 +1095,10 @@ def main(actor, queues):
                         enabled = False
 
                     gState.setGprobeState(id, enable=enabled, info=info, create=True, flags=info.flags)
+
+                # Build and install an instrument block for this cartridge info
+                loadTccBlock(msg.cmd, actorState, gState)
+                
                 #
                 # Report the cartridge status
                 #

@@ -109,7 +109,7 @@ def getCartInfo(cartID):
     return cartInfo
 
 def main():
-    plugfile = sys.argv[2]
+    plugfile = sys.argv[-1]
     
     cvtPlugMap(plugfile)
 
