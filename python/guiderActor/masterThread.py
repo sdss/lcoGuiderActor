@@ -366,9 +366,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             frameInfo.decenterScale = 0.0
 
         if gstate.decenterChanged:  #output the keywords only when the decenter changes
-        guideCmd.inform("decenter=%4d,%s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2" % (
-            frameNo, gstate.decenter, frameInfo.decenterRA, frameInfo.decenterDec, frameInfo.decenterRot,
-            frameInfo.decenterFocus, frameInfo.decenterScale))
+            guideCmd.inform("decenter=%4d,%s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2" % (
+            frameNo, gstate.decenter, frameInfo.decenterRA, frameInfo.decenterDec,
+            frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
 
         fiber.dRA = dRA
         fiber.dDec = dDec
