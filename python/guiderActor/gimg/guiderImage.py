@@ -585,7 +585,7 @@ class GuiderImageAnalysis(object):
 		    self.debug('After flattening: image range: %g to %g' % (image.min(), image.max()))
 
 		# Save the processed image
-		self.guiderImage = image/2.0
+		self.guiderImage = image/2.0  #PH***quick Kluge needs to be corrected
 		self.guiderHeader = hdr
 		self.maskImage = mask
 
@@ -747,6 +747,7 @@ class GuiderImageAnalysis(object):
 		med = i2[I[len(I)/2]]
 		# pk == 99th percentile
 		pk = i2[I[int(len(I)*0.99)]]
+#		pk = i2[I[int(len(I)*0.998)]]  # change percentile based on N big fibers, N small fibers 
 		thresh = (med + pk)/2.
 
 		# Threshold image
