@@ -263,7 +263,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
     frameInfo.guideCameraScale = guideCameraScale
     frameInfo.plugPlateScale = gState.plugPlateScale
-    mmToArcsec = 3600./gState.plugPlateScale   #arcsec per mm
+    ArcsecPermm = 3600./gState.plugPlateScale   #arcsec per mm
 
     A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
     b = numpy.matrix(numpy.zeros(3).reshape([3,1])); b3 = 0.0
@@ -280,8 +280,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideXRMS   = 0.0
     guideYRMS   = 0.0
     nguideRMS   = 0
-    #guideAzRMS  = 0.0
-    #guideAltRMS = 0.0
+    inFocusFwhm = []
 
     for fiber in fibers:
         # necessary?
@@ -393,6 +392,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         if not enabled or tooFaint:
             continue
 
+        #Collect fwhms for good in focus stars
+        #Allow for a possible small range of focus offsets
+        if abs(probe.focusOffset) < 50 : inFocusFwhm.append(fiber.fwhm)
+
         #accumulate guiding errors for good stars used in fit
         guideRMS += fiber.dx**2 + fiber.dy**2
         guideXRMS += fiber.dx**2
@@ -477,12 +480,31 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideCmd.respond("axisError=%g, %g, %g" % (3600*dRA, 3600*dDec, 3600*dRot))
         guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetRa, -3600*offsetDec, -3600*offsetRot,
                                                         "enabled" if gState.guideAxes else "disabled"))
+        #calc FWHM with trimmed mean for 8 in focus fibers
+        if True:
+            nFwhm = len(inFocusFwhm)
+            trimLo = 1 if nFwhm > 4 else 0
+            trimHi= nFwhm - trimLo
+            nKept = nFwhm - 2*trimLo
+            nReject = nFwhm - nKept
+            meanFwhm = (sum(inFocusFwhm))/nFwhm
+            tMeanFwhm = (sum(sorted(inFocusFwhm)[trimLo:trimHi]))/nKept
+            loKept = inFocusFwhm[trimLo]
+            hiKept = inFocusFwhm[(trimHi-1)]
+            print ("FWHM: %d, %7.2f, %d, %d, %7.2f" % (
+                    frameNo, tMeanFwhm, nKept, nReject, meanFwhm))
+
+            guideCmd.inform('fwhm=%d, %7.2f, %d, %d, %7.2f' % (
+                    frameNo, tMeanFwhm, nKept, nReject, meanFwhm))
+
+            frameInfo.meanFwhm = meanFwhm
+            frameInfo.tMeanFwhm = tMeanFwhm
 
         #rms position error prior to this frames correction
         try:
-            guideRMS  = (math.sqrt(guideRMS/nguideRMS)) *mmToArcsec
-            guideXRMS = (math.sqrt(guideXRMS/nguideRMS))*mmToArcsec
-            guideYRMS = (math.sqrt(guideYRMS/nguideRMS))*mmToArcsec
+            guideRMS  = (math.sqrt(guideRMS/nguideRMS)) *ArcsecPermm
+            guideXRMS = (math.sqrt(guideXRMS/nguideRMS))*ArcsecPermm
+            guideYRMS = (math.sqrt(guideYRMS/nguideRMS))*ArcsecPermm
         except:
             guideRMS = numpy.nan; guideXRMS = numpy.nan; guideYRMS = numpy.nan
 
@@ -638,11 +660,11 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 guideCmd.warn('text="Failed to issue scale change"')
 
     #Evaluate RMS on fit over fibers used in fits here
+    #FIXME--PH not calculated yet
     guideFitRMS = numpy.nan
-    nguideFitRMS = numpy.nan
     nguideFitRMS = 0
 
-    # RMS guiding error output has to be after scale extimation so the full fit residual can be reported
+    # RMS guiding error output has to be after scale estimation so the full fit residual can be reported
 
     print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f, RMS_X= %4.3f, RMS_Y=%4.3f" %(
         guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS) 
