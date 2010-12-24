@@ -367,8 +367,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
         #output the keywords only when the decenter changes
         if gState.decenterChanged: 
-            guideCmd.inform("decenter=%4d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
-            frameNo, gState.decenter, frameInfo.decenterRA, frameInfo.decenterDec,
+            guideCmd.inform("decenter=%d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
+            frameNo, ("enabled" if gState.decenter else "disabled"), frameInfo.decenterRA, frameInfo.decenterDec,
             frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
 
             gState.decenterChanged = False
@@ -682,8 +682,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
     print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f, RMS_X= %4.3f, RMS_Y=%4.3f" %(
         guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS) 
-    guideCmd.inform('guideRMS=%5d,%4.3f,%4d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d,%4d' % (
-        frameNo, guideRMS, nguideRMS,guideAzRMS, guideAltRMS, 
+    guideCmd.inform("guideRMS=%5d,%4.3f,%4d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d,%4d" % (
+        frameNo, guideRMS, nguideRMS, guideAzRMS, guideAltRMS, 
         guideXRMS, guideYRMS, guideFitRMS, nguideFitRMS, nguideRejectFitRMS))
 
     #
