@@ -61,10 +61,10 @@ class GuiderState(object):
             self.pid[what] = PID.PID(self.expTime, 0, 0, 0)
 
         self.decenter = False                #gstate only
-        self.decenterChanged = False
         self.setDecenter("decenterRA")       
         self.setDecenter("decenterDec")      
         self.setDecenter("decenterRot")
+        self.decenterChanged = True
         self.decenterFocus = numpy.nan       
         self.decenterScale = numpy.nan
 
@@ -109,7 +109,7 @@ class GuiderState(object):
             self.decenterRot = value
         else:
             raise RuntimeError, ("Unknown decenter axis name %s" % what)
-        GuiderState.decenterChanged = True
+
 try:
     gState
 except:
@@ -365,10 +365,13 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             frameInfo.decenterFocus = 0.0
             frameInfo.decenterScale = 0.0
 
-        if gstate.decenterChanged:  #output the keywords only when the decenter changes
-            guideCmd.inform("decenter=%4d,%s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2" % (
-            frameNo, gstate.decenter, frameInfo.decenterRA, frameInfo.decenterDec,
+        #output the keywords only when the decenter changes
+        if gState.decenterChanged: 
+            guideCmd.inform("decenter=%4d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
+            frameNo, gState.decenter, frameInfo.decenterRA, frameInfo.decenterDec,
             frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
+
+            gState.decenterChanged = False
 
         fiber.dRA = dRA
         fiber.dDec = dDec
@@ -673,6 +676,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     #FIXME--PH not calculated yet
     guideFitRMS = numpy.nan
     nguideFitRMS = 0
+    nguideRejectFitRMS = 0
 
     # RMS guiding error output has to be after scale estimation so the full fit residual can be reported
 
@@ -680,7 +684,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS) 
     guideCmd.inform('guideRMS=%5d,%4.3f,%4d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d,%4d' % (
         frameNo, guideRMS, nguideRMS,guideAzRMS, guideAltRMS, 
-        guideXRMS, guideYRMS, guideFitRMS, nguideFitRMS, nrejectFitRMS))
+        guideXRMS, guideYRMS, guideFitRMS, nguideFitRMS, nguideRejectFitRMS))
 
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
@@ -1036,12 +1040,13 @@ def main(actor, queues):
                     continue
 
                 #Check if offsets were changed during guiding without force
-                if (gState.decenter and not force) or not gState.decenter:
+                if (gState.decenter and not force):
                     cmd.fail('text="Decentred guiding must use force."')
                     gState.setDecenter("decenterRA")  #reset all to 0
                     gState.setDecenter("decenterDec")
                     gState.setDecenter("decenterRot")
                     gState.decenter = False
+                    gState.decenterChanged = True
                     queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False))
                     continue
 
@@ -1207,7 +1212,7 @@ def main(actor, queues):
                         gState.setDecenter("decenterRA",msg.decenterRA)
                         gState.setDecenter("decenterDec",msg.decenterDec)
                         gState.setDecenter("decenterRot",msg.decenterRot)
-
+                        gState.decenterChanged = True
             elif msg.type == Msg.STATUS:
                 # Try to generate status even after we have failed.
                 cmd = msg.cmd if msg.cmd.alive else actor.bcast
