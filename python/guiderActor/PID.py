@@ -2,20 +2,25 @@ import numpy
 
 class PID(object):
     """A class to handle PID loops"""
-    def __init__(self, dt, Kp, Ti, Td, Imax=-1, nfilt=1):
+    def __init__(self, dt, Kp, Ti, Td, Imax=-1, nfilt=1, tfilt=None):
         self.dt = dt                    # Time between PID updates
         self.Kp = Kp                    # Proportional term
         self.Ti = Ti                    # Integral time
         self.Td = Td                    # Derivative time
 
         self.Imax = Imax                # limit to abs(.Ix)
-        self.nfilt = nfilt              # number of inputs to smooth over.
+        self.tfilt = tfilt
+        if tfilt != None:
+            self.nfilt = tfilt / self.dt
+        else:
+            self.nfilt = nfilt              # number of inputs to smooth over.
+
         self.histlen = 0
         
         self._x = None                  # previous value of the error, x
         
     def __str__(self):
-        return "K_P = %g  T_i = %g  T_d = %g" % (self.Kp, self.Ti, self.Td)
+        return "K_P=%g T_i=%g T_d=%g tfilt=%s nfilt=%d" % (self.Kp, self.Ti, self.Td, self.tfilt, self.nfilt)
 
     def filterX(self, x):
         """ Apply some smoothing/predictive filter to inputs. Dumb median now; kalman maybe later.
@@ -58,6 +63,8 @@ class PID(object):
         self._x = None
         if dt:
             self.dt = dt
+            if self.tfilt:
+                self.nfilt = self.tfilt / dt
 
     def ZieglerNichols(self, Kpc, Pc, loopType="PID"):
         """Perform Ziegler-Nichols tuning of a PID loop; Kpc is the critical proportional
@@ -79,9 +86,9 @@ class PID(object):
         else:
             raise RuntimeError, ("I don't know how to tune a %s loop" % loopType)
 
-    def setPID(self, dt=None, Kp=None, Ti=None, Td=None, Imax=None, nfilt=None):
+    def setPID(self, dt=None, Kp=None, Ti=None, Td=None, Imax=None, nfilt=None, tfilt=None):
 
-        needReset = dt != None or Imax != None or nfilt != None
+        needReset = dt != None or Imax != None or nfilt != None or tfilt != None
 
         if dt is not None:
             try:
@@ -103,7 +110,10 @@ class PID(object):
         if Imax is not None:
             self.Imax = Imax
 
-        if nfilt:
+        if tfilt:
+            self.tfilt = tfilt
+            self.nfilt = tfilt / self.dt
+        elif nfilt:
             self.nfilt = nfilt
 
         if needReset:

@@ -258,15 +258,17 @@ class GuiderImageAnalysis(object):
 			imageHDU.header.update('OBJECT', objectname, '')
 			imageHDU.header.update('GCAMSCAL', frameInfo.guideCameraScale, 'guide camera plate scale (mm/pixel)')
 			imageHDU.header.update('PLATSCAL', frameInfo.plugPlateScale, 'plug plate scale (mm/degree)')
+                        # Do this first, before we need the models.
+			guiderCards = self.getGuideloopCards(cmd, frameInfo)
+			actorFits.extendHeader(cmd, imageHDU.header, guiderCards)
+			self.addPixelWcs(imageHDU.header)
+
 			tccCards = actorFits.tccCards(models, cmd=cmd)
 			actorFits.extendHeader(cmd, imageHDU.header, tccCards)
 			mcpCards = actorFits.mcpCards(models, cmd=cmd)
 			actorFits.extendHeader(cmd, imageHDU.header, mcpCards)
 			plateCards = actorFits.plateCards(models, cmd=cmd)
 			actorFits.extendHeader(cmd, imageHDU.header, plateCards)
-			guiderCards = self.getGuideloopCards(cmd, frameInfo)
-			actorFits.extendHeader(cmd, imageHDU.header, guiderCards)
-			self.addPixelWcs(imageHDU.header)
 		except Exception, e:
 			self.warn('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e))
 
