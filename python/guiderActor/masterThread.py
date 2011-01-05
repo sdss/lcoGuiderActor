@@ -1,3 +1,4 @@
+import ConfigParser
 import Queue, threading
 import math, numpy, re
 import subprocess
@@ -11,6 +12,7 @@ import opscore.utility.tback as tback
 import PID
 
 from gimg.guiderImage import GuiderImageAnalysis
+import loadGprobes
 
 import pyfits
 import os.path
@@ -68,7 +70,6 @@ class GuiderState(object):
         self.decenterFocus = numpy.nan       
         self.decenterScale = numpy.nan
 
-
     def deleteAllGprobes(self):
         """Delete all fibers """
         self.gprobes = {}
@@ -110,6 +111,19 @@ class GuiderState(object):
         else:
             raise RuntimeError, ("Unknown decenter axis name %s" % what)
 
+    def setScales(self, plugPlateScale=None,
+                  dSecondary_dmm=None,
+                  gcameraPixelSize=None,
+                  gcameraMagnification=None):
+        if plugPlateScale != None:
+            self.plugPlateScale = plugPlateScale
+        if dSecondary_dmm != None:
+            self.dSecondary_dmm = dSecondary_dmm
+        if gcameraPixelSize != None:
+            self.gcameraPixelSize = gcameraPixelSize
+        if gcameraMagnification != None:
+            self.gcameraMagnification = gcameraMagnification
+            
 try:
     gState
 except:
@@ -170,21 +184,43 @@ class FakeCommand(object):
         self._respond('w', text)
     def respond(self, text):
         self._respond('i', text)
+    def inform(self, text):
+        self._respond('i', text)
+    def diag(self, text):
+        self._respond('d', text)
     def finish(self, text):
         self._respond(':', text)
     def fail(self, text):
         self._respond('f', text)
 
-def processOneFile(guiderFile, cartFile, plateFile):
+def setupGstate(cartFile, plateFile, cartridgeId):
+    global gState
+
+    gState = GuiderState()
+    config = ConfigParser.ConfigParser()
+    config.read('etc/guider.cfg')
     
+    plugPlateScale = float(config.get('telescope', "scale"))
+    dSecondary_dmm = float(config.get('telescope', "dSecondary_dmm"))
+    gcameraPixelSize = float(config.get('gcamera', "pixelSize"))
+    gcameraMagnification = float(config.get('gcamera', "magnification"))
+    gState.setScales(plugPlateScale=plugPlateScale,
+                     dSecondary_dmm=dSecondary_dmm,
+                     gcameraMagnification=gcameraMagnification,
+                     gcameraPixelSize=gcameraPixelSize)
+        
     gState.setGuideMode('axes', False)
     gState.setGuideMode('focus', False)
     gState.setGuideMode('scale', False)
-
+    gState.gprobes = loadGprobes.getGprobes(cartFile, plateFile, cartridgeId)
+    gState.cartridge = cartridgeId
     cmd = FakeCommand()
+    gState.setCmd(cmd)
+
+def processOneFile(guiderFile):
     queues = dict(MASTER=Queue.Queue())
 
-    guideStep(None, queues, cmd, cmd, guiderFile, True)
+    guideStep(None, queues, gState.guideCmd, guiderFile, True)
 
 def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None, cmd=None, guideCmd=None):
     gState.setGuideMode('axes', False)
@@ -212,7 +248,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     minStarFlux = 500 #ADU, avoid guiding on noise spikes during acquisitions
                        #should be in photons, based on RON, Dark residual, SKY   
 
-    actorState = guiderActor.myGlobals.actorState
+    #actorState = guiderActor.myGlobals.actorState
     guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
     frameNo = int(re.search(r"([0-9]+)\.fits$", inFile).group(1))
@@ -268,7 +304,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
     frameInfo.guideCameraScale = guideCameraScale
     frameInfo.plugPlateScale = gState.plugPlateScale
-    ArcsecPermm = 3600./gState.plugPlateScale   #arcsec per mm
+    arcsecPerMM = 3600./gState.plugPlateScale   #arcsec per mm
 
     A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
     b = numpy.matrix(numpy.zeros(3).reshape([3,1])); b3 = 0.0
@@ -287,6 +323,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     nguideRMS   = 0
     inFocusFwhm = []
 
+    import pdb; pdb.set_trace()
     for fiber in fibers:
         # necessary?
         if fiber.gprobe is None:
@@ -500,10 +537,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             trimHi= nFwhm - trimLo
             nKept = nFwhm - 2*trimLo
             nReject = nFwhm - nKept
-            meanFwhm = (sum(inFocusFwhm))/nFwhm
-            tMeanFwhm = (sum(sorted(inFocusFwhm)[trimLo:trimHi]))/nKept
-            loKept = inFocusFwhm[trimLo]
-            hiKept = inFocusFwhm[(trimHi-1)]
+            meanFwhm = (sum(inFocusFwhm))/nFwhm if nFwhm>0 else numpy.nan
+            tMeanFwhm = (sum(sorted(inFocusFwhm)[trimLo:trimHi]))/nKept if nKept>0 else numpy.nan
+            #loKept = inFocusFwhm[trimLo]
+            #hiKept = inFocusFwhm[(trimHi-1)]
             print ("FWHM: %d, %7.2f, %d, %d, %7.2f" % (
                     frameNo, tMeanFwhm, nKept, nReject, meanFwhm))
 
@@ -515,9 +552,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
         #rms position error prior to this frames correction
         try:
-            guideRMS  = (math.sqrt(guideRMS/nguideRMS)) *ArcsecPermm
-            guideXRMS = (math.sqrt(guideXRMS/nguideRMS))*ArcsecPermm
-            guideYRMS = (math.sqrt(guideYRMS/nguideRMS))*ArcsecPermm
+            guideRMS  = (math.sqrt(guideRMS/nguideRMS)) *arcsecPerMM
+            guideXRMS = (math.sqrt(guideXRMS/nguideRMS))*arcsecPerMM
+            guideYRMS = (math.sqrt(guideYRMS/nguideRMS))*arcsecPerMM
         except:
             guideRMS = numpy.nan; guideXRMS = numpy.nan; guideYRMS = numpy.nan
 
@@ -1190,10 +1227,10 @@ def main(actor, queues):
                     cmd.finish('text="scale change completed"')
 
             elif msg.type == Msg.SET_SCALE:
-                gState.plugPlateScale = msg.plugPlateScale
-                gState.gcameraMagnification = msg.gcameraMagnification
-                gState.gcameraPixelSize = msg.gcameraPixelSize
-                gState.dSecondary_dmm = msg.dSecondary_dmm
+                gState.setScales(plugPlateScale=msg.plugPlateScale,
+                                 cameraMagnification=msg.gcameraMagnification,
+                                 gcameraPixelSize=msg.gcameraPixelSize,
+                                 dSecondary_dmm=msg.dSecondary_dmm)
                 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
