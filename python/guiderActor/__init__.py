@@ -40,6 +40,7 @@ class Msg(object):
     class TCC_EXPOSURE(): pass
     class TCC_EXPOSURE_FINISHED(): pass
     class DECENTER(): pass
+    class CENTERUP(): pass
 
     def __init__(self, type, cmd, **data):
         self.type = type
