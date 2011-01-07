@@ -103,6 +103,7 @@ class GuiderCmd(object):
             ('focus', '(on|off)', self.focus),
             ('scale', '(on|off)', self.scale),
             ('status', "[geek]", self.status),
+            ('centerUp', "", self.centerUp),
             ("setScale", "<delta>|<scale>", self.setScale),
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
             ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter)
@@ -199,6 +200,11 @@ class GuiderCmd(object):
         """Turn guiding off"""
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=False))
+
+    def centerUp(self, cmd):
+        """Force a single XY offset"""
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.CENTERUP, cmd=cmd))
 
     def reprocessFile(self, cmd):
         """Reprocess a single file."""

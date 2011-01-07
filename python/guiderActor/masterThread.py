@@ -48,6 +48,7 @@ class GuiderState(object):
         self.pointing = "?"
         self.expTime = 0
         self.inMotion = False
+        self.centerUp = False
         self.guideCmd = None
 
         self.fscanMJD = self.fscanID = -1
@@ -323,7 +324,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     nguideRMS   = 0
     inFocusFwhm = []
 
-    import pdb; pdb.set_trace()
     for fiber in fibers:
         # necessary?
         if fiber.gprobe is None:
@@ -334,6 +334,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         enabled = gp.enabled
         tooFaint = False
 
+        # Center up on acquisition fibers only.
+        if gState.centerUp and probe.fiber_type != "ACQUIRE":
+            enabled = False
+            
         #
         # dx, dy are the offsets on the ALTA guider image
         #
@@ -515,17 +519,24 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         frameInfo.dRot = dRot
         print 'dRA,dDec,dRot', dRA, dDec, dRot
 
-        offsetRa  = -gState.pid["raDec"].update(dRA)                    
-        offsetDec = -gState.pid["raDec"].update(dDec)
-        offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
+        if gState.centerUp:
+            offsetRa = -dRA
+            offsetDec = -dDec
+            offsetRot = 0
+        else:
+            offsetRa  = -gState.pid["raDec"].update(dRA)                    
+            offsetDec = -gState.pid["raDec"].update(dDec)
+            offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
+
         print 'offsetRA, offsetDec, offsetRot', offsetRa, offsetDec, offsetRot
 
         frameInfo.filtRA  = offsetRa
         frameInfo.filtDec = offsetDec
         frameInfo.filtRot = offsetRot
-        frameInfo.offsetRA  = offsetRa  if gState.guideAxes else 0.0
-        frameInfo.offsetDec = offsetDec if gState.guideAxes else 0.0
-        frameInfo.offsetRot = offsetRot if gState.guideAxes else 0.0
+
+        frameInfo.offsetRA  = offsetRa  if (gState.guideAxes or gState.centerUp) else 0.0
+        frameInfo.offsetDec = offsetDec if (gState.guideAxes or gState.centerUp) else 0.0
+        frameInfo.offsetRot = offsetRot if (gState.guideAxes or gState.centerUp) else 0.0
 
         guideCmd.respond("axisError=%g, %g, %g" % (3600*dRA, 3600*dDec, 3600*dRot))
         guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetRa, -3600*offsetDec, -3600*offsetRot,
@@ -569,11 +580,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #frameInfo.guideAzRMS = guideAzRMS
         #frameInfo.guideAltRMS = guideAltRMS     
      
-        if gState.guideAxes:
+        if gState.guideAxes or gState.centerUp:
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                      cmdStr="offset arc %f, %f" % \
                                          (-offsetRa, -offsetDec))
-
             if cmdVar.didFail:
                 guideCmd.warn('text="Failed to issue offset"')
 
@@ -581,7 +591,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                          cmdStr="offset guide %f, %f, %g" % \
                                              (0.0, 0.0, -offsetRot))
-
             if cmdVar.didFail:
                 guideCmd.warn('text="Failed to issue offset in rotator"')
 
@@ -689,10 +698,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))
     curScale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
 
-	# There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
-	# So for now defer focus changes if we apply a scale change.
+    # There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
+    # So for now defer focus changes if we apply a scale change.
     blockFocusMove = False
-		
+        
     if gState.guideScale and abs(offsetScale) > 1e-7:
         # Clip to the motion we think is too big to apply at once.
         offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
@@ -961,7 +970,17 @@ def main(actor, queues):
                     msg.cmd.inform('text="Exiting thread %s"' % (threading.current_thread().name))
 
                 return
-            
+
+            elif msg.type == Msg.CENTERUP:
+                # Arrange for the next exposure to do a centerUp.
+                if not gState.guideCmd:
+                    msg.cmd.fail('text="The guider must be running in order to centerUp"')
+                    continue
+                else:
+                    gState.centerUp = True
+
+                continue
+
             elif msg.type == Msg.START_GUIDING:
                 if not msg.start:
                     if msg.start is None:
@@ -1013,7 +1032,7 @@ def main(actor, queues):
 
                 guideCmd = msg.cmd
                 gState.setCmd(guideCmd)
-				
+                
                 #
                 # Reset any PID I terms
                 #
@@ -1073,6 +1092,13 @@ def main(actor, queues):
                 guideStep(actor, queues, msg.cmd, msg.filename, oneExposure,
                           plot=plot, psPlot=psPlot, sm=sm)
                 gState.inMotion = False
+                if gState.centerUp:
+                    gState.centerUp = False
+
+                    # Reset any PID I terms
+                    for key in gState.pid.keys():
+                        gState.pid[key].reset()
+                    
                 if not gState.guideCmd:    # something fatal happened in guideStep
                     continue
 
