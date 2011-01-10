@@ -668,7 +668,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     except numpy.linalg.LinAlgError:
         guideCmd.warn("text=%s" % qstr("Unable to solve for axis offsets"))
 
-    if nStar <= 1 or centerUp:      # don't bother with focus/scale!
+    if nStar <= 1 or gState.centerUp:      # don't bother with focus/scale!
         GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
 
         if oneExposure:
