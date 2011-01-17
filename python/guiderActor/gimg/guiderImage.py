@@ -755,7 +755,8 @@ class GuiderImageAnalysis(object):
 		# median
 		med = i2[I[len(I)/2]]
 		# pk == 99th percentile
-		pk = i2[I[int(len(I)*0.99)]]
+		#pk = i2[I[int(len(I)*0.99)]]
+		pk = i2[I[int(len(I)*0.998)]]
 #		pk = i2[I[int(len(I)*0.998)]]  # change percentile based on N big fibers, N small fibers 
 		thresh = (med + pk)/2.
 
