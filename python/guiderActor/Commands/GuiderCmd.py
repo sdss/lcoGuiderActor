@@ -106,7 +106,7 @@ class GuiderCmd(object):
             ('centerUp', "", self.centerUp),
             ("setScale", "<delta>|<scale>", self.setScale),
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
-            ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter)
+            ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter),
             ]
     #
     # Define commands' callbacks

@@ -337,6 +337,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         # Center up on acquisition fibers only.
         if gState.centerUp and probe.fiber_type != "ACQUIRE":
             enabled = False
+
+        if not enabled:
+            guideCmd.warn('text="Gprobe %d is not enabled"' % fiber.fiberid)
+            continue
             
         #
         # dx, dy are the offsets on the ALTA guider image
@@ -353,7 +357,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #
         theta = 90                   # allow for 90 deg rot of camera view, should be -90 
         theta += probe.rotation # allow for intrinsic fibre rotation
-        theta -= probe.phi      # allow for orientation of alignment hole
+        try:
+            theta -= probe.phi      # allow for orientation of alignment hole
+        except Exception, e:
+            cmd.warn('text="skipping phi-less probe %s"' % (fiber.fiberid))
+            continue
+        
         probe.rotStar2Sky = theta # Squirrel the real angle away.
 
         isnan = numpy.isnan
@@ -1191,7 +1200,7 @@ def main(actor, queues):
                         enabled = False
 
                     gState.setGprobeState(id, enable=enabled, info=info, create=True, flags=info.flags)
-
+					
                 # Build and install an instrument block for this cartridge info
                 loadTccBlock(msg.cmd, actorState, gState)
                 
