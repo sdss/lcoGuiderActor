@@ -55,6 +55,11 @@ class GuiderState(object):
 
         self.deleteAllGprobes()
 
+        self.plugPlateScale = numpy.nan
+        self.dSecondary_dmm = numpy.nan
+        self.gcameraPixelSize = numpy.nan
+        self.gcameraMagnification = numpy.nan
+        
         self.setGuideMode("axes")
         self.setGuideMode("focus")
         self.setGuideMode("scale")
@@ -116,6 +121,7 @@ class GuiderState(object):
                   dSecondary_dmm=None,
                   gcameraPixelSize=None,
                   gcameraMagnification=None):
+
         if plugPlateScale != None:
             self.plugPlateScale = plugPlateScale
         if dSecondary_dmm != None:
@@ -249,7 +255,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     minStarFlux = 500 #ADU, avoid guiding on noise spikes during acquisitions
                        #should be in photons, based on RON, Dark residual, SKY   
 
-    #actorState = guiderActor.myGlobals.actorState
+    actorState = guiderActor.myGlobals.actorState
     guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
     frameNo = int(re.search(r"([0-9]+)\.fits$", inFile).group(1))
@@ -1214,6 +1220,7 @@ def main(actor, queues):
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+
             elif msg.type == Msg.SET_GUIDE_MODE:
                 gState.setGuideMode(msg.what, msg.enable)
                 #
@@ -1259,7 +1266,7 @@ def main(actor, queues):
 
             elif msg.type == Msg.SET_SCALE:
                 gState.setScales(plugPlateScale=msg.plugPlateScale,
-                                 cameraMagnification=msg.gcameraMagnification,
+                                 gcameraMagnification=msg.gcameraMagnification,
                                  gcameraPixelSize=msg.gcameraPixelSize,
                                  dSecondary_dmm=msg.dSecondary_dmm)
                 

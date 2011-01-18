@@ -98,7 +98,7 @@ class Guider(actorcore.Actor.Actor):
                                                       gcameraMagnification=gcameraMagnification,
                                                       gcameraPixelSize=gcameraPixelSize))
         for what in self.config.options("enable"):
-             enable = {"True" : True, "False" : False}[self.config.get('enable', what)]
+            enable = {"True" : True, "False" : False}[self.config.get('enable', what)]
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, None, what=what,
                                                           enable=enable))
 
