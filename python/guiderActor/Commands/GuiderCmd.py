@@ -56,6 +56,7 @@ class GuiderCmd(object):
                                         keys.Key("mjd", types.Int(), help="The MJD when a plate was scanned"),
                                         keys.Key("plate", types.Int(), help="A plugplate ID"),
                                         keys.Key("fibers", types.Int()*(1,None), help="A list of fibers"),
+                                        keys.Key("probe", types.Int(), help="A probe ID, 1-indexed"),
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
                                         keys.Key("time", types.Float(), help="Exposure time for guider"),
@@ -104,6 +105,7 @@ class GuiderCmd(object):
             ('scale', '(on|off)', self.scale),
             ('status', "[geek]", self.status),
             ('centerUp', "", self.centerUp),
+            ('fk5InFiber', "[<probe>] [<time>]", self.fk5InFiber),
             ("setScale", "<delta>|<scale>", self.setScale),
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
             ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter),
@@ -205,6 +207,32 @@ class GuiderCmd(object):
         """Force a single XY offset"""
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.CENTERUP, cmd=cmd))
+
+    def fk5InFiber(self, cmd):
+        """Have the TCC put a bright star down a giver probe"""
+
+        actorState = guiderActor.myGlobals.actorState
+        probe = cmd.cmd.keywords['probe'].values[0] if 'probe' in cmd.cmd.keywords else None
+
+        expTime = cmd.cmd.keywords["time"].values[0] if 'time' in cmd.cmd.keywords else 0.1
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
+
+        # Turn off corrections.
+        for what in ["scale", "focus", "axes"]:
+            actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enable=False))
+
+        if probe:
+            cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
+                                                cmdStr="set ptErrProbe=%d" % (probe))
+        if cmdVar.didFail:
+            cmd.fail("text=\"Failed to set the pointing error probe to %s\"" % (probe))
+            return
+
+        cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
+                                            cmdStr="track/pterr=(noobj,nocorr)")
+        if cmdVar.didFail:
+            cmd.fail("text=\"Failed to move to a bright star\"")
+            return
 
     def reprocessFile(self, cmd):
         """Reprocess a single file."""
