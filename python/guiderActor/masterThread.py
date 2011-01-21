@@ -1343,8 +1343,8 @@ def main(actor, queues):
             actor.bcast.diag('text="%s alive"' % threadName)
         except Exception, e:
             errMsg = "Unexpected exception %s in guider %s thread" % (e, threadName)
-			if gState.guideCmd:
-				g.warn('text="%s"' % errMsg)
+            if gState.guideCmd:
+                g.warn('text="%s"' % errMsg)
             actor.bcast.warn('text="%s"' % errMsg)
             gState.setCmd(False)
             # I (dstn) get infinite recursion from this...
