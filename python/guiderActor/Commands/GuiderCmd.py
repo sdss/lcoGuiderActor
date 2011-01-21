@@ -224,9 +224,9 @@ class GuiderCmd(object):
         if probe:
             cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
                                                 cmdStr="set ptErrProbe=%d" % (probe))
-        if cmdVar.didFail:
-            cmd.fail("text=\"Failed to set the pointing error probe to %s\"" % (probe))
-            return
+            if cmdVar.didFail:
+                cmd.fail("text=\"Failed to set the pointing error probe to %s\"" % (probe))
+                return
 
         cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
                                             cmdStr="track/pterr=(noobj,nocorr)")
