@@ -36,7 +36,7 @@ def main(actor, queues):
                 except:
                     expType = "expose" 
 
-                timeLim = msg.expTime + 15     # allow for readout time
+                timeLim = msg.expTime + 45     # allow for readout time
                 
                 filenameKey = guiderActor.myGlobals.actorState.models[camera].keyVarDict["filename"]
 
