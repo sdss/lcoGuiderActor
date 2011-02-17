@@ -946,7 +946,7 @@ def loadTccBlock(cmd, actorState, gState):
             raise RuntimeError("xfer job failed with %s" % (-retcode))
 
         cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
-                                            cmdStr="set inst=spectro/gcview=%s" % (gState.plate))
+                                            cmdStr="set inst=spectro/gcview=%s/keep=(scaleFac)" % (gState.plate))
         if cmdVar.didFail:
             cmd.fail('text="Failed to set inst!"')
     except Exception, e:
