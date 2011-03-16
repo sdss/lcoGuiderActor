@@ -717,7 +717,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         # Clip to the motion we think is too big to apply at once.
         offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
         offsetScale *= curScale
-        cmd.warn('text="setting scale=%0.8f"' % (offsetScale))
+        # cmd.warn('text="setting scale=%0.8f"' % (offsetScale))
 
         # Last chance to bailout.
         if offsetScale < 0.9995 or offsetScale > 1.0005:
@@ -988,7 +988,7 @@ def main(actor, queues):
                     msg.cmd.fail('text="The guider must be running in order to centerUp"')
                     continue
                 else:
-                    gState.centerUp = True
+                    gState.centerUp = msg.cmd # Provide some way for this command to be finished.
 
                 continue
 
@@ -1104,6 +1104,7 @@ def main(actor, queues):
                           plot=plot, psPlot=psPlot, sm=sm)
                 gState.inMotion = False
                 if gState.centerUp:
+                    gState.centerUp.finish('')
                     gState.centerUp = False
 
                     # Reset any PID I terms
