@@ -1,7 +1,7 @@
+setupOptional(platedb)
+setupRequired(scipy)
 setupRequired(sopActor)
 setupRequired(actorcore)
-setupRequired(scipy)
-setupOptional(platedb)
 setupOptional(sm)
 
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)
