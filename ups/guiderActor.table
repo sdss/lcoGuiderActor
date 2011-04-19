@@ -2,6 +2,7 @@ setupOptional(platedb)
 setupRequired(scipy)
 setupRequired(sopActor)
 setupRequired(actorcore)
+setupRequired(platelist)
 setupOptional(sm)
 
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)

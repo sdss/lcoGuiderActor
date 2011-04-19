@@ -16,6 +16,7 @@ import loadGprobes
 
 import pyfits
 import os.path
+import scipy.interpolate
 
 try:
     import sm
@@ -52,7 +53,7 @@ class GuiderState(object):
         self.guideCmd = None
 
         self.fscanMJD = self.fscanID = -1
-
+        self.design_ha = numpy.nan
         self.deleteAllGprobes()
 
         self.plugPlateScale = numpy.nan
@@ -63,7 +64,8 @@ class GuiderState(object):
         self.setGuideMode("axes")
         self.setGuideMode("focus")
         self.setGuideMode("scale")
-
+        self.setRefractionCorrection(0.0)
+        
         self.pid = {}               # PIDs for various axes
         for what in ["raDec", "rot", "scale", "focus"]:
             self.pid[what] = PID.PID(self.expTime, 0, 0, 0)
@@ -104,6 +106,9 @@ class GuiderState(object):
         else:
             raise RuntimeError, ("Unknown guide mode %s" % what)
 
+    def setRefractionCorrection(self, value=0.0):
+        self.refractionCorrection = value
+        
     def setCmd(self, cmd=None):
         self.guideCmd = cmd
 
@@ -219,6 +224,7 @@ def setupGstate(cartFile, plateFile, cartridgeId):
     gState.setGuideMode('axes', False)
     gState.setGuideMode('focus', False)
     gState.setGuideMode('scale', False)
+    gState.setRefractionCorrection(0.0)
     gState.gprobes = loadGprobes.getGprobes(cartFile, plateFile, cartridgeId)
     gState.cartridge = cartridgeId
     cmd = FakeCommand()
@@ -330,6 +336,22 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     nguideRMS   = 0
     inFocusFwhm = []
 
+    # Grab some times for refraction correction
+    cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                             cmdStr="show time")
+    if cmdVar.didFail:
+        guideCmd.warn('text="Failed to fetch time"')
+    LST = actorState.models["tcc"].keyVarDict["lst"][0]
+    RAkey = actorState.models["tcc"].keyVarDict["objNetPos"][0]
+    RA = RAkey.getPos()
+    HA = LST-RA     # The corrections are indexed by degrees, happily.
+    dHA = HA - gState.design_ha
+    haLimWarn = False
+    guideCmd.warn('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
+                  (LST, RA, HA, gState.design_ha,dHA))
+
+    # Manually set for now. CPL
+    wavelength = 16600
     for fiber in fibers:
         # necessary?
         if fiber.gprobe is None:
@@ -401,7 +423,44 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         dDec *= -1
 
         #FIXME PH -- calc dAlt and dAz for guiding diagnostics,(output as part of fiber?)
+        
+        # Apply refraction correction
+        try:
+            xCorr = 0.0
+            yCorr = 0.0
+            haTime = 0.0
+            if wavelength in probe.haOffsetTimes:
+                haTimes = probe.haOffsetTimes[wavelength]
+                if dHA < haTimes[0]:
+                    if not haLimWarn:
+                        cmd.warn('text="dHA (%s) is below interpolation table; using limit"' % (dHA))
+                        haLimWarn = True
+                    haTime = haTimes[0]
+                elif dHA > haTimes[-1]:
+                    if not haLimWarn:
+                        cmd.warn('text="dHA (%s) is above interpolation table; using limit"' % (dHA))
+                        haLimWarn = True
+                    haTime = haTimes[-1]
+                else:
+                    haTime = dHA
 
+                # I'm now assuming 0...offset, but it should be offset1...offset2
+                xInterp = scipy.interpolate.interp1d(haTimes,
+                                                     probe.haXOffsets[wavelength])
+                xCorr = gState.refractionCorrection * xInterp(haTime)
+                yInterp = scipy.interpolate.interp1d(haTimes,
+                                                     probe.haYOffsets[wavelength])
+                yCorr = gState.refractionCorrection * yInterp(haTime)
+        except Exception, e:
+            guideCmd.diag('text="failed to calc offsets for %s: %s"' % (wavelength, e))
+            pass
+
+        guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
+                                                                            gState.refractionCorrection,
+                                                                            haTime, xCorr, yCorr))
+        dRA += xCorr
+        dDec += yCorr
+        
         # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
         # The guiderRMS will be calculated around the new effective fiber centers
       
@@ -1192,6 +1251,7 @@ def main(actor, queues):
                 gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
                 gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
                 gState.boresight_ra, gState.boresight_dec = msg.boresight_ra, msg.boresight_dec
+                gState.design_ha = msg.design_ha
                 #
                 # Set the gState.gprobes array (actually a dictionary as we're not sure which fibre IDs are present)
                 #
@@ -1218,6 +1278,12 @@ def main(actor, queues):
                 
             elif msg.type == Msg.SET_PID:
                 gState.pid[msg.what].setPID(Kp=msg.Kp, Ti=msg.Ti, Td=msg.Td, Imax=msg.Imax, nfilt=msg.nfilt)
+
+                if msg.cmd:
+                    queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+
+            elif msg.type == Msg.SET_REFRACTION:
+                gState.setRefractionCorrection(msg.value)
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
@@ -1329,13 +1395,16 @@ def main(actor, queues):
                 cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 cmd.respond("expTime=%g" % (gState.expTime))
                 cmd.respond("scales=%g, %g, %g, %g" % (gState.plugPlateScale,
-                                                           gState.gcameraMagnification, gState.gcameraPixelSize,
-                                                           gState.dSecondary_dmm,))
+                                                       gState.gcameraMagnification, gState.gcameraPixelSize,
+                                                       gState.dSecondary_dmm,))
                 for w in gState.pid.keys():
                     cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w, 
-                                                               gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
-                                                               gState.pid[w].Imax, gState.pid[w].nfilt))
+                                                           gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
+                                                           gState.pid[w].Imax, gState.pid[w].nfilt))
                 cmd.diag('text="guideCmd=%s"' % (qstr(gState.guideCmd)))
+                cmd.warn('refractionCorrection=%0.1f' % (gState.refractionCorrection))
+                cmd.diag('text="design_ha=%0.1f"' % (gState.design_ha))
+                
                 if msg.finish:
                     cmd.finish()
             else:
@@ -1345,7 +1414,7 @@ def main(actor, queues):
         except Exception, e:
             errMsg = "Unexpected exception %s in guider %s thread" % (e, threadName)
             if gState.guideCmd:
-                g.warn('text="%s"' % errMsg)
+                gState.guideCmd.warn('text="%s"' % errMsg)
             actor.bcast.warn('text="%s"' % errMsg)
             gState.setCmd(False)
             # I (dstn) get infinite recursion from this...
