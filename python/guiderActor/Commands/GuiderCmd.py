@@ -12,6 +12,7 @@ import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 
 from opscore.utility.qstr import qstr
+import opscore.utility.YPF as YPF
 
 from guiderActor import *
 import guiderActor
@@ -44,7 +45,10 @@ class GuiderCmd(object):
             self.fiber_type = fiber_type
             self.rotStar2Sky = numpy.nan
             self.flags = flags
-
+            self.haOffsetTimes = {}
+            self.haXOffsets = {}
+            self.haYOffsets = {}
+            
     def __init__(self, actor):
         self.actor = actor
         #
@@ -82,6 +86,7 @@ class GuiderCmd(object):
                                         keys.Key("decenterRot", types.Float(), help="Telescope absolute offset for guiding in Rot"),
                                         keys.Key("scale", types.Float(), help="Current scale from \"tcc show scale\""),
                                         keys.Key("delta", types.Float(), help="Delta scale (percent)"),
+                                        keys.Key("corrRatio", types.Float(), help="(percent)"),
                                        )
         #
         # Declare commands
@@ -109,6 +114,8 @@ class GuiderCmd(object):
             ("setScale", "<delta>|<scale>", self.setScale),
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
             ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter),
+            #('correctRefraction', "(on|off)", self.correctRefraction),
+            ('setRefractionBalance', "<corrRatio>", self.setRefractionBalance),
             ]
     #
     # Define commands' callbacks
@@ -271,13 +278,15 @@ that isn't actually mounted (unless you specify force)
             plate = 0
             boresight_ra = float("NaN")
             boresight_dec = float("NaN")
+            design_ha = ("NaN")
             #
             # Send that information off to the master thread
             #
             myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
-                                                                cartridge=cartridge, plate=plate, pointing=pointing,
-                                                                boresight_ra=boresight_ra, boresight_dec=boresight_dec,
-                                                                gprobes=gprobes))
+                                                                    cartridge=cartridge, plate=plate, pointing=pointing,
+                                                                    boresight_ra=boresight_ra, boresight_dec=boresight_dec,
+                                                                    design_ha=design_ha,
+                                                                    gprobes=gprobes))
             return
         #
         # Check that the claimed cartridge is actually on the telescope
@@ -324,6 +333,7 @@ that isn't actually mounted (unless you specify force)
         plate = cmdVar.getLastKeyVarData(pointingInfoKey)[0]
         boresight_ra = cmdVar.getLastKeyVarData(pointingInfoKey)[3]
         boresight_dec = cmdVar.getLastKeyVarData(pointingInfoKey)[4]
+        design_ha = cmdVar.getLastKeyVarData(pointingInfoKey)[6]
         #
         # Lookup the valid gprobes
         #
@@ -389,7 +399,23 @@ that isn't actually mounted (unless you specify force)
             except KeyError:
                 cmd.warn("text=\"Unknown fiberId %d from plugmap file (%s)\"" % (id, ", ".join([str(e) for e in el[1:]])))
                 continue
+
+        # Add in the refraction functions from plateGeomCoeffs
         #
+        # I don't know how to get numeric pointing IDs
+        if pointing == 'A':
+            pointingID = 1
+        elif pointing == 'B':
+            pointingID = 2
+        else:
+            cmd.warn('text="Unknown pointing name %s, trying pointing #1"' % (pointing))
+            pointingID = 1
+
+        pointingID = 1
+        cmd.warn('text="HACK for tonight: forcing pointingID %d for pointing %s"' % (pointingID, pointing))
+            
+        self.addGuideOffsets(cmd, plate, pointingID, gprobes)
+
         # Send that information off to the master thread
         #
         myGlobals.actorState.queues[guiderActor.MASTER].put(
@@ -397,7 +423,47 @@ that isn't actually mounted (unless you specify force)
                 cartridge=cartridge, plate=plate, pointing=pointing,
                 fscanMJD=fscanMJD, fscanID=fscanID,
                 boresight_ra=boresight_ra, boresight_dec=boresight_dec,
+                design_ha=design_ha,
                 gprobes=gprobes))
+
+    def addGuideOffsets(self, cmd, plate, pointingID, gprobes):
+        """ Read in the new (needed for APOGEE/MARVELS) plateGuideOffsets interpolation arrays. """
+        
+        # Get .par file name in the platelist product.
+        # plates/0046XX/004671/plateGuideOffsets-004671-p1-l16600.par
+        for wavelength in (5400, 16600):
+            path = os.path.join(os.environ['PLATELIST_DIR'],
+                                'plates',
+                                '%04dXX' % (int(plate/100)),
+                                '%06d' % (plate),
+                                'plateGuideOffsets-%06d-p%d-l%05d.par' % (plate, pointingID, wavelength))
+            cmd.inform('text="loading guider coeffs for %d from %s"' % (wavelength, path))
+
+            try:
+                ygo = YPF.YPF(path)
+                guideOffsets = ygo.structs['HAOFFSETS'].asObjlist()
+            except Exception, e:
+                cmd.warn('text="failed to read plateGuideOffsets file %s: %s"' % (path, e))
+                continue
+            
+            for gpID, gp in gprobes.items():
+                if gp.fiber_type == 'TRITIUM':
+                    next
+                    
+                offset = [o for o in guideOffsets if o.holetype == "GUIDE" and o.iguide == gpID]
+                if len(offset) != 1:
+                    cmd.warn('text="no or too many (%d) guideOffsets for probe %s"' % (len(offset), gpID))
+                    continue
+                
+                gp.haOffsetTimes[wavelength] = offset[0].delha
+                gp.haXOffsets[wavelength] = offset[0].xfoff
+                gp.haYOffsets[wavelength] = offset[0].yfoff
+
+    def setRefractionBalance(self, cmd):
+        """ Top-level 'setRefractionBalance <ratio> command """
+        
+        myGlobals.actorState.queues[guiderActor.MASTER].put(
+            Msg(Msg.SET_REFRACTION, value=cmd.cmd.keywords["corrRatio"].values[0], cmd=cmd))
 
     def ping(self, cmd):
         """ Top-level 'ping' command handler. Query the actor for liveness/happiness. """

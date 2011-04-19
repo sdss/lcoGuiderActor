@@ -41,7 +41,8 @@ class Msg(object):
     class TCC_EXPOSURE_FINISHED(): pass
     class DECENTER(): pass
     class CENTERUP(): pass
-
+    class SET_REFRACTION(): pass
+    
     def __init__(self, type, cmd, **data):
         self.type = type
         self.cmd = cmd
