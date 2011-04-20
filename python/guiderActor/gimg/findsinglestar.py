@@ -80,7 +80,7 @@ def find_single_star(img, medfiltsize = 10, psfsigma = 1.0,
 	print 'Estimated noise:', noise
 
 	# binary search for a threshold that produces only one peak.
-	siglo,sighi = 10,10000
+	siglo,sighi = 20,10000
 	iters = 0
 	while True:
 		iters += 1
