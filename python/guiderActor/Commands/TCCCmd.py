@@ -224,13 +224,18 @@ i RawText="3 3   213.712 144.051   5.73 4.90 77.5   192.1 5569.1 328.0   0.008 0
             self.notOK(cmd, "no doread file available to process!")
             return
 
-        cmd.warn('text="doTccFindstars processing %s"' % (tccState.doreadFilename))
+        cmd.diag('text="doTccFindstars processing %s"' % (tccState.doreadFilename))
 
         try:
             img = pyfits.getdata(tccState.doreadFilename)
         except Exception, e:
             self.notOK(cmd, "could not read image file %s: %s" % (tccState.doreadFilename, e))
             return
+
+        try:
+            cmd.inform('file="%s","%s"' % os.path.split(tccState.doreadFilename))
+        except Exception, e:
+            cmd.warn('text="failed to send file key: %s"' % (e))
 
         try:
             # Subframe before sending -- CPL
@@ -248,10 +253,6 @@ i RawText="3 3   213.712 144.051   5.73 4.90 77.5   192.1 5569.1 328.0   0.008 0
                      (tccState.binX, tccState.binY,
                       starX, starY,  
                       2.5, 2.5, 77.5,   192.1, 5569.1, 328.0,   0.008, 0.008,   0))
-        try:
-            cmd.inform('file="%s","%s"' % os.path.split(tccState.doreadFilename))
-        except Exception, e:
-            cmd.warn('text="failed to send file key: %s"' % (e))
         
         self.OK(cmd)
         
