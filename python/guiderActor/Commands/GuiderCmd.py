@@ -86,7 +86,8 @@ class GuiderCmd(object):
                                         keys.Key("decenterRot", types.Float(), help="Telescope absolute offset for guiding in Rot"),
                                         keys.Key("scale", types.Float(), help="Current scale from \"tcc show scale\""),
                                         keys.Key("delta", types.Float(), help="Delta scale (percent)"),
-                                        keys.Key("corrRatio", types.Float(), help="(percent)"),
+                                        keys.Key("corrRatio", types.Float(),
+                                                 help="How much refraction correction to apply (0..)"),
                                        )
         #
         # Declare commands
@@ -114,7 +115,6 @@ class GuiderCmd(object):
             ("setScale", "<delta>|<scale>", self.setScale),
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
             ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter),
-            #('correctRefraction', "(on|off)", self.correctRefraction),
             ('setRefractionBalance', "<corrRatio>", self.setRefractionBalance),
             ]
     #
