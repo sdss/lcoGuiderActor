@@ -339,22 +339,18 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     inFocusFwhm = []
 
     # Grab some times for refraction correction
-    cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                             cmdStr="show time")
-    if cmdVar.didFail:
-        guideCmd.warn('text="Failed to fetch time"')
-    LST = actorState.models["tcc"].keyVarDict["lst"][0]
     longitude = -105.82045
-    UTC = RO.Astro.Tm.utcFromPySec(time.time() + actorState.models["tcc"].keyVarDict["utc_TAI"][0])
-    LST2 = RO.Astro.Tm.lastFromUT1(UTC, longitude)
+    UTC = RO.Astro.Tm.utcFromPySec(time.time() +
+                                   actorState.models["tcc"].keyVarDict["utc_TAI"][0])
+    LST = RO.Astro.Tm.lastFromUT1(UTC, longitude)
     
     RAkey = actorState.models["tcc"].keyVarDict["objNetPos"][0]
     RA = RAkey.getPos()
     HA = LST-RA     # The corrections are indexed by degrees, happily.
     dHA = HA - gState.design_ha
     haLimWarn = False
-    guideCmd.warn('text="LST=%0.4f LST2=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
-                  (LST, LST2, RA, HA, gState.design_ha,dHA))
+    guideCmd.warn('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
+                  (LST, RA, HA, gState.design_ha,dHA))
 
     # Manually set for now. CPL
     wavelength = 16600
