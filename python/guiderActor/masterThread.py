@@ -1,6 +1,7 @@
 import ConfigParser
 import Queue, threading
 import math, numpy, re
+import time
 import subprocess
 
 from guiderActor import *
@@ -8,6 +9,7 @@ import loadGprobes
 import guiderActor.myGlobals
 from opscore.utility.qstr import qstr
 import opscore.utility.tback as tback
+import RO
 
 import PID
 
@@ -342,13 +344,17 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     if cmdVar.didFail:
         guideCmd.warn('text="Failed to fetch time"')
     LST = actorState.models["tcc"].keyVarDict["lst"][0]
+    longitude = -105.82045
+    UTC = RO.Astro.Tm.utcFromPySec(time.time() + actorState.models["tcc"].keyVarDict["utc_TAI"][0])
+    LST2 = RO.Astro.Tm.lastFromUT1(UTC, longitude)
+    
     RAkey = actorState.models["tcc"].keyVarDict["objNetPos"][0]
     RA = RAkey.getPos()
     HA = LST-RA     # The corrections are indexed by degrees, happily.
     dHA = HA - gState.design_ha
     haLimWarn = False
-    guideCmd.warn('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
-                  (LST, RA, HA, gState.design_ha,dHA))
+    guideCmd.warn('text="LST=%0.4f LST2=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
+                  (LST, LST2, RA, HA, gState.design_ha,dHA))
 
     # Manually set for now. CPL
     wavelength = 16600
@@ -426,19 +432,19 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         
         # Apply refraction correction
         try:
-            xCorr = 0.0
-            yCorr = 0.0
+            xOffset = 0.0
+            yOffset = 0.0
             haTime = 0.0
             if wavelength in probe.haOffsetTimes:
                 haTimes = probe.haOffsetTimes[wavelength]
                 if dHA < haTimes[0]:
                     if not haLimWarn:
-                        cmd.warn('text="dHA (%s) is below interpolation table; using limit"' % (dHA))
+                        cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (dHA, haTimes[0]))
                         haLimWarn = True
                     haTime = haTimes[0]
                 elif dHA > haTimes[-1]:
                     if not haLimWarn:
-                        cmd.warn('text="dHA (%s) is above interpolation table; using limit"' % (dHA))
+                        cmd.warn('text="dHA (%0.1f) is above interpolation table; using limit (%0.1f)"' % (dHA, haTimes[-1]))
                         haLimWarn = True
                     haTime = haTimes[-1]
                 else:
@@ -447,19 +453,19 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 # I'm now assuming 0...offset, but it should be offset1...offset2
                 xInterp = scipy.interpolate.interp1d(haTimes,
                                                      probe.haXOffsets[wavelength])
-                xCorr = gState.refractionCorrection * xInterp(haTime)
+                xOffset = gState.refractionCorrection * xInterp(haTime)
                 yInterp = scipy.interpolate.interp1d(haTimes,
                                                      probe.haYOffsets[wavelength])
-                yCorr = gState.refractionCorrection * yInterp(haTime)
+                yOffset = gState.refractionCorrection * yInterp(haTime)
         except Exception, e:
             guideCmd.diag('text="failed to calc offsets for %s: %s"' % (wavelength, e))
             pass
 
         guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
                                                                             gState.refractionCorrection,
-                                                                            haTime, xCorr, yCorr))
-        dRA += xCorr
-        dDec += yCorr
+                                                                            haTime, xOffset, yOffset))
+        dRA -= xOffset
+        dDec -= yOffset
         
         # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
         # The guiderRMS will be calculated around the new effective fiber centers

@@ -3,6 +3,7 @@ setupRequired(scipy)
 setupRequired(sopActor)
 setupRequired(actorcore)
 setupRequired(platelist)
+setupRequired(RO)
 setupOptional(sm)
 
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)
