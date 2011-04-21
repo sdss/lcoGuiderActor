@@ -427,10 +427,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #FIXME PH -- calc dAlt and dAz for guiding diagnostics,(output as part of fiber?)
         
         # Apply refraction correction
+        xOffset = 0.0
+        yOffset = 0.0
+        haTime = 0.0
         try:
-            xOffset = 0.0
-            yOffset = 0.0
-            haTime = 0.0
             if wavelength in probe.haOffsetTimes:
                 haTimes = probe.haOffsetTimes[wavelength]
                 if dHA < haTimes[0]:
@@ -454,7 +454,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                                                      probe.haYOffsets[wavelength])
                 yOffset = gState.refractionCorrection * yInterp(haTime)
         except Exception, e:
-            guideCmd.diag('text="failed to calc offsets for %s: %s"' % (wavelength, e))
+            guideCmd.diag('text="failed to calc refraction offsets for %s: %s"' % (wavelength, e))
             pass
 
         guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
