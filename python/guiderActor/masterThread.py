@@ -349,7 +349,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     HA = LST-RA     # The corrections are indexed by degrees, happily.
     dHA = HA - gState.design_ha
     haLimWarn = False
-    guideCmd.warn('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
+    guideCmd.diag('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
                   (LST, RA, HA, gState.design_ha,dHA))
 
     # Manually set for now. CPL
@@ -657,10 +657,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #frameInfo.guideAltRMS = guideAltRMS     
      
         if gState.guideAxes or gState.centerUp:
+            offsetsOK = True
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                      cmdStr="offset arc %f, %f" % \
                                          (-offsetRa, -offsetDec))
             if cmdVar.didFail:
+                offsetsOK = False
                 guideCmd.warn('text="Failed to issue offset"')
 
             if offsetRot: 
@@ -668,8 +670,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                                          cmdStr="offset guide %f, %f, %g" % \
                                              (0.0, 0.0, -offsetRot))
             if cmdVar.didFail:
+                offsetsOK = False
                 guideCmd.warn('text="Failed to issue offset in rotator"')
 
+            if gState.centerUp and offsetsOK:
+                gState.setGuideMode('axes', True)
+            
         if sm: 
             if plot:
                 try:
@@ -1168,9 +1174,12 @@ def main(actor, queues):
                     gState.centerUp.finish('')
                     gState.centerUp = False
 
-                    # Reset any PID I terms
+                    # Reset any PID I terms and smoothing filters
                     for key in gState.pid.keys():
                         gState.pid[key].reset()
+
+                    # Stuff has changed; tell STUI.
+                    queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=False))
                     
                 if not gState.guideCmd:    # something fatal happened in guideStep
                     continue
@@ -1394,7 +1403,6 @@ def main(actor, queues):
                         gprobeBits[k] = f
                     cmd.respond("gprobeBits=%s" % ", ".join(gprobeBits[1:]))
                     
-
                 cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 cmd.respond("expTime=%g" % (gState.expTime))
                 cmd.respond("scales=%g, %g, %g, %g" % (gState.plugPlateScale,
@@ -1405,7 +1413,10 @@ def main(actor, queues):
                                                            gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
                                                            gState.pid[w].Imax, gState.pid[w].nfilt))
                 cmd.diag('text="guideCmd=%s"' % (qstr(gState.guideCmd)))
-                cmd.warn('refractionCorrection=%0.1f' % (gState.refractionCorrection))
+                if gState.refractionCorrection != 0.0:
+                    cmd.warn('refractionCorrection=%0.1f' % (gState.refractionCorrection))
+                else:
+                    cmd.respond('refractionCorrection=%0.1f' % (gState.refractionCorrection))
                 cmd.diag('text="design_ha=%0.1f"' % (gState.design_ha))
                 
                 if msg.finish:
