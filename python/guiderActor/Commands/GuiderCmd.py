@@ -402,17 +402,11 @@ that isn't actually mounted (unless you specify force)
 
         # Add in the refraction functions from plateGeomCoeffs
         #
-        # I don't know how to get numeric pointing IDs
-        if pointing == 'A':
-            pointingID = 1
-        elif pointing == 'B':
-            pointingID = 2
-        else:
-            cmd.warn('text="Unknown pointing name %s, trying pointing #1"' % (pointing))
-            pointingID = 1
-
+        # I'm not sure how to get numeric pointing IDs, but it turns out that
+        # shared plates will only ever have one pointing.
         pointingID = 1
-        cmd.warn('text="HACK for tonight: forcing pointingID %d for pointing %s"' % (pointingID, pointing))
+        if pointing != 'A':
+            cmd.warn('text="pointing name is %s, but we are using pointing #1. This is probably OK."' % (pointing))
             
         self.addGuideOffsets(cmd, plate, pointingID, gprobes)
 
@@ -431,17 +425,16 @@ that isn't actually mounted (unless you specify force)
         
         # Get .par file name in the platelist product.
         # plates/0046XX/004671/plateGuideOffsets-004671-p1-l16600.par
-        for wavelength in (5400, 16600):
+        for wavelength in (16600,):
             path = os.path.join(os.environ['PLATELIST_DIR'],
                                 'plates',
                                 '%04dXX' % (int(plate/100)),
                                 '%06d' % (plate),
                                 'plateGuideOffsets-%06d-p%d-l%05d.par' % (plate, pointingID, wavelength))
-            cmd.inform('text="loading guider coeffs for %d from %s"' % (wavelength, path))
-
             try:
                 ygo = YPF.YPF(path)
                 guideOffsets = ygo.structs['HAOFFSETS'].asObjlist()
+                cmd.inform('text="loaded guider coeffs for %dA from %s"' % (wavelength, path))
             except Exception, e:
                 cmd.warn('text="failed to read plateGuideOffsets file %s: %s"' % (path, e))
                 continue
