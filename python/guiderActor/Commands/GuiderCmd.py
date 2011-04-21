@@ -431,6 +431,10 @@ that isn't actually mounted (unless you specify force)
                                 '%04dXX' % (int(plate/100)),
                                 '%06d' % (plate),
                                 'plateGuideOffsets-%06d-p%d-l%05d.par' % (plate, pointingID, wavelength))
+            if not os.path.exists(path):
+                cmd.warn('text="no refraction corrections for plate %d at %dA"' % (plate, wavelength))
+                continue
+
             try:
                 ygo = YPF.YPF(path)
                 guideOffsets = ygo.structs['HAOFFSETS'].asObjlist()
@@ -438,16 +442,16 @@ that isn't actually mounted (unless you specify force)
             except Exception, e:
                 cmd.warn('text="failed to read plateGuideOffsets file %s: %s"' % (path, e))
                 continue
-            
+
             for gpID, gp in gprobes.items():
                 if gp.fiber_type == 'TRITIUM':
                     next
-                    
+
                 offset = [o for o in guideOffsets if o.holetype == "GUIDE" and o.iguide == gpID]
                 if len(offset) != 1:
                     cmd.warn('text="no or too many (%d) guideOffsets for probe %s"' % (len(offset), gpID))
                     continue
-                
+
                 gp.haOffsetTimes[wavelength] = offset[0].delha
                 gp.haXOffsets[wavelength] = offset[0].xfoff
                 gp.haYOffsets[wavelength] = offset[0].yfoff
