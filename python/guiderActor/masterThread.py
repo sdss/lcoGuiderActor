@@ -1249,6 +1249,7 @@ def main(actor, queues):
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.deleteAllGprobes()
+                gState.setRefractionCorrection(0.0)
 
                 gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
                 gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
