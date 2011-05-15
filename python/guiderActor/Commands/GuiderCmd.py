@@ -216,18 +216,17 @@ class GuiderCmd(object):
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.CENTERUP, cmd=cmd))
 
     def fk5InFiber(self, cmd):
-        """Have the TCC put a bright star down a giver probe"""
+        """Have the TCC put a bright star down a given probe"""
 
         actorState = guiderActor.myGlobals.actorState
         probe = cmd.cmd.keywords['probe'].values[0] if 'probe' in cmd.cmd.keywords else None
-
         expTime = cmd.cmd.keywords["time"].values[0] if 'time' in cmd.cmd.keywords else 0.1
-        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
 
-        # Turn off corrections.
+        # Force up an image-only guide loop
         for what in ["scale", "focus", "axes"]:
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enable=False))
-
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=True,
+                                                      expTime=expTime, force=force))
         if probe:
             cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
                                                 cmdStr="set ptErrProbe=%d" % (probe))
@@ -241,6 +240,9 @@ class GuiderCmd(object):
             cmd.fail("text=\"Failed to move to a bright star\"")
             return
 
+        probeId = actorState.models["mcp"].keyVarDict["ptErrProbe"]
+        cmd.finish("text='There should be a bright star in probe %s'" % (probeId))
+        
     def reprocessFile(self, cmd):
         """Reprocess a single file."""
 

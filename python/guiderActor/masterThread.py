@@ -656,7 +656,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #frameInfo.guideAzRMS = guideAzRMS
         #frameInfo.guideAltRMS = guideAltRMS     
      
-        if gState.guideAxes or gState.centerUp:
+        if gState.guideAxes:
             offsetsOK = True
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                      cmdStr="offset arc %f, %f" % \
@@ -673,8 +673,21 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 offsetsOK = False
                 guideCmd.warn('text="Failed to issue offset in rotator"')
 
-            if gState.centerUp and offsetsOK:
-                gState.setGuideMode('axes', True)
+        elif gState.centerUp:
+            # If we are in the middle of an fk5InFiber (or other TCC track/pterr),
+            # adjust the calibration offsets
+            doCalibOffset = actorState.models["tcc"].keyVarDict["objName"][0] == "position reference star":
+            if doCalibOffset:
+                guideCmd.warn('text="using arc offsets at a pointing star"')
+                
+            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                     cmdStr="offset arc %f, %f" % \
+                                     (-offsetRa, -offsetDec))
+            if cmdVar.didFail:
+                guideCmd.warn('text="Failed to issue centering offset"')
+            else:
+                if not doCalibOffset:
+                    gState.setGuideMode('axes', True)
             
         if sm: 
             if plot:
