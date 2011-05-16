@@ -1029,7 +1029,6 @@ def loadAllProbes(cmd, gState):
         gState.allProbes = keep
     except Exception, e:
         cmd.warn('text=%s' % (qstr("could not load all probe info: %s" % (e))))
-    import pdb; pdb.set_trace()
     
 def loadTccBlock(cmd, actorState, gState):
     try:
@@ -1389,12 +1388,14 @@ def main(actor, queues):
                     srcX, srcY = 0.0, 0.0
 
                 dx = (dstX - srcX) / gState.plugPlateScale
-                dy = -(dstY - srcY) / gState.plugPlateScale
+                dy = (dstY - srcY) / gState.plugPlateScale
 
-                msg.cmd.warn('text="offsetting by dy, dx = %g,%g"' % (dy, dx))
+                msg.cmd.warn('text="offsetting by dy, dx = %g,%g (%g, %g,%g"' %
+                             (dy, dx, gState.plugPlateScale,
+                              (dstY - srcY), (dstX - srcX)))
                 if True:
                     cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=msg.cmd,
-                                                        cmdStr="offset bore %g,%g /pabs" % (dy, dx))
+                                                        cmdStr="offset bore %g,%g /pabs/computed" % (dx, dy))
                     if cmdVar.didFail:
                         if guidingIsOK(msg.cmd, actorState):
                             msg.cmd.warn('text="Failed to offset, but axes are bypassed"')
