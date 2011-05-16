@@ -230,7 +230,7 @@ class GuiderCmd(object):
         for what in ["scale", "focus", "axes"]:
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enable=False))
         actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=True,
-                                                      expTime=expTime, force=force))
+                                                      expTime=expTime, force=True))
         if probe:
             cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
                                                 cmdStr="set ptErrProbe=%d" % (probe))
@@ -244,8 +244,8 @@ class GuiderCmd(object):
             cmd.fail("text=\"Failed to move to a bright star\"")
             return
 
-        probeId = actorState.models["mcp"].keyVarDict["ptErrProbe"]
-        cmd.finish("text='There should be a bright star in probe %s'" % (probeId))
+        #probeId = actorState.models["mcp"].keyVarDict["ptErrProbe"]
+        cmd.finish("text='There should be a bright star in probe'")
 
     def loadAllProbes(self, cmd):
         pass
