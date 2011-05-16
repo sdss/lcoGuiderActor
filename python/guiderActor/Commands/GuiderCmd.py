@@ -61,6 +61,9 @@ class GuiderCmd(object):
                                         keys.Key("plate", types.Int(), help="A plugplate ID"),
                                         keys.Key("fibers", types.Int()*(1,None), help="A list of fibers"),
                                         keys.Key("probe", types.Int(), help="A probe ID, 1-indexed"),
+                                        keys.Key("gprobe", types.Int(), help="A probe ID, 1-indexed"),
+                                        keys.Key("fromProbe", types.Int(), help="A probe ID, 1-indexed"),
+                                        keys.Key("fromGprobe", types.Int(), help="A probe ID, 1-indexed"),
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
                                         keys.Key("time", types.Float(), help="Exposure time for guider"),
@@ -112,6 +115,7 @@ class GuiderCmd(object):
             ('status', "[geek]", self.status),
             ('centerUp', "", self.centerUp),
             ('fk5InFiber', "[<probe>] [<time>]", self.fk5InFiber),
+            ('starInFiber', "[<probe>] [<gprobe>] [<fromProbe>] [<fromGprobe>]", self.starInFiber),
             ("setScale", "<delta>|<scale>", self.setScale),
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
             ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter),
@@ -242,7 +246,30 @@ class GuiderCmd(object):
 
         probeId = actorState.models["mcp"].keyVarDict["ptErrProbe"]
         cmd.finish("text='There should be a bright star in probe %s'" % (probeId))
+
+    def loadAllProbes(self, cmd):
+        pass
+    
+    def starInFiber(self, cmd):
+        """ Put a star down a given probe """
+
+        actorState = guiderActor.myGlobals.actorState
+        probe = cmd.cmd.keywords['probe'].values[0] if 'probe' in cmd.cmd.keywords else None
+        gprobe = cmd.cmd.keywords['gprobe'].values[0] if 'gprobe' in cmd.cmd.keywords else None
+        if (probe == None and gprobe == None) or (probe != None and gprobe != None) :
+            cmd.fail('text="exactly one destination probe must specified"')
+            return
         
+        fromProbe = cmd.cmd.keywords["fromProbe"].values[0] if 'fromProbe' in cmd.cmd.keywords else None
+        fromGprobe = cmd.cmd.keywords["fromGprobe"].values[0] if 'fromGprobe' in cmd.cmd.keywords else None
+        if (fromProbe != None and fromGprobe != None) :
+            cmd.fail('text="no more than one source probe can be specified"')
+            return
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STAR_IN_FIBER, cmd=cmd,
+                                                                probe=probe, gprobe=gprobe,
+                                                                fromProbe=fromProbe, fromGprobe=fromGprobe))
+
     def reprocessFile(self, cmd):
         """Reprocess a single file."""
 

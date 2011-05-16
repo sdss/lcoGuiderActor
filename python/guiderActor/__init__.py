@@ -42,6 +42,7 @@ class Msg(object):
     class DECENTER(): pass
     class CENTERUP(): pass
     class SET_REFRACTION(): pass
+    class STAR_IN_FIBER(): pass
     
     def __init__(self, type, cmd, **data):
         self.type = type
