@@ -9,6 +9,7 @@ import loadGprobes
 import guiderActor.myGlobals
 from opscore.utility.qstr import qstr
 import opscore.utility.tback as tback
+import opscore.utility.YPF as YPF
 import RO
 
 import PID
@@ -676,7 +677,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         elif gState.centerUp:
             # If we are in the middle of an fk5InFiber (or other TCC track/pterr),
             # adjust the calibration offsets
-            doCalibOffset = actorState.models["tcc"].keyVarDict["objName"][0] == "position reference star":
+            doCalibOffset = actorState.models["tcc"].keyVarDict["objName"][0] == "position reference star"
             if doCalibOffset:
                 guideCmd.warn('text="using arc offsets at a pointing star"')
                 
@@ -1001,6 +1002,35 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             #
     GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
 
+def loadAllProbes(cmd, gState):
+    gState.allProbes = None
+    try:
+        path = os.path.join(os.environ['PLATEDB_DIR'],
+                            'bin', 'catPlPlugMapM')
+        cmd1 = "%s -c %s -m %s -p %s -f %s %s" % (path,
+                                                  gState.cartridge, gState.fscanMJD,
+                                                  gState.pointing, gState.fscanID,
+                                                  gState.plate)
+        try:
+            cmd.diag('text=%s' % (qstr('running: %s' % (cmd1))))
+            ret = subprocess.Popen(cmd1.split(), stdout=subprocess.PIPE)
+            plugmapBlob, errText = ret.communicate()
+        except subprocess.CalledProcessError, e:
+            cmd.warn('text="failed to load plugmap file: %s"' % (e))
+            return
+
+        ypm = YPF.YPF(fromString=plugmapBlob)
+        pm = ypm.structs['PLUGMAPOBJ'].asArray()
+
+
+        keep = pm[numpy.where(((pm.holeType == "GUIDE") & (pm.objType == "NA"))
+                              | (pm.holeType == "OBJECT"))]
+        cmd.diag('text="kept %d probes"' % (len(keep)))
+        gState.allProbes = keep
+    except Exception, e:
+        cmd.warn('text=%s' % (qstr("could not load all probe info: %s" % (e))))
+    import pdb; pdb.set_trace()
+    
 def loadTccBlock(cmd, actorState, gState):
     try:
         cmd1 = "catPlPlugMapM -c %s -m %s -p %s -f %s %s" % (gState.cartridge, gState.fscanMJD,
@@ -1295,6 +1325,7 @@ def main(actor, queues):
 					
                 # Build and install an instrument block for this cartridge info
                 loadTccBlock(msg.cmd, actorState, gState)
+                loadAllProbes(msg.cmd, gState)
                 
                 #
                 # Report the cartridge status
@@ -1313,6 +1344,67 @@ def main(actor, queues):
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
+            elif msg.type == Msg.STAR_IN_FIBER:
+                if gState.allProbes == None:
+                    msg.cmd.fail('text="the probes for this plate are not available"')
+                    continue
+
+                w = None
+                if msg.probe:
+                    w = numpy.where((gState.allProbes.fiberId == msg.probe) &
+                                    (gState.allProbes.holeType == 'OBJECT'))
+                    w = w[0]
+                elif msg.gprobe:
+                    w = numpy.where((gState.allProbes.fiberId == msg.gprobe) &
+                                    (gState.allProbes.holeType == 'GUIDE'))
+                    w = w[0]
+                if w == None or len(w) != 1:
+                    msg.cmd.fail('text="no unique destination probe was specified"')
+                    continue
+                dstProbe = gState.allProbes[w]
+                dstX = dstProbe.xFocal
+                dstY = dstProbe.yFocal
+                
+                w = None
+                if msg.fromProbe:
+                    w = numpy.where((gState.allProbes.fiberId == msg.fromProbe) &
+                                    (gState.allProbes.holeType == 'OBJECT'))
+                    w = w[0]
+                    if len(w) != 1:
+                        msg.cmd.fail('text="no unique source probe was specified"')
+                        continue
+                elif msg.fromGprobe:
+                    w = numpy.where((gState.allProbes.fiberId == msg.fromGprobe) &
+                                    (gState.allProbes.holeType == 'GUIDE'))
+                    w = w[0]
+                    if len(w) != 1:
+                        msg.cmd.fail('text="no unique source probe was specified"')
+                        continue
+                if w != None:
+                    srcProbe = gState.allProbes[w]
+                    srcX = srcProbe.xFocal
+                    srcY = srcProbe.yFocal
+                else:
+                    srcProbe = None
+                    srcX, srcY = 0.0, 0.0
+
+                dx = (dstX - srcX) / gState.plugPlateScale
+                dy = -(dstY - srcY) / gState.plugPlateScale
+
+                msg.cmd.warn('text="offsetting by dy, dx = %g,%g"' % (dy, dx))
+                if True:
+                    cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=msg.cmd,
+                                                        cmdStr="offset bore %g,%g /pabs" % (dy, dx))
+                    if cmdVar.didFail:
+                        if guidingIsOK(msg.cmd, actorState):
+                            msg.cmd.warn('text="Failed to offset, but axes are bypassed"')
+                        else:
+                            gState.inMotion = False
+                            msg.cmd.fail('text="Failed to offset"')
+                            continue
+                    
+                msg.cmd.finish()
+                
             elif msg.type == Msg.SET_GUIDE_MODE:
                 gState.setGuideMode(msg.what, msg.enable)
                 #
@@ -1323,7 +1415,7 @@ def main(actor, queues):
 
             elif msg.type == Msg.ENABLE_FIBER:
                 if gState.plate < 0:
-                    msg.cmd.error("test=\"no plate is loaded\"")
+                    msg.cmd.fail("test=\"no plate is loaded\"")
                     continue
                 
                 gState.setGprobeState(msg.fiber, enable=msg.enable)
