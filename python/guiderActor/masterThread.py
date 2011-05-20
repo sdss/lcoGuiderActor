@@ -1350,7 +1350,8 @@ def main(actor, queues):
 
                 w = None
                 if msg.probe:
-                    w = numpy.where((gState.allProbes.fiberId == msg.probe) &
+                    w = numpy.where((gState.allProbes.spectrographId == 2) &
+                                    (gState.allProbes.fiberId == msg.probe) &
                                     (gState.allProbes.holeType == 'OBJECT'))
                     w = w[0]
                 elif msg.gprobe:
@@ -1366,7 +1367,8 @@ def main(actor, queues):
                 
                 w = None
                 if msg.fromProbe:
-                    w = numpy.where((gState.allProbes.fiberId == msg.fromProbe) &
+                    w = numpy.where((gState.allProbes.spectrographId == 2) &
+                                    (gState.allProbes.fiberId == msg.fromProbe) &
                                     (gState.allProbes.holeType == 'OBJECT'))
                     w = w[0]
                     if len(w) != 1:
