@@ -1392,6 +1392,16 @@ def main(actor, queues):
                 dx = (dstX - srcX) / gState.plugPlateScale
                 dy = (dstY - srcY) / gState.plugPlateScale
 
+                # OK. In all cases disable corrections.
+                # For the gprobe case turn on the guide loop.
+                for what in ('axes', 'focus', 'scale'):
+                    gState.setGuideMode(what, False))
+                if msg.gprobe:
+                    actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=msg.cmd,
+                                                                  start=True, force=True))
+                if msg.cmd:
+                    queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=False))
+
                 msg.cmd.warn('text="offsetting by dy, dx = %g,%g (%g, %g,%g"' %
                              (dy, dx, gState.plugPlateScale,
                               (dstY - srcY), (dstX - srcX)))
