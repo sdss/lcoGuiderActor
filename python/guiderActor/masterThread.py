@@ -1395,7 +1395,7 @@ def main(actor, queues):
                 # OK. In all cases disable corrections.
                 # For the gprobe case turn on the guide loop.
                 for what in ('axes', 'focus', 'scale'):
-                    gState.setGuideMode(what, False))
+                    gState.setGuideMode(what, False)
                 if msg.gprobe:
                     actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=msg.cmd,
                                                                   start=True, force=True))
