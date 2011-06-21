@@ -64,9 +64,13 @@ def writeGProbe(cartInfo, probeInfo):
 def cvtPlugMap(plugFile):
     """ Write out an entire GCView block for the given plugfile. """
 
-    ypm = YPF.YPF(plugFile)
-    pm = ypm.structs['PLUGMAPOBJ'].asArray()
-
+    try:
+        ypm = YPF.YPF(plugFile)
+        pm = ypm.structs['PLUGMAPOBJ'].asArray()
+    except Exception, e:
+        sys.stderr.write("failed to read plugFile %s: %s\n" % (plugFile, e))
+        return
+    
     gfibers = pm[numpy.where((pm.holeType == "GUIDE") & (pm.objType == "NA"))]
 
     cartId = ypm.vars['cartridgeId'].value
