@@ -67,7 +67,7 @@ class GuiderState(object):
         self.setGuideMode("axes")
         self.setGuideMode("focus")
         self.setGuideMode("scale")
-        self.setRefractionCorrection(0.0)
+        self.setRefractionBalance(0.0)
         
         self.pid = {}               # PIDs for various axes
         for what in ["raDec", "rot", "scale", "focus"]:
@@ -109,8 +109,8 @@ class GuiderState(object):
         else:
             raise RuntimeError, ("Unknown guide mode %s" % what)
 
-    def setRefractionCorrection(self, value=0.0):
-        self.refractionCorrection = value
+    def setRefractionBalance(self, value=0.0):
+        self.refractionBalance = value
         
     def setCmd(self, cmd=None):
         self.guideCmd = cmd
@@ -227,7 +227,7 @@ def setupGstate(cartFile, plateFile, cartridgeId):
     gState.setGuideMode('axes', False)
     gState.setGuideMode('focus', False)
     gState.setGuideMode('scale', False)
-    gState.setRefractionCorrection(0.0)
+    gState.setRefractionBalance(0.0)
     gState.gprobes = loadGprobes.getGprobes(cartFile, plateFile, cartridgeId)
     gState.cartridge = cartridgeId
     cmd = FakeCommand()
@@ -450,16 +450,16 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 # I'm now assuming 0...offset, but it should be offset1...offset2
                 xInterp = scipy.interpolate.interp1d(haTimes,
                                                      probe.haXOffsets[wavelength])
-                xOffset = gState.refractionCorrection * xInterp(haTime)
+                xOffset = gState.refractionBalance * xInterp(haTime)
                 yInterp = scipy.interpolate.interp1d(haTimes,
                                                      probe.haYOffsets[wavelength])
-                yOffset = gState.refractionCorrection * yInterp(haTime)
+                yOffset = gState.refractionBalance * yInterp(haTime)
         except Exception, e:
             guideCmd.diag('text="failed to calc refraction offsets for %s: %s"' % (wavelength, e))
             pass
 
         guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
-                                                                            gState.refractionCorrection,
+                                                                            gState.refractionBalance,
                                                                             haTime, xOffset, yOffset))
         dRA -= xOffset
         dDec -= yOffset
@@ -1300,7 +1300,7 @@ def main(actor, queues):
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.deleteAllGprobes()
-                gState.setRefractionCorrection(0.0)
+                gState.setRefractionBalance(0.0)
 
                 gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
                 gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
@@ -1338,7 +1338,7 @@ def main(actor, queues):
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
             elif msg.type == Msg.SET_REFRACTION:
-                gState.setRefractionCorrection(msg.value)
+                gState.setRefractionBalance(msg.value)
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
@@ -1531,10 +1531,10 @@ def main(actor, queues):
                                                            gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
                                                            gState.pid[w].Imax, gState.pid[w].nfilt))
                 cmd.diag('text="guideCmd=%s"' % (qstr(gState.guideCmd)))
-                if gState.refractionCorrection != 0.0:
-                    cmd.warn('refractionCorrection=%0.1f' % (gState.refractionCorrection))
+                if gState.refractionBalance != 0.0:
+                    cmd.warn('refractionBalance=%0.1f' % (gState.refractionBalance))
                 else:
-                    cmd.respond('refractionCorrection=%0.1f' % (gState.refractionCorrection))
+                    cmd.respond('refractionBalance=%0.1f' % (gState.refractionBalance))
                 cmd.diag('text="design_ha=%0.1f"' % (gState.design_ha))
                 
                 if msg.finish:
