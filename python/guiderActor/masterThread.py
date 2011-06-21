@@ -460,7 +460,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
         guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
                                                                             gState.refractionBalance,
-                                                                            haTime, xOffset, yOffset))
+                                                                            haTime,
+                                                                            xOffset*arcsecPerMM,
+                                                                            yOffset*arcsecPerMM))
         dRA -= xOffset
         dDec -= yOffset
         
@@ -469,8 +471,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
       
         if gState.decenter: 
             #convert decenter offset to mm on guider
-            frameInfo.decenterRA  = gState.decenterRA*gState.plugPlateScale/3600
-            frameInfo.decenterDec = gState.decenterDec*gState.plugPlateScale/3600
+            frameInfo.decenterRA  = gState.decenterRA/arcsecPerMM
+            frameInfo.decenterDec = gState.decenterDec/arcsecPerMM
             frameInfo.decenterRot = gState.decenterRot            
             # apply decenter offset so that telescope moves (not the star)
             dRA  += frameInfo.decenterRA
@@ -510,7 +512,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         refmag = numpy.nan
         guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
             frameNo, fiber.fiberid, probe.flags,
-            3600.0*(fiber.dRA/gState.plugPlateScale), 3600.0*(fiber.dDec/gState.plugPlateScale),
+            fiber.dRA*arcsecPerMM, fiber.dDec*arcsecPerMM,
             fiber.fwhm, probe.focusOffset,
             fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
                 
