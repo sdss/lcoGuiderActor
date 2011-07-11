@@ -1327,7 +1327,10 @@ def main(actor, queues):
                 # Build and install an instrument block for this cartridge info
                 loadTccBlock(msg.cmd, actorState, gState)
                 loadAllProbes(msg.cmd, gState)
-                
+
+                if gState.cartridge > 0 and gState.cartridge < 10:
+                    gState.setRefractionBalance(1.0)
+
                 #
                 # Report the cartridge status
                 #
