@@ -274,19 +274,19 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     flatcart = h.get('FLATCART', None)
     darkfile = h.get('DARKFILE', None)
     if not flatfile:
-        guideCmd.fail("text=%s" % qstr("No flat image available"))
+        guideCmd.fail('guideState="failed"; text=%s' % qstr("No flat image available"))
         gState.setCmd(None)
         return
     
     if not darkfile:
-        guideCmd.fail("text=%s" % qstr("No dark image available"))
+        guideCmd.fail('guideState="failed"; text=%s' % qstr("No dark image available"))
         gState.setCmd(None)
         return
 
     if flatcart != gState.cartridge:
         if False:
-            guideCmd.fail("text=%s" % qstr("Guider flat is for cartridge %d but %d is loaded" % (
-                flatcart, gState.cartridge)))
+            guideCmd.fail('guideState="failed"; text=%s' % qstr("Guider flat is for cartridge %d but %d is loaded" % (
+                            flatcart, gState.cartridge)))
             gState.setCmd(None)
             return
         else:
@@ -300,7 +300,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         fibers = GI.findFibers(gState.gprobes)
         guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
     except Exception, e:
-        guideCmd.fail("text=%s" % qstr("Error in processing guide images: %s" % e))
+        guideCmd.fail('guideState="failed"; text=%s' % qstr("Error in processing guide images: %s" % e))
         gState.setCmd(None)
         tback.tback("GuideTest", e)
         return
@@ -1105,6 +1105,11 @@ def main(actor, queues):
 
             elif msg.type == Msg.START_GUIDING:
                 if not msg.start:
+                    try:
+                        success = msg.success
+                    except AttributeError:
+                        success = True
+                        
                     if msg.start is None:
                         queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
                         continue
@@ -1113,11 +1118,23 @@ def main(actor, queues):
                         msg.cmd.fail('text="The guider is already off"')
                         continue
 
-                    msg.cmd.respond("guideState=stopping")
-                    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
-                    gState.guideCmd.finish("guideState=off")
-                    gState.setCmd(None)
-                    msg.cmd.finish()
+                    if success:
+                        msg.cmd.respond("guideState=stopping")
+                        queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
+                        if gState.guideCmd != msg.cmd:
+                            msg.cmd.finish()
+
+                        gState.guideCmd.finish("guideState=off")
+                        gState.setCmd(None)
+
+                    else:
+                        queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
+                        msg.cmd.respond("guideState=failed")
+                        if gState.guideCmd != msg.cmd:
+                            msg.cmd.fail()
+
+                        gState.guideCmd.fail("guideState=failed")
+                        gState.setCmd(None)
                     continue
 
                 try:
@@ -1208,7 +1225,7 @@ def main(actor, queues):
 
                 if not msg.success:
                     gState.inMotion = False
-                    queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False))
+                    queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False, success=False))
                     continue
 
                 guideStep(actor, queues, msg.cmd, msg.filename, oneExposure,
@@ -1287,18 +1304,24 @@ def main(actor, queues):
                 cmd.inform("text=GuiderImageAnalysis.findFibers()...")
                 try:
                     fibers = GI.findFibers(gState.gprobes)
+                except:
+                    tback.tback("findFibers", e)
+                    cmd.fail('text="findFibers failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
+                    continue
+                
+                try:
                     flatoutname = GI.getProcessedOutputName(msg.filename) 
                     dirname, filename = os.path.split(flatoutname)
                     cmd.inform('file=%s/,%s' % (dirname, filename))
                     cmd.finish('text="flat image processing done"')
                 except Exception, e:
-                    tback.tback("findFibers", e)
-                    cmd.fail('text="findFibers failed: %s"' % (e))
+                    tback.tback("findFibers2", e)
+                    cmd.fail('text="failed to save flat: %s"' % (e))
 
                 continue
                     
             elif msg.type == Msg.FAIL:
-                msg.cmd.fail('text="%s"' % msg.text);
+                msg.cmd.fail('guideState="failed"; text="%s"' % msg.text);
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.deleteAllGprobes()

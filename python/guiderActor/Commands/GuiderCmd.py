@@ -504,17 +504,13 @@ that isn't actually mounted (unless you specify force)
 
         actorState = myGlobals.actorState
 
-        if actorState.restartCmd:
-            actorState.restartCmd.finish("text=\"Nunc dimittis servum tuum Domine\"")
-            actorState.restartCmd = None
+        cmd.inform('text="Restarting threads or at least _trying to_)"')
 
-        actorState.actor.startThreads(actorState, cmd, restart=True, restartQueues=True)
-        #
-        # We can't finish this command now as the threads may not have died yet,
-        # but we can remember to clean up _next_ time we restart
-        #
-        cmd.inform("text=\"Restarting threads\"")
-        actorState.restartCmd = cmd
+        # We can't finish this command after all the threads have died, 'cuz we might not get there.
+        actorState.actor.startThreads(actorState, actorState.actor.bcast, restart=True, restartQueues=True)
+
+        cmd.finish("text=\"Nunc dimittis servum tuum Domine\"")
+
 
     def correctionImpl(self, cmd, what):
         """Turn guiding something on or off"""
