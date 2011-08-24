@@ -1039,13 +1039,13 @@ def loadTccBlock(cmd, actorState, gState):
                                                              gState.plate)
         scratchFile = '/tmp/v_ca1_%04d.dat' % (gState.plate)
         cmd1 += " | %s /dev/stdin > %s" % (os.path.join(os.environ['GUIDERACTOR_DIR'],
-                                                        'python/guiderActor',
+                                                        'bin',
                                                         'convertPlPlugMap.py'),
                                            scratchFile)
         cmd.diag('text=%s' % (qstr('running: %s' % (cmd1))))
         
         cmd2 = " %s %s" % (os.path.join(os.environ['GUIDERACTOR_DIR'],
-                                        'python/guiderActor',
+                                        'bin',
                                         'xferBlock.py'),
                            scratchFile)
         cmd.diag('text=%s' % (qstr('running: %s' % (cmd2))))

@@ -1,5 +1,7 @@
 * text=auto !eol
+bin/convertPlPlugMap.py -text
 bin/guiderToDs9 -text
+bin/xferBlock.py -text
 doc/ProcessedGuiderImages.html -text
 etc/gcamFiberInfo.par -text
 etc/guider.cfg -text
@@ -10,7 +12,6 @@ python/guiderActor/Commands/TCCCmd.py -text
 python/guiderActor/Commands/__init__.py -text
 python/guiderActor/PID.py -text
 python/guiderActor/__init__.py -text
-python/guiderActor/convertPlPlugMap.py -text
 python/guiderActor/gcameraThread.py -text
 python/guiderActor/gimg/__init__.py -text
 python/guiderActor/gimg/findsinglestar.py -text
@@ -25,7 +26,6 @@ python/guiderActor/masterThread.py -text
 python/guiderActor/myGlobals.py -text
 python/guiderActor/test_flat.py -text
 python/guiderActor/tests.py -text
-python/guiderActor/xferBlock.py -text
 /setup.py -text
 src/Makefile -text
 src/gimg/Makefile -text
