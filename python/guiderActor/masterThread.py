@@ -796,21 +796,22 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     # So for now defer focus changes if we apply a scale change.
     blockFocusMove = False
         
-    if gState.guideScale and abs(offsetScale) > 1e-7:
-        # Clip to the motion we think is too big to apply at once.
-        offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
-        offsetScale *= curScale
-        # cmd.warn('text="setting scale=%0.8f"' % (offsetScale))
-
-        # Last chance to bailout.
-        if offsetScale < 0.9995 or offsetScale > 1.0005:
-            cmd.warn('text="NOT setting scarily large scale=%0.8f"' % (offsetScale))
+    if gState.guideScale:
+        if abs(offsetScale) < 1e-6:
+            cmd.warn('text="skipping small scale change=%0.8f"' % (offsetScale))
         else:
-            # blockFocusMove = True
-            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                     cmdStr="set scale=%.9f" % (offsetScale))
-            if cmdVar.didFail:
-                guideCmd.warn('text="Failed to issue scale change"')
+            # Clip to the motion we think is too big to apply at once.
+            offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
+
+            # Last chance to bailout.
+            if offsetScale < 0.9995 or offsetScale > 1.0005:
+                cmd.warn('text="NOT setting scarily large scale=%0.8f"' % (offsetScale))
+            else:
+                # blockFocusMove = True
+                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                         cmdStr="set scale=%.9f /mult" % (offsetScale))
+                if cmdVar.didFail:
+                    guideCmd.warn('text="Failed to issue scale change"')
 
     #Evaluate RMS on fit over fibers used in fits here
     #FIXME--PH not calculated yet
