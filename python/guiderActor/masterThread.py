@@ -560,7 +560,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
     nStar = A[0, 0]
     if nStar == 0 or gState.inMotion:
-        guideCmd.warn('text="No stars are available for guiding or guiding is deferred"')
+        if nStar == 0:
+            guideCmd.warn('text="No stars are available for guiding."')
+        else:
+            guideCmd.warn('text="Telescope moved during exposure -- skipping this image."')
 
         GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
 
@@ -798,7 +801,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         
     if gState.guideScale:
         if abs(offsetScale) < 1e-6:
-            cmd.warn('text="skipping small scale change=%0.8f"' % (offsetScale))
+            cmd.debug('text="skipping small scale change=%0.8f"' % (offsetScale))
         else:
             # Clip to the motion we think is too big to apply at once.
             offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
