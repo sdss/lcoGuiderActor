@@ -801,7 +801,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         
     if gState.guideScale:
         if abs(offsetScale) < 1e-6:
-            cmd.debug('text="skipping small scale change=%0.8f"' % (offsetScale))
+            cmd.diag('text="skipping small scale change=%0.8f"' % (offsetScale))
         else:
             # Clip to the motion we think is too big to apply at once.
             offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
