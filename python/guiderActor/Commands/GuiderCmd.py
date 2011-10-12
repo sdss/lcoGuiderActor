@@ -362,7 +362,9 @@ that isn't actually mounted (unless you specify force)
         plate = cmdVar.getLastKeyVarData(pointingInfoKey)[0]
         boresight_ra = cmdVar.getLastKeyVarData(pointingInfoKey)[3]
         boresight_dec = cmdVar.getLastKeyVarData(pointingInfoKey)[4]
-        design_ha = cmdVar.getLastKeyVarData(pointingInfoKey)[6]
+        design_ha = cmdVar.getLastKeyVarData(pointingInfoKey)[5]
+        if design_ha < 0:
+            design_ha += 360
         #
         # Lookup the valid gprobes
         #

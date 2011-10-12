@@ -27,6 +27,17 @@ except ImportError:
     print "Failed to import SM"
     sm = None
 
+def adiff(a1, a2):
+    """ return a1-a2, all in degrees. """
+
+    dd = a1-a2
+    if dd >= 180.0:
+        dd -= 360.0
+    elif dd <= -180.0:
+        dd += 360.0
+
+    return dd
+
 class GuiderState(object):
     """Save the state of the guider"""
 
@@ -347,8 +358,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     
     RAkey = actorState.models["tcc"].keyVarDict["objNetPos"][0]
     RA = RAkey.getPos()
-    HA = LST-RA     # The corrections are indexed by degrees, happily.
-    dHA = HA - gState.design_ha
+    HA = adiff(LST, RA)     # The corrections are indexed by degrees, happily.
+    dHA = adiff(HA, gState.design_ha)
     haLimWarn = False
     guideCmd.diag('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
                   (LST, RA, HA, gState.design_ha,dHA))
