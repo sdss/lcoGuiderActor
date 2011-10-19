@@ -878,15 +878,17 @@ class GuiderImageAnalysis(object):
 		dx = mean([dx for fi,probei,dx,dy in fmatch])
 		dy = mean([dy for fi,probei,dx,dy in fmatch])
 		self.inform('Matched %i fibers, with dx,dy = (%g,%g)' % (len(fmap), dx, dy))
-		#import pdb; pdb.set_trace()
-
-		# Filter out those with no match...
-		fibers = [f for i,f in enumerate(fibers) if i in fmap]
+		# import pdb; pdb.set_trace()
 
 		# Record the fiber id, and remember the gprobe...
 		for i,f in enumerate(fibers):
+			if i not in fmap:
+				self.debug('probe %d (%d) not matched; skipping...' % (i, f.fiberid))
+				continue
 			f.fiberid = fmap[i]
 			f.gprobe = gprobes[f.fiberid]
+		# Filter out those with no match...
+		fibers = [f for i,f in enumerate(fibers) if i in fmap and f.fiberid >= 0]
 
 		# Reorder fibers by fiberid.
 		I = argsort(array([f.fiberid for f in fibers]))
