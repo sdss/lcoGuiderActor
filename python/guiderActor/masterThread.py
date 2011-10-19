@@ -1320,7 +1320,7 @@ def main(actor, queues):
                 cmd.inform("text=GuiderImageAnalysis.findFibers()...")
                 try:
                     fibers = GI.findFibers(gState.gprobes)
-                except:
+                except Exception, e:
                     tback.tback("findFibers", e)
                     cmd.fail('text="findFibers failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
                     continue
