@@ -19,7 +19,6 @@ import guiderActor.myGlobals
 #
 # Import sdss3logging before logging if you want to use it
 #
-#if False:
 import opscore.utility.sdss3logging as sdss3logging
 import logging
 
