@@ -1155,9 +1155,11 @@ def main(actor, queues):
 
                 try:
                     expTime = msg.expTime
+                    stack = msg.stack
                     
-                    if expTime >= 0 and gState.expTime != expTime:
+                    if (expTime >= 0 and gState.expTime != expTime) or gState.stack != stack:
                         gState.expTime = expTime
+                        gState.stack = stack
                         queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=False))
                 except AttributeError:
                     pass
@@ -1200,7 +1202,8 @@ def main(actor, queues):
                 else: 
                     gState.decenter = False
 
-                queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
+                queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
+                                        expTime=gState.expTime, stack=gState.stack))
 
             elif msg.type == Msg.REPROCESS_FILE:
                 processOneProcFile(msg.filename, actor, queues, cmd=msg.cmd)
@@ -1285,7 +1288,8 @@ def main(actor, queues):
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
                     gState.setCmd(None)
                 else:
-                    queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.guideCmd, replyQueue=queues[MASTER], expTime=gState.expTime))
+                    queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.guideCmd, replyQueue=queues[MASTER],
+                                            expTime=gState.expTime, stack=gState.stack))
                 
             elif msg.type == Msg.TAKE_FLAT:
                 if gState.cartridge <= 0:
@@ -1516,9 +1520,10 @@ def main(actor, queues):
 
             elif msg.type == Msg.SET_TIME:
                 gState.expTime = msg.expTime
+                gState.stack = msg.stack
 
                 for k in gState.pid.keys():
-                    gState.pid[k].setPID(dt=(gState.expTime + 5)) # "+ 5" to allow for overhead
+                    gState.pid[k].setPID(dt=(gState.expTime*gState.stack + 5)) # "+ 5" to allow for overhead
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))

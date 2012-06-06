@@ -89,6 +89,7 @@ class GuiderCmd(object):
                                         keys.Key("decenterRot", types.Float(), help="Telescope absolute offset for guiding in Rot"),
                                         keys.Key("scale", types.Float(), help="Current scale from \"tcc show scale\""),
                                         keys.Key("delta", types.Float(), help="Delta scale (percent)"),
+                                        keys.Key("stack", types.Int(), help="number of itime gcamera integrations to request per exposure."),
                                         keys.Key("corrRatio", types.Float(),
                                                  help="How much refraction correction to apply (0..)"),
                                        )
@@ -96,9 +97,9 @@ class GuiderCmd(object):
         # Declare commands
         #
         self.vocab = [
-            ("on", "[<time>] [force] [oneExposure] [decenter] [plot] [psPlot] [<display>] [<spiderInstAng>]", self.guideOn),
+            ("on", "[<time>] [force] [oneExposure] [decenter] [plot] [psPlot] [<display>] [<spiderInstAng>] [<stack>]", self.guideOn),
             ("off", "", self.guideOff),
-            ("setExpTime", "<time>", self.setExpTime),
+            ("setExpTime", "<time> [<stack>]", self.setExpTime),
             ("setPID", "(raDec|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>] [nfilt]", self.setPID),
             ("disable", "<fibers>|<gprobes>", self.disableFibers),
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
@@ -152,7 +153,8 @@ class GuiderCmd(object):
         """Set the exposure time"""
 
         expTime = cmd.cmd.keywords["time"].values[0]
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime))
+        expTime = cmd.cmd.keywords["stack"].values[0] if "stack" in cmd.cmd.keywords else 1
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime, stack=stack))
 
     def flat(self, cmd):
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 0.5
@@ -190,6 +192,7 @@ class GuiderCmd(object):
         psPlot = "psPlot" in cmd.cmd.keywords
         display = cmd.cmd.keywords["display"].values[0] if "display" in cmd.cmd.keywords else None
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
+        stack = cmd.cmd.keywords["stack"].values[0] if "stack" in cmd.cmd.keywords else 1
         spiderInstAng = cmd.cmd.keywords["spiderInstAng"].values[0] if "spiderInstAng" in cmd.cmd.keywords else None
         decenter = True if "decenter" in cmd.cmd.keywords else None
 
@@ -205,7 +208,7 @@ class GuiderCmd(object):
             os.environ["DISPLAY"] = display
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
-                                                                start=True, expTime=expTime,
+                                                                start=True, expTime=expTime, stack=stack,
                                                                 spiderInstAng=spiderInstAng,
                                                                 force=force, oneExposure=oneExposure,
                                                                 plot=plot, psPlot=psPlot, decenter=decenter))
