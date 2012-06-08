@@ -62,6 +62,7 @@ class GuiderState(object):
         self.plate = -1
         self.pointing = "?"
         self.expTime = 0
+        self.stack = 1
         self.inMotion = False
         self.centerUp = False
         self.guideCmd = None
@@ -1520,7 +1521,10 @@ def main(actor, queues):
 
             elif msg.type == Msg.SET_TIME:
                 gState.expTime = msg.expTime
-                gState.stack = msg.stack
+                try:
+                    gState.stack = msg.stack
+                except:
+                    gState.stack = 1
 
                 for k in gState.pid.keys():
                     gState.pid[k].setPID(dt=(gState.expTime*gState.stack + 5)) # "+ 5" to allow for overhead

@@ -228,12 +228,13 @@ class GuiderCmd(object):
         actorState = guiderActor.myGlobals.actorState
         probe = cmd.cmd.keywords['probe'].values[0] if 'probe' in cmd.cmd.keywords else None
         expTime = cmd.cmd.keywords["time"].values[0] if 'time' in cmd.cmd.keywords else 0.1
+        stack = cmd.cmd.keywords["stack"].values[0] if 'stack' in cmd.cmd.keywords else 1
 
         # Force up an image-only guide loop
         for what in ["scale", "focus", "axes"]:
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enable=False))
         actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=True,
-                                                      expTime=expTime, force=True))
+                                                      expTime=expTime, stack=stack, force=True))
         if probe:
             cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
                                                 cmdStr="set ptErrProbe=%d" % (probe))
