@@ -45,11 +45,18 @@ def main(actor, queues):
                 except:
                     forTCC = False
 
+                    
                 cmdStr="%s time=%f" % (expType, msg.expTime)
                 if expType == "flat":
                     cmdStr += " cartridge=%s" % (msg.cartridge)
                     responseMsg = Msg.FLAT_FINISHED
                 else:
+                    try:
+                        stack = msg.stack
+                        cmdStr += " stack=%d" % (stack)
+                    except:
+                        stack = 1
+
                     responseMsg = Msg.EXPOSURE_FINISHED
 
                 actor.bcast.diag('text="%s %s with timeLim=%s"' % (camera, cmdStr, timeLim))
