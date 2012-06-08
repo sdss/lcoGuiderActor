@@ -153,7 +153,7 @@ class GuiderCmd(object):
         """Set the exposure time"""
 
         expTime = cmd.cmd.keywords["time"].values[0]
-        expTime = cmd.cmd.keywords["stack"].values[0] if "stack" in cmd.cmd.keywords else 1
+        stack = cmd.cmd.keywords["stack"].values[0] if "stack" in cmd.cmd.keywords else 1
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, cmd=cmd, expTime=expTime, stack=stack))
 
     def flat(self, cmd):
