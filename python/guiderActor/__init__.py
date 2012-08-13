@@ -76,21 +76,21 @@ def flushQueue(queue):
             return
 
 class GprobeInfo(object):
-	"""Capture information about a guider probe"""
-	def __init__(self, exists, enabled, xCenter, yCenter, radius, rotation,
-				 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type, flags):
-		self.exists = exists
-		self.enabled = enabled
-		self.xCenter = xCenter
-		self.yCenter = yCenter
-		self.radius = radius
-		self.xFerruleOffset = xFerruleOffset
-		self.yFerruleOffset = yFerruleOffset
-		self.rotation = rotation
-		self.focusOffset = focusOffset
-		self.fiber_type = fiber_type
-		self.rotStar2Sky = numpy.nan
-		self.flags = flags
+    """Capture information about a guider probe"""
+    def __init__(self, exists, enabled, xCenter, yCenter, radius, rotation,
+                 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type, flags):
+        self.exists = exists
+        self.enabled = enabled
+        self.xCenter = xCenter
+        self.yCenter = yCenter
+        self.radius = radius
+        self.xFerruleOffset = xFerruleOffset
+        self.yFerruleOffset = yFerruleOffset
+        self.rotation = rotation
+        self.focusOffset = focusOffset
+        self.fiber_type = fiber_type
+        self.rotStar2Sky = numpy.nan
+        self.flags = flags
 
 __all__ = ["MASTER", "GCAMERA", "Msg", "GprobeInfo"]
 
