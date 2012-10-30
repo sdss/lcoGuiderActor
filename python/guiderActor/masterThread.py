@@ -457,8 +457,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #FIXME PH -- calc dAlt and dAz for guiding diagnostics,(output as part of fiber?)
         
         # Apply refraction correction
-        xOffset = 0.0
-        yOffset = 0.0
+        xRefractCorr = 0.0
+        yRefractCorr = 0.0
         haTime = 0.0
         try:
             if wavelength in probe.haOffsetTimes:
@@ -479,10 +479,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 # I'm now assuming 0...offset, but it should be offset1...offset2
                 xInterp = scipy.interpolate.interp1d(haTimes,
                                                      probe.haXOffsets[wavelength])
-                xOffset = gState.refractionBalance * xInterp(haTime)
+                xRefractCorr = gState.refractionBalance * xInterp(haTime)
                 yInterp = scipy.interpolate.interp1d(haTimes,
                                                      probe.haYOffsets[wavelength])
-                yOffset = gState.refractionBalance * yInterp(haTime)
+                yRefractCorr = gState.refractionBalance * yInterp(haTime)
         except Exception, e:
             guideCmd.diag('text="failed to calc refraction offsets for %s: %s"' % (wavelength, e))
             pass
@@ -490,10 +490,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
                                                                             gState.refractionBalance,
                                                                             haTime,
-                                                                            xOffset*arcsecPerMM,
-                                                                            yOffset*arcsecPerMM))
-        dRA -= xOffset
-        dDec -= yOffset
+                                                                            xRefractCorr*arcsecPerMM,
+                                                                            yRefractCorr*arcsecPerMM))
+        dRA -= xRefractCorr
+        dDec -= yRefractCorr
         
         # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
         # The guiderRMS will be calculated around the new effective fiber centers
@@ -894,8 +894,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             continue
         probe = gp.info
 
-                                # FIXME -- do we want to include ACQUISITION fibers?
-                                # PH -- currently all valid enabled fibers are used so OK.
+        # FIXME -- do we want to include ACQUISITION fibers?
+        # PH -- currently all valid enabled fibers are used so OK.
         rms = fiber.fwhm / sigmaToFWHM
         if isnan(rms):
             continue
