@@ -186,6 +186,8 @@ class FrameInfo(object):
         self.nguideRMS = numpy.nan
         self.guideXRMS = numpy.nan
         self.guideYRMS = numpy.nan
+        self.guideRaRMS = numpy.nan
+        self.guideDecRMS = numpy.nan
 
         self.guideAzRMS = numpy.nan      #not implemented yet
         self.guideAltRMS = numpy.nan     
@@ -349,6 +351,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideXRMS   = 0.0
     guideYRMS   = 0.0
     nguideRMS   = 0
+    guideRaRMS  = 0.0
+    guideDecRMS = 0.0
     inFocusFwhm = []
 
     # Grab some times for refraction correction
@@ -364,6 +368,19 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     haLimWarn = False
     guideCmd.diag('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
                   (LST, RA, HA, gState.design_ha,dHA))
+
+    # Setup the decentered guiding parameteres
+    if gState.decenter:  #PH moved outside the fiber loop so write once per frame, not once per fiber
+        #convert decenter offset to mm on guider
+        frameInfo.decenterRA  = gState.decenterRA/arcsecPerMM
+        frameInfo.decenterDec = gState.decenterDec/arcsecPerMM
+        frameInfo.decenterRot = gState.decenterRot #degrees        
+    else:
+        frameInfo.decenterRA = 0.0
+        frameInfo.decenterDec = 0.0
+        frameInfo.decenterRot = 0.0
+        frameInfo.decenterFocus = 0.0
+        frameInfo.decenterScale = 0.0
 
     # Manually set for now. CPL
     wavelength = 16600
@@ -481,21 +498,11 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
         # The guiderRMS will be calculated around the new effective fiber centers
       
-        if gState.decenter: 
-            #convert decenter offset to mm on guider
-            frameInfo.decenterRA  = gState.decenterRA/arcsecPerMM
-            frameInfo.decenterDec = gState.decenterDec/arcsecPerMM
-            frameInfo.decenterRot = gState.decenterRot            
+        if gState.decenter:
             # apply decenter offset so that telescope moves (not the star)
             dRA  += frameInfo.decenterRA
             dDec += frameInfo.decenterDec
             #decenterRot applied after guide solution
-        else:
-            frameInfo.decenterRA = 0.0
-            frameInfo.decenterDec = 0.0
-            frameInfo.decenterRot = 0.0
-            frameInfo.decenterFocus = 0.0
-            frameInfo.decenterScale = 0.0
 
         #output the keywords only when the decenter changes
         if gState.decenterChanged: 
@@ -546,6 +553,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideXRMS += fiber.dx**2
         guideYRMS += fiber.dy**2        
         nguideRMS += 1
+        guideRaRMS += dRA**2
+        guideDecRMS += dDec**2
         #guideAzRMS += fiber.dAz**2
         #guideAltRMS += fiber.dAlt**2        
 
@@ -604,9 +613,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         dDec = x[1, 0]/gState.plugPlateScale
         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
-        #add the decenter guiding rotation offset here for now (in degrees)
-        if gState.decenter:
-            dRot += frameInfo.decenterRot/3600.0
+#        #PH Kludge add the decenter guiding rotation offset here for now (in degrees)
+#        if gState.decenter:
+#            dRot += frameInfo.decenterRot/3600.0
 
         frameInfo.dRA  = dRA
         frameInfo.dDec = dDec
@@ -660,13 +669,19 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             guideRMS  = (math.sqrt(guideRMS/nguideRMS)) *arcsecPerMM
             guideXRMS = (math.sqrt(guideXRMS/nguideRMS))*arcsecPerMM
             guideYRMS = (math.sqrt(guideYRMS/nguideRMS))*arcsecPerMM
+            guideRaRMS = (math.sqrt(guideRaRMS/nguideRMS))*arcsecPerMM
+            guideDecRMS = (math.sqrt(guideDecRMS/nguideRMS))*arcsecPerMM
+
         except:
-            guideRMS = numpy.nan; guideXRMS = numpy.nan; guideYRMS = numpy.nan
+            guideRMS = numpy.nan; guideXRMS = numpy.nan; guideYRMS = numpy.nan; guideRaRMS = numpy.nan; guideDecRMS = numpy.nan
 
         frameInfo.guideRMS  = guideRMS
         frameInfo.nguideRMS = nguideRMS
         frameInfo.guideXRMS = guideXRMS
         frameInfo.guideYRMS = guideYRMS
+        frameInfo.guideRaRMS = guideRaRMS
+        frameInfo.guideDecRMS = guideDecRMS
+
 
         #FIXME PH ---Need to calculate Az and Alt RMS in arcsec
         guideAzRMS  = numpy.nan
@@ -837,8 +852,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
     # RMS guiding error output has to be after scale estimation so the full fit residual can be reported
 
-    print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f, RMS_X= %4.3f, RMS_Y=%4.3f" %(
-        guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS) 
+    print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f, RMS_X= %4.3f, RMS_Y=%4.3f, RMS_Ra= %4.3f, RMS_Dec=%4.3f" %(
+        guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS, guideRaRMS, guideDecRMS) 
     guideCmd.inform("guideRMS=%5d,%4.3f,%4d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d,%4d" % (
         frameNo, guideRMS, nguideRMS, guideAzRMS, guideAltRMS, 
         guideXRMS, guideYRMS, guideFitRMS, nguideFitRMS, nguideRejectFitRMS))
