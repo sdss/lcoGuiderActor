@@ -90,7 +90,7 @@ class GuiderState(object):
         self.setDecenter("decenterDec")      
         self.setDecenter("decenterRot")
         self.decenterChanged = True
-        self.decenterFocus = numpy.nan       
+        self.decenterFocus = numpy.nan
         self.decenterScale = numpy.nan
 
     def deleteAllGprobes(self):
@@ -374,7 +374,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #convert decenter offset to mm on guider
         frameInfo.decenterRA  = gState.decenterRA/arcsecPerMM
         frameInfo.decenterDec = gState.decenterDec/arcsecPerMM
-        frameInfo.decenterRot = gState.decenterRot #degrees        
+        frameInfo.decenterRot = gState.decenterRot #degrees
+        frameInfo.decenterFocus = gState.decenterFocus
+        frameInfo.decenterScale = gState.decenterScale*1e-6
     else:
         frameInfo.decenterRA = 0.0
         frameInfo.decenterDec = 0.0
@@ -507,9 +509,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #output the keywords only when the decenter changes
         if gState.decenterChanged: 
             guideCmd.inform("decenter=%d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
-            frameNo, ("enabled" if gState.decenter else "disabled"), frameInfo.decenterRA, frameInfo.decenterDec,
-            frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
-
+                            frameNo, ("enabled" if gState.decenter else "disabled"), frameInfo.decenterRA, frameInfo.decenterDec,
+                            frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
             gState.decenterChanged = False
 
         fiber.dRA = dRA

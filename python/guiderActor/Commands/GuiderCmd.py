@@ -570,5 +570,8 @@ that isn't actually mounted (unless you specify force)
         decenterRA  = cmd.cmd.keywords["decenterRA"].values[0] if "decenterRA" in cmd.cmd.keywords else 0
         decenterDec = cmd.cmd.keywords["decenterDec"].values[0] if "decenterDEC" in cmd.cmd.keywords else 0
         decenterRot = cmd.cmd.keywords["decenterRot"].values[0] if "decenterRot" in cmd.cmd.keywords else 0
+        decenterFocus = cmd.cmd.keywords["decenterFocus"].values[0] if "decenterFocus" in cmd.cmd.keywords else 0
+        decenterScale = cmd.cmd.keywords["decenterScale"].values[0] if "decenterScale" in cmd.cmd.keywords else 0
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.DECENTER, cmd=cmd, decenterRA=decenterRA,
-                                                                decenterDec=decenterDec, decenterRot=decenterRot))
+                                                                decenterDec=decenterDec, decenterRot=decenterRot,
+                                                                decenterFocus=decenterFocus, decenterScale=decenterScale))
