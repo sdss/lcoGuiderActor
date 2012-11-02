@@ -149,7 +149,8 @@ class GuiderImageAnalysis(object):
         self.saturationLevel = 0xA000     #try 41k
                 
         # The value to replace saturated pixels by.
-        self.saturationReplacement = 0xA000
+        #self.saturationReplacement = 0xA000
+        self.saturationReplacement = 0xFFF0
 
         # The factor by which guider images are binned down.
         # That is, unbinned (flat) images are this factor bigger in
