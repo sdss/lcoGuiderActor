@@ -863,11 +863,11 @@ gproffit(
 {
     int err[NCELL];
     int i;
-    int sumf ;
-    int sump ; 
-    int sumw ;
-    int sumf2 ;
-    int sumfp ;
+    long sumf ;
+    long sump ; 
+    long sumw ;
+    long sumf2 ;
+    long sumfp ;
     int diff;
     int sumerr ;
     int w,f,p;
@@ -908,10 +908,10 @@ wpg[NCELL] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,24,28,32,36,40,45,50,
             sumfp += w*f*p;
             sumw  += w;
 
-	    //#ifdef GPROFDEBUG            
-            //printf("GP:f,p,w,s:f,f2,p,fp,w:%4d %2d %2d %d %d %d %d %d\n",
-            //    f,p,w,sumf,sumf2,sump,sumfp,sumw);
-	    //#endif
+#ifdef GPROFDEBUG            
+            printf("GP:f,p,w,s:f,f2,p,fp,w:%4d %2d %2d %ld %ld %ld %ld %ld\n",
+                   f,p,w,sumf,sumf2,sump,sumfp,sumw);
+#endif
                 
         }
         disc = (double)sumw*(double)sumf2 - (double)sumf*(double)sumf ;

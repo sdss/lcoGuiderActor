@@ -41,15 +41,21 @@
 
 /*the Alta guider is 16 bit, but bitshifted in GCAM */
 /* max value of guider data*/
+
+/* PH chage to 64k when remove divide by 2 in guiderImage.py */
 #define DMAX 32767
 
 /* FNORM is the normalization of the flat, so everything works with the integer 
    profile fitting code, by JG. */
 /* in GMFLATTEN there is a bitshift of 12, thus FNORM must be 4096 */
+
+/* PH chage to DMAX/16 when remove divide by 2 in guiderImage.py */
 #define FNORM DMAX/8			
 
 /* PMAX is the normalization of the profile (central pixel), so everything works with the integer 
    profile fitting code, by JG. */
+
+/* PH chage to DMAX/16 when remove divide by 2 in guiderImage.py */
 #define PMAX DMAX/8
 
 /*maximum radius we have in the profile arrays seeprofile and radtable */
