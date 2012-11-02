@@ -140,17 +140,17 @@ class GuiderImageAnalysis(object):
         self.bigFiberRadius = 12.
 
         # Saturation level.  
-        #FIXME...PH   was 32K for Gunn integer C code
         #need to make use of full 64k image for bright marvels guide stars.
         #A solution was to scale by 2 data into and out of the C code
         #Problems also with the rotation of postage stamps
-        #If increase to 64k bet integer overflows on sums in c
-        #self.saturationLevel = 0xFFF0    #65520 
-        self.saturationLevel = 0xA000     #try 41k
+        # jkp: note that the saturation level is a bit below the 
+        # full well level of the chip, to prevent column bleedthrough.
+        #self.saturationLevel = 0xA000     #41k
+        self.saturationLevel = 0xF000    #62,000
                 
         # The value to replace saturated pixels by.
         #self.saturationReplacement = 0xA000
-        self.saturationReplacement = 0xFFF0
+        self.saturationReplacement = 0xF000 #62,000
 
         # The factor by which guider images are binned down.
         # That is, unbinned (flat) images are this factor bigger in
