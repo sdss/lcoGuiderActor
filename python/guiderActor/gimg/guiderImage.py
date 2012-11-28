@@ -370,8 +370,8 @@ class GuiderImageAnalysis(object):
         if stampImage is None:
             stampImage = image
 
-        bg = median(image[numpy.isfinite(image)])
-        #bg = median(image[mask == 0])
+        #bg = median(image[numpy.isfinite(image)])
+        bg = median(image[mask == 0])
         #bg = self.imageBias
         
         imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
@@ -544,7 +544,6 @@ class GuiderImageAnalysis(object):
         if any(sat):
             self.warn('the exposure has %i saturated pixels' % sum(sat))
         image[sat] = self.saturationReplacement
-        #FIXME PH --- have to create mask here to keep track of saturated pixels
 
         # Get dark and flat
         (darkfn, flatfn) = self.findDarkAndFlat(self.gimgfn, hdr)
@@ -563,16 +562,17 @@ class GuiderImageAnalysis(object):
 
         self.debug('Using flat image %s' % flatfn)
         X = self.analyzeFlat(flatfn, cartridgeId, gprobes)
+
         if X is None:
             return None
         (flat, mask, fibers) = X
         fibers = [f for f in fibers if not f.is_fake()]
+        # mask the saturated pixels with the appropriate value.
+        mask[sat] = GuiderImageAnalysis.mask_badpixels
 
         exptime = hdr.get('EXPTIME', 0)
 
         print 'Exposure time', exptime
-
-        # FIXME -- presumably we want to mask pixels that are saturated?
 
         # FIXME -- we currently don't apply the flat.
 
@@ -729,10 +729,15 @@ class GuiderImageAnalysis(object):
 
         return (flat, mask, fibers)
 
-    # Returns (flat, mask, fibers)
-    # NOTE, returns a list of fibers the same length as 'gprobes';
-    # some will have xcen=ycen=NaN; test with fiber.is_fake()
     def analyzeFlat(self, flatfn, cartridgeId, gprobes, stamps=False):
+        """
+        Return (flat,mask,fibers): with the processed flat, mask to apply
+        to the image and flat to mask everything but the fibers, and a list
+        of the fiber number to x,y position.
+        
+        NOTE: returns a list of fibers the same length as 'gprobes';
+        some will have xcen=ycen=NaN; test with fiber.is_fake()
+        """
         flatout = self.getProcessedOutputName(flatfn)
 
         if os.path.exists(flatout):
@@ -937,16 +942,6 @@ class GuiderImageAnalysis(object):
         if hdulist is None:
             self.warn('Failed to create processed flat file')
             return (flat, mask, fibers)
-
-        imageHDU = hdulist[0]
-
-        # Bah! Need to scoosh this in.
-        guideCameraScale = 0.026
-        plugPlateScale = 217.7358
-        imageHDU.header.update('SDSSFMT', 'GPROC 1 3', 'type major minor version for this file')
-        imageHDU.header.update('IMGBACK', 0.0, 'crude background for entire image. For displays.')
-        #imageHDU.header.update('GCAMSCAL', guideCameraScale, 'guide camera plate scale (mm/pixel)')
-        #imageHDU.header.update('PLATSCAL', plugPlateScale, 'plug plate scale (mm/degree)')
 
         hdulist.writeto(flatout, clobber=True)
         # Now read that file we just wrote...
