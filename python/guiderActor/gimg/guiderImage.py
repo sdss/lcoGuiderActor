@@ -173,7 +173,7 @@ class GuiderImageAnalysis(object):
             return -99
         return -2.5 * log10(flux / exptime) + self.zeropoint
 
-    def find_bias(self,image,binning=1):
+    def find_bias_level(self,image,binning=1):
         """
         Find the bias level of the image.
         Set binning to the number of binned pixels in x and y.
@@ -186,7 +186,7 @@ class GuiderImageAnalysis(object):
             # subtracting the overall median value should be good enough
             # NOTE: can only use the last few columns, as the first few
             # include some  counts that have bled through.
-            bias = median(image[:,1040/binning:])
+            bias = numpy.median(image[:,(1040/binning):])
         else:
             # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
             ir = image.ravel()
@@ -317,14 +317,14 @@ class GuiderImageAnalysis(object):
                 ('guideYRMS',    'gdYRMS',   'CCD Y component of guiding RMS, arcsec'),
                 ('guideAzRMS',    'gdAzRMS',  'Az component of guiding RMS error, arcsec'),
                 ('guideAltRMS', 'gdAltRMS', 'Alt component of guiding RMS error, arcsec'),
-                                ('guideFitRMS',  'gdFRMS',  'RMS of fit to guide star posn, arcsec'),
-                                ('nguideFitRMS', 'ngdFRMS', 'N stars used for fit RMS'),
-                                ('decenterRA',    'dcnRA',   'applied user supplied offset in RA, deg '),
-                                ('decenterDec',   'dcnDec',  'applied user supplied offset in Dec, deg'),
-                                ('decenterRot',   'dcnRot',  'applied user supplied rotator offset, deg'),
-                                ('decenterFocus', 'dcnFcus', 'applied user supplied focus offset, um'),
-                                ('decenterScale', 'dcnScle', 'applied user supplied scale offset, %' ))
-                                 #FIXME PH --- do we change to 1e6 units for scale
+                ('guideFitRMS',  'gdFRMS',  'RMS of fit to guide star posn, arcsec'),
+                ('nguideFitRMS', 'ngdFRMS', 'N stars used for fit RMS'),
+                ('decenterRA',    'dcnRA',   'applied user supplied offset in RA, deg '),
+                ('decenterDec',   'dcnDec',  'applied user supplied offset in Dec, deg'),
+                ('decenterRot',   'dcnRot',  'applied user supplied rotator offset, deg'),
+                ('decenterFocus', 'dcnFcus', 'applied user supplied focus offset, um'),
+                ('decenterScale', 'dcnScle', 'applied user supplied scale offset, %' ))
+                #FIXME PH --- do we change to 1e6 units for scale
         cards = []
         for name, fitsName, comment in defs:
             try:
@@ -579,7 +579,7 @@ class GuiderImageAnalysis(object):
             flatfn = self.gimgfn
             self.debug('Analysing flat image %s' % (flatfn))
             (flat, mask, fibers) = self.analyzeFlat(flatfn, cartridgeId, gprobes)
-            flatoutname = self.getProcessedOutputName(flatfn) 
+            flatoutname = self.getProcessedOutputName(flatfn)
             return fibers
 
         self.debug('Using flat image %s' % flatfn)
@@ -596,8 +596,7 @@ class GuiderImageAnalysis(object):
 
         print 'Exposure time', exptime
 
-        # FIXME -- we currently don't apply the flat or the dark.
-        bias = self.find_bias(image,binning=self.binning)
+        bias = self.find_bias_level(image,binning=self.binning)
         self.inform('subtracting bias level: %g' % bias)
         image -= bias
         self.imageBias = bias
@@ -619,11 +618,9 @@ class GuiderImageAnalysis(object):
 
         # Zero out parts of the image that are masked out.
         # In this mask convention, 0 = good, >0 is bad.
-        if False:
-            # Mark negative pixels
-            mask[(img < 0) & (mask == 0)] |= GuiderImageAnalysis.mask_badpixels
-            # Clamp negative pixels
-            img[img < 0] = 0
+        # Mark negative pixels
+        badpixels = (img < 0) & (mask == 0)
+        mask[badpixels] |= GuiderImageAnalysis.mask_badpixels
         # Blank out masked pixels.
         img[mask > 0] = 0
         img16 = img.astype(int16)
@@ -761,15 +758,15 @@ class GuiderImageAnalysis(object):
 
         img = pyfits.getdata(flatfn)
 
+        bias = self.find_bias_level(img,binning=1)
+        self.inform('subtracting bias level: %g' % bias)
+        img -= bias
+        self.imageBias = bias
+
         # FIXME -- we KNOW the area (ie, the number of pixels) of the
         # fibers -- we could choose the threshold appropriately.
         # NOTE, that's not always true, we sometimes lose fibers, even
         # acquisition fibers which are pretty big.
-
-        bias = self.find_bias(image,binning=1)
-        self.inform('subtracting bias level: %g' % bias)
-        image -= bias
-        self.imageBias = bias
 
         # HACK -- find threshold level inefficiently.
         # This is the threshold level that was used in "gfindfibers".
@@ -780,7 +777,7 @@ class GuiderImageAnalysis(object):
         # pk == 99th percentile
         #pk = i2[I[int(len(I)*0.99)]]
         pk = i2[I[int(len(I)*0.998)]]
-        #pk = i2[I[int(len(I)*0.998)]]  # change percentile based on N big fibers, N small fibers 
+        #pk = i2[I[int(len(I)*0.998)]]  # change percentile based on N big fibers, N small fibers
         thresh = (med + pk)/2.
 
         # Threshold image
@@ -926,9 +923,9 @@ class GuiderImageAnalysis(object):
             obji = (L == i)
             # FIXME -- flat -- normalize by max? median? sum? of this fiber
             # FIXME -- clipping, etc.
-            flat[obji] += clip((img[obji]-background) / median(img[obji]-background), 0.5, 1.5)
-            # objflat = (img[obji]-background) / median(img[obji]-background)
-            # print 'objflat range:', objflat.min(), objflat.max()
+            objflat = (img[obji]-background) / median(img[obji]-background)
+            flat[obji] += numpy.clip(objflat, 0.5, 1.5)
+            print 'objflat range:', objflat.min(), objflat.max()
 
         # Bin down the mask and flat.
         bmask = zeros((mask.shape[0]/BIN, mask.shape[1]/BIN), bool)
