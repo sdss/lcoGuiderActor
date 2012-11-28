@@ -173,6 +173,28 @@ class GuiderImageAnalysis(object):
             return -99
         return -2.5 * log10(flux / exptime) + self.zeropoint
 
+    def find_bias(self,image,binning=1):
+        """
+        Find the bias level of the image.
+        Set binning to the number of binned pixels in x and y.
+        
+        If there is no overscan region (expected to be 24 extra columns unbinned)
+        then we use a kludged overscan.
+        """
+        # The overscan region is an extra 24 columns (12 after binning)
+        if image.shape[1] == 1048/binning:
+            # subtracting the overall median value should be good enough
+            # NOTE: can only use the last few columns, as the first few
+            # include some  counts that have bled through.
+            bias = median(image[:,1040/binning:])
+        else:
+            # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
+            ir = image.ravel()
+            I = argsort(ir)
+            bias = ir[I[int(0.3 * len(ir))]]
+        return bias
+    #...
+    
     def ensureLibraryLoaded(self):
         # Load C library "ipGguide.c"
         path = os.path.expandvars("$GUIDERACTOR_DIR/lib/libguide.so")
@@ -372,11 +394,11 @@ class GuiderImageAnalysis(object):
 
         #bg = median(image[numpy.isfinite(image)])
         bg = median(image[mask == 0])
-        #bg = self.imageBias
-        
+
         imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
         imageHDU.header.update('SDSSFMT', 'GPROC 1 3', 'type major minor version for this file')
         imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
+        imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
 
         try:
             # List the fibers by fiber id.
@@ -568,31 +590,21 @@ class GuiderImageAnalysis(object):
         (flat, mask, fibers) = X
         fibers = [f for f in fibers if not f.is_fake()]
         # mask the saturated pixels with the appropriate value.
-        mask[sat] = GuiderImageAnalysis.mask_badpixels
+        mask[sat] |= GuiderImageAnalysis.mask_badpixels
 
         exptime = hdr.get('EXPTIME', 0)
 
         print 'Exposure time', exptime
 
-        # FIXME -- we currently don't apply the flat.
-
-        # Subtract overscan if it exists else a kluged overscan.
-        if False:  # if haveOverscan:
-            pass
-        else:
-            # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
-            ir = image.ravel()
-            I = argsort(ir)
-            bias = ir[I[int(0.3 * len(ir))]]
-
+        # FIXME -- we currently don't apply the flat or the dark.
+        bias = self.find_bias(image,binning=self.binning)
         self.inform('subtracting bias level: %g' % bias)
         image -= bias
-        self.imageBias = bias             
+        self.imageBias = bias
 
-        if False:  # if scaleByFlat:
-            # Divide by the flat (avoiding NaN where the flat is zero)
-            image /= (flat + (flat == 0)*1)
-            self.debug('After flattening: image range: %g to %g' % (image.min(), image.max()))
+        # Divide by the flat (avoiding NaN where the flat is zero)
+        image /= (flat + (flat == 0)*1)
+        self.debug('After flattening: image range: %g to %g' % (image.min(), image.max()))
 
         # Save the processed image
         self.guiderImage = image/2.0  #PH***quick Kluge needs to be corrected
@@ -753,6 +765,11 @@ class GuiderImageAnalysis(object):
         # fibers -- we could choose the threshold appropriately.
         # NOTE, that's not always true, we sometimes lose fibers, even
         # acquisition fibers which are pretty big.
+
+        bias = self.find_bias(image,binning=1)
+        self.inform('subtracting bias level: %g' % bias)
+        image -= bias
+        self.imageBias = bias
 
         # HACK -- find threshold level inefficiently.
         # This is the threshold level that was used in "gfindfibers".
