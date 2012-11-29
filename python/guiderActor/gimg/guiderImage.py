@@ -9,14 +9,6 @@ from scipy.ndimage.measurements import label, center_of_mass, find_objects
 import actorcore.utility.fits as actorFits
 from opscore.utility.tback import tback
 
-def printbzero(hdr,txt):
-    """Debugging."""
-    try:
-        print txt,'BZERO', hdr['BZERO']
-    except KeyError:
-        print txt,'No BZERO!!!!!'
-
-
 # A guider fiber and the star image seen through it.
 class fiber(object):
     def __init__(self, fibid, xc=numpy.nan, yc=numpy.nan, r=numpy.nan, illr=numpy.nan):
