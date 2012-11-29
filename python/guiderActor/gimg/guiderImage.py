@@ -9,6 +9,14 @@ from scipy.ndimage.measurements import label, center_of_mass, find_objects
 import actorcore.utility.fits as actorFits
 from opscore.utility.tback import tback
 
+def printbzero(hdr,txt):
+    """Debugging."""
+    try:
+        print txt,'BZERO', hdr['BZERO']
+    except KeyError:
+        print txt,'No BZERO!!!!!'
+
+
 # A guider fiber and the star image seen through it.
 class fiber(object):
     def __init__(self, fibid, xc=numpy.nan, yc=numpy.nan, r=numpy.nan, illr=numpy.nan):
@@ -509,6 +517,9 @@ class GuiderImageAnalysis(object):
 
 
     def writeFITS(self, models, cmd, frameInfo, gprobes):
+        """
+        Write a fits file containing the processed results for this exposure.
+        """
         if not self.fibers:
             raise Exception('must call findFibers() before writeFITS()')
         fibers = self.fibers
@@ -574,6 +585,8 @@ class GuiderImageAnalysis(object):
         # FIXME -- we currently don't do anything with the dark frame.
         #   we'll need hdr['EXPTIME'] if we do.
         # FIXME -- filter probes here for !exists, !tritium ?
+        exptime = hdr.get('EXPTIME', 0)
+        print 'Exposure time', exptime
 
         if hdr['IMAGETYP'] == 'flat':
             flatfn = self.gimgfn
@@ -584,17 +597,13 @@ class GuiderImageAnalysis(object):
 
         self.debug('Using flat image %s' % flatfn)
         X = self.analyzeFlat(flatfn, cartridgeId, gprobes)
-
         if X is None:
+            # TBD: jkp: should we ever get here? What kind of crazy result is this?
             return None
         (flat, mask, fibers) = X
         fibers = [f for f in fibers if not f.is_fake()]
         # mask the saturated pixels with the appropriate value.
-        mask[sat] |= GuiderImageAnalysis.mask_badpixels
-
-        exptime = hdr.get('EXPTIME', 0)
-
-        print 'Exposure time', exptime
+        mask[sat] |= GuiderImageAnalysis.mask_saturated
 
         bias = self.find_bias_level(image,binning=self.binning)
         self.inform('subtracting bias level: %g' % bias)
@@ -604,6 +613,11 @@ class GuiderImageAnalysis(object):
         # Divide by the flat (avoiding NaN where the flat is zero)
         image /= (flat + (flat == 0)*1)
         self.debug('After flattening: image range: %g to %g' % (image.min(), image.max()))
+
+        # NOTE: jkp: post-flat fielding, we need to re-check for saturated pixels and remask them
+        sat_flat = (image.astype(int) >= self.saturationLevel)
+        image[sat_flat] = self.saturationReplacement
+        mask[sat_flat] |= GuiderImageAnalysis.mask_saturated
 
         # Save the processed image
         self.guiderImage = image/2.0  #PH***quick Kluge needs to be corrected
@@ -672,7 +686,7 @@ class GuiderImageAnalysis(object):
 
     @staticmethod
     def binImage(img, BIN):
-        binned = zeros((img.shape[0]/BIN, img.shape[1]/BIN), float)
+        binned = zeros((img.shape[0]/BIN, img.shape[1]/BIN), numpy.float32)
         for i in range(BIN):
             for j in range(BIN):
                 binned += img[i::BIN,j::BIN]
@@ -738,6 +752,24 @@ class GuiderImageAnalysis(object):
 
         return (flat, mask, fibers)
 
+    def analyzeDark(self, darkfn, cartridgeId):
+        """Open a dark file, process it, and return the dark data. """
+        darkout = self.getProcessedOutputName(darkfn)
+
+        if os.path.exists(darkout):
+            self.inform('Reading processed flat-field from %s' % flatout)
+            try:
+                return GuiderImageAnalysis.readProcessedDark(darkout, gprobes, stamps)
+            except:
+                self.warn('Failed to read processed dark-field from %s; regenerating it.' % darkout)
+
+        # darks are binned.
+        bias = self.find_bias_level(img,binning=self.binning)
+        self.inform('subtracting bias level: %g' % bias)
+        img -= bias
+        self.imageBias = bias
+    #...
+    
     def analyzeFlat(self, flatfn, cartridgeId, gprobes, stamps=False):
         """
         Return (flat,mask,fibers): with the processed flat, mask to apply
@@ -746,6 +778,7 @@ class GuiderImageAnalysis(object):
         
         NOTE: returns a list of fibers the same length as 'gprobes';
         some will have xcen=ycen=NaN; test with fiber.is_fake()
+
         """
         flatout = self.getProcessedOutputName(flatfn)
 
@@ -793,19 +826,19 @@ class GuiderImageAnalysis(object):
         mask = binary_erosion(T, iterations=3)
 
         # Label connected components.
-        (L,nl) = label(T)
+        (fiber_labels,nlabels) = label(T)
 
         # FIXME -- the following could be made a bit quicker by using:
-        #    objs = find_objects(L, nl)
+        #    objs = find_objects(fiber_albels, nlabels)
         # ==> "objs" is a list of (slice-rows, slice-cols)
 
         BIN = self.binning
 
         fibers = []
-        self.debug('%d components' % (nl))
-        for i in range(1, nl+1):
+        self.debug('%d components' % (nlabels))
+        for i in range(1, nlabels+1):
             # find pixels labelled as belonging to object i.
-            obji = (L == i)
+            obji = (fiber_labels == i)
             # ri,ci = nonzero(obji)
             # print 'fiber', i, 'extent', ci.min(), ci.max(), ri.min(), ri.max()
             npix = sum(obji)
@@ -916,16 +949,19 @@ class GuiderImageAnalysis(object):
         for f in fibers:
             self.debug('Fiber id %i at (%.1f, %.1f)' % (f.fiberid, f.xcen-dx, f.ycen-dy))
 
-        # Create the flat image.
-        flat = zeros_like(img).astype(float)
-        for i in range(1, nl+1):
+        # Create the processed flat image.
+        # NOTE: jkp: using float32 to keep the fits header happier.
+        flat = zeros_like(img).astype(numpy.float32)
+        all_mean = numpy.empty(nlabels,dtype=numpy.float32)
+        for i in range(1, nlabels+1):
             # find pixels belonging to object i.
-            obji = (L == i)
+            obji = (fiber_labels == i)
             # FIXME -- flat -- normalize by max? median? sum? of this fiber
             # FIXME -- clipping, etc.
             objflat = (img[obji]-background) / median(img[obji]-background)
-            flat[obji] += numpy.clip(objflat, 0.5, 1.5)
-            print 'objflat range:', objflat.min(), objflat.max()
+            flat[obji] += objflat
+            all_mean[i-1] = objflat.mean()
+            print i, 'objflat (min,max,med):', objflat.min(), objflat.max(), all_mean[i-1]
 
         # Bin down the mask and flat.
         bmask = zeros((mask.shape[0]/BIN, mask.shape[1]/BIN), bool)
@@ -938,6 +974,10 @@ class GuiderImageAnalysis(object):
         mask = mask.astype(uint8)
 
         flat = GuiderImageAnalysis.binImage(flat, BIN)
+        # Now clip the flat to be within a reasonable range.
+        # Have to do it post-binning, otherwise the fiber edges get wonky.
+        # This prevents dividing by really big/small numbers when using the flat.
+        numpy.clip(flat, 0.5, 1.5, out=flat)
 
         #int16 for the rotation code in C
         binimg = GuiderImageAnalysis.binImage(img, BIN).astype(int16)
@@ -945,6 +985,9 @@ class GuiderImageAnalysis(object):
         # Write output file... copy header cards from input image.
         # DX?  DY?  Any other stats in here?
         hdr = pyfits.getheader(flatfn)
+        # we don't want the bzero header keyword set.
+        # it somehow is ending up in the raw flat files, but not the object files.
+        del hdr['BZERO']
         pixunit = 'binned guider-camera pixels'
 
         # For writing fiber postage stamps, fill in rotation fields.
@@ -961,5 +1004,3 @@ class GuiderImageAnalysis(object):
         # Now read that file we just wrote...
 
         return GuiderImageAnalysis.readProcessedFlat(flatout, gprobes, stamps)
-
-
