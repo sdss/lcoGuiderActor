@@ -27,6 +27,6 @@ sdss3tools.setup(
                                )],
 
         description = "SDSS-3 guider actor.",
-        cmdclass = dict(install=my_install),
+        #cmdclass = dict(install=my_install),
         )
 
