@@ -11,14 +11,8 @@ import glob
 class my_install(distInstall.install):
     def run(self):
         distInstall.install.run(self)
-        print '!!!!!!!!!!!!'
-        print '!!!!!!!!!!!!'
-        print self.install_lib
         basedir = self.install_lib.replace('/python','')
-        print basedir
-        print '!!!!!!!!!!!!'
-        print '!!!!!!!!!!!!'
-        os.symlink(self.install_lib, os.path.join(basedir, 'lib'))
+        os.symlink('python', os.path.join(basedir, 'lib'))
 
 sdss3tools.setup(
         ext_modules=[Extension('libguide', 
