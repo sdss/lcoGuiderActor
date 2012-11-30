@@ -11,8 +11,14 @@ import glob
 class my_install(distInstall.install):
     def run(self):
         distInstall.install.run(self)
-        build_path = glob.glob(os.path.join(self.install_lib,'build/lib.*'))[0]
-        os.symlink(build_path, os.path.join(self.install_lib, 'lib'))
+        print '!!!!!!!!!!!!'
+        print '!!!!!!!!!!!!'
+        print self.install_lib
+        build_path = glob.glob(os.path.join(self.install_lib,'build/lib.*'))
+        print build_path
+        print '!!!!!!!!!!!!'
+        print '!!!!!!!!!!!!'
+        os.symlink(build_path[0], os.path.join(self.install_lib, 'lib'))
 
 sdss3tools.setup(
         ext_modules=[Extension('libguide', 
