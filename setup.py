@@ -11,7 +11,7 @@ import glob
 class my_install(distInstall.install):
     def run(self):
         distInstall.install.run(self)
-        build_path = glob.glob(os.path.join(self.install_lib,'build/lib.*'))
+        build_path = glob.glob(os.path.join(self.install_lib,'build/lib.*'))[0]
         os.symlink(build_path, os.path.join(self.install_lib, 'lib'))
 
 sdss3tools.setup(
