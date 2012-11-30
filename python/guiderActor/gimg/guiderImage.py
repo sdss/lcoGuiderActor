@@ -396,7 +396,7 @@ class GuiderImageAnalysis(object):
         bg = median(image[mask == 0])
 
         imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
-        imageHDU.header.update('SDSSFMT', 'GPROC 1 3', 'type major minor version for this file')
+        imageHDU.header.update('SDSSFMT', 'GPROC 1 4', 'type major minor version for this file')
         imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
         imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
 
