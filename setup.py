@@ -1,4 +1,5 @@
 import distutils
+import distutils.command.install as distInstall
 from distutils.core import setup, Extension
 
 import sdss3tools
