@@ -14,11 +14,11 @@ class my_install(distInstall.install):
         print '!!!!!!!!!!!!'
         print '!!!!!!!!!!!!'
         print self.install_lib
-        build_path = glob.glob(os.path.join(self.install_lib,'build/lib.*'))
-        print build_path
+        basedir = self.install_lib.replace('/python','')
+        print basedir
         print '!!!!!!!!!!!!'
         print '!!!!!!!!!!!!'
-        os.symlink(build_path[0], os.path.join(self.install_lib, 'lib'))
+        os.symlink(self.install_lib, os.path.join(basedir, 'lib'))
 
 sdss3tools.setup(
         ext_modules=[Extension('libguide', 
@@ -27,6 +27,6 @@ sdss3tools.setup(
                                )],
 
         description = "SDSS-3 guider actor.",
-        #cmdclass = dict(install=my_install),
+        cmdclass = dict(install=my_install),
         )
 
