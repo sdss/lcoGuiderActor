@@ -371,9 +371,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
     # Setup the decentered guiding parameteres
     if gState.decenter:  #PH moved outside the fiber loop so write once per frame, not once per fiber
-        #convert decenter offset to mm on guider
-        frameInfo.decenterRA  = gState.decenterRA/arcsecPerMM
-        frameInfo.decenterDec = gState.decenterDec/arcsecPerMM
+        # Keep decenter values as entered (in arcsec) and only convert them when
+        # we use them, to help the FITS frameInfo cards match the data model.
+        frameInfo.decenterRA  = gState.decenterRA
+        frameInfo.decenterDec = gState.decenterDec
         frameInfo.decenterRot = gState.decenterRot #degrees
         frameInfo.decenterFocus = gState.decenterFocus
         frameInfo.decenterScale = gState.decenterScale*1e-6
@@ -502,8 +503,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
       
         if gState.decenter:
             # apply decenter offset so that telescope moves (not the star)
-            dRA  += frameInfo.decenterRA
-            dDec += frameInfo.decenterDec
+            dRA  += frameInfo.decenterRA/arcsecPerMM
+            dDec += frameInfo.decenterDec/arcsecPerMM
             #decenterRot applied after guide solution
 
         #output the keywords only when the decenter changes

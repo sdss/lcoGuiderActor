@@ -201,7 +201,7 @@ class GuiderCmd(object):
             return
 
         if decenter and not force:
-            cmd.fail('text="You must specify decenter with force, its for guider engineering test only "')
+            cmd.fail('text="You must specify decenter with force. Decentering is not used as part of any current SDSS3 observations."')
             return
 
         if display:
