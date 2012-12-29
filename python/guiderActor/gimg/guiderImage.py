@@ -319,9 +319,9 @@ class GuiderImageAnalysis(object):
                 ('guideAltRMS', 'gdAltRMS', 'Alt component of guiding RMS error, arcsec'),
                 ('guideFitRMS',  'gdFRMS',  'RMS of fit to guide star posn, arcsec'),
                 ('nguideFitRMS', 'ngdFRMS', 'N stars used for fit RMS'),
-                ('decenterRA',    'dcnRA',   'applied user supplied offset in RA, deg '),
-                ('decenterDec',   'dcnDec',  'applied user supplied offset in Dec, deg'),
-                ('decenterRot',   'dcnRot',  'applied user supplied rotator offset, deg'),
+                ('decenterRA',    'dcnRA',   'applied user supplied offset in RA, arcsec'),
+                ('decenterDec',   'dcnDec',  'applied user supplied offset in Dec, arcsec'),
+                ('decenterRot',   'dcnRot',  'applied user supplied rotator offset, arcsec'),
                 ('decenterFocus', 'dcnFcus', 'applied user supplied focus offset, um'),
                 ('decenterScale', 'dcnScle', 'applied user supplied scale offset, %' ))
                 #FIXME PH --- do we change to 1e6 units for scale
