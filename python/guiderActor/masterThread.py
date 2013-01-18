@@ -201,6 +201,13 @@ class FrameInfo(object):
         self.decenterRot = numpy.nan
         self.decenterFocus = numpy.nan
         self.decenterScale = numpy.nan
+        
+        self.refractionBalance = numpy.nan
+        self.wavelength = numpy.nan
+        
+        self.A = numpy.nan
+        self.b = numpy.nan
+#...
 
 def postscriptDevice(psPlotDir, frameNo, prefix=""):
     """Return the SM device to write the postscript file for guide frame frameNo"""
@@ -264,6 +271,203 @@ def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None,
     gState.setCmd(guideCmd)
     guideStep(None, queues, cmd, cmd, guiderFile, True)
 
+def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
+    """
+    Process one single fiber, computing various scales and corrections.
+    """
+    # necessary?
+    if fiber.gprobe is None:
+        guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % fiber.fiberid)
+        return
+    gp = fiber.gprobe
+    probe = gp.info
+    enabled = gp.enabled
+    tooFaint = False
+
+    # Center up on acquisition fibers only.
+    if gState.centerUp and probe.fiber_type != "ACQUIRE":
+        enabled = False
+
+    if not enabled:
+        guideCmd.diag('text="Gprobe %d is not enabled"' % fiber.fiberid)
+        return
+        
+    #
+    # dx, dy are the offsets on the ALTA guider image
+    #
+    fiber.dx = frameInfo.guideCameraScale*(fiber.xs - fiber.xcen) + (probe.xFerruleOffset / 1000.)
+    fiber.dy = frameInfo.guideCameraScale*(fiber.ys - fiber.ycen) + (probe.yFerruleOffset / 1000.)
+    poserr = fiber.xyserr
+
+    #
+    # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
+    #
+    # phi is the orientation of the alignment hole measured clockwise from N
+    # rotation is the anticlockwise rotation from x on the ALTA to the pin
+    #
+    theta = 90                   # allow for 90 deg rot of camera view, should be -90 
+    theta += probe.rotation # allow for intrinsic fibre rotation
+    try:
+        theta -= probe.phi      # allow for orientation of alignment hole
+    except Exception, e:
+        cmd.warn('text="skipping phi-less probe %s"' % (fiber.fiberid))
+        return
+    
+    probe.rotStar2Sky = theta # Squirrel the real angle away.
+
+    #FIXME PH -- We should ignore gprobes not present on plate/pointing (MARVELS dual pointing)
+    #               and ignore fibers not found in flat.
+    #            However we probably want to record values of disabled fibers for diagnosis 
+    if numpy.isnan(fiber.dx) or numpy.isnan(fiber.dy) or numpy.isnan(poserr):
+        guideCmd.warn("text=%s" %
+                      qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber measured=(%g, %g), nominal=(%g,%g)" % (
+                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
+        return
+
+    if fiber.flux < minStarFlux and enabled:
+        guideCmd.warn("text=%s" %
+                      qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
+                          fiber.fiberid, fiber.flux, minStarFlux)))
+        tooFaint = True      #PH should we add an extra bit for this.
+
+    if poserr == 0:
+        guideCmd.warn("text=%s" %
+                      qstr("position error is 0 for gprobe %d star=(%g, %g) fiber=(%g, %g) nominal=(%g,%g)" % (
+                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
+        return
+
+    theta = math.radians(theta)
+    ct, st = math.cos(theta), math.sin(theta)
+    # error in guide star position; n.b. still in mm here
+    dRA   =  fiber.dx*ct + fiber.dy*st
+    dDec  = -fiber.dx*st + fiber.dy*ct
+    dDec *= -1
+
+    #FIXME PH -- calc dAlt and dAz for guiding diagnostics,(output as part of fiber?)
+    
+    # Apply refraction correction
+    xRefractCorr = 0.0
+    yRefractCorr = 0.0
+    haTime = 0.0
+    try:
+        if frameInfo.wavelength in probe.haOffsetTimes:
+            haTimes = probe.haOffsetTimes[frameInfo.wavelength]
+            if dHA < haTimes[0]:
+                if not haLimWarn:
+                    cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (dHA, haTimes[0]))
+                    haLimWarn = True
+                haTime = haTimes[0]
+            elif dHA > haTimes[-1]:
+                if not haLimWarn:
+                    cmd.warn('text="dHA (%0.1f) is above interpolation table; using limit (%0.1f)"' % (dHA, haTimes[-1]))
+                    haLimWarn = True
+                haTime = haTimes[-1]
+            else:
+                haTime = dHA
+
+            # I'm now assuming 0...offset, but it should be offset1...offset2
+            xInterp = scipy.interpolate.interp1d(haTimes,
+                                                 probe.haXOffsets[frameInfo.wavelength])
+            xRefractCorr = gState.refractionBalance * xInterp(haTime)
+            yInterp = scipy.interpolate.interp1d(haTimes,
+                                                 probe.haYOffsets[frameInfo.wavelength])
+            yRefractCorr = gState.refractionBalance * yInterp(haTime)
+        else:
+            guideCmd.warn('text="No HA Offset Time available for probe %d at wavelength %d. No refraction offset calculated."'%(gp.id,frameInfo.wavelength))
+    except Exception, e:
+        guideCmd.diag('text="failed to calc refraction offsets for %s: %s"' % (frameInfo.wavelength, e))
+        pass
+
+    guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
+                                                                        gState.refractionBalance,
+                                                                        haTime,
+                                                                        xRefractCorr*arcsecPerMM,
+                                                                        yRefractCorr*arcsecPerMM))
+    dRA -= xRefractCorr
+    dDec -= yRefractCorr
+    
+    # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
+    # The guiderRMS will be calculated around the new effective fiber centers
+  
+    if gState.decenter:
+        # apply decenter offset so that telescope moves (not the star)
+        dRA  += frameInfo.decenterRA/arcsecPerMM
+        dDec += frameInfo.decenterDec/arcsecPerMM
+        #decenterRot applied after guide solution
+
+    #output the keywords only when the decenter changes
+    if gState.decenterChanged: 
+        guideCmd.inform("decenter=%d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
+                        frameNo, ("enabled" if gState.decenter else "disabled"), frameInfo.decenterRA, frameInfo.decenterDec,
+                        frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
+        gState.decenterChanged = False
+
+    fiber.dRA = dRA
+    fiber.dDec = dDec
+    raCenter  = probe.xFocal
+    decCenter = probe.yFocal
+
+    if plot:
+        try:
+            fiberid_np[fiber.fiberid] = fiber.fiberid
+            raCenter_np[fiber.fiberid] = raCenter
+            decCenter_np[fiber.fiberid] = decCenter
+            dRA_np[fiber.fiberid] = dRA
+            dDec_np[fiber.fiberid] = dDec
+        except IndexError, e:
+            #import pdb; pdb.set_trace()
+            pass
+
+    refmag = numpy.nan
+    guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
+        frameNo, fiber.fiberid, probe.flags,
+        fiber.dRA*arcsecPerMM, fiber.dDec*arcsecPerMM,
+        fiber.fwhm, probe.focusOffset,
+        fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
+            
+    print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
+        frameNo,
+        fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
+        probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
+        probe.focusOffset)
+
+    if not enabled or tooFaint:
+        return
+
+    #Collect fwhms for good in focus stars
+    #Allow for a possible small range of focus offsets
+    if abs(probe.focusOffset) < 50 : frameInfo.inFocusFwhm.append(fiber.fwhm)
+
+    #accumulate guiding errors for good stars used in fit
+    frameInfo.guideRMS += fiber.dx**2 + fiber.dy**2
+    frameInfo.guideXRMS += fiber.dx**2
+    frameInfo.guideYRMS += fiber.dy**2        
+    frameInfo.nguideRMS += 1
+    frameInfo.guideRaRMS += dRA**2
+    frameInfo.guideDecRMS += dDec**2
+    #guideAzRMS += fiber.dAz**2
+    #guideAltRMS += fiber.dAlt**2        
+
+    frameInfo.b[0] += dRA
+    frameInfo.b[1] += dDec
+    frameInfo.b[2] += raCenter*dDec - decCenter*dRA
+
+    frameInfo.A[0, 0] += 1
+    frameInfo.A[0, 1] += 0
+    frameInfo.A[0, 2] += -decCenter
+
+    frameInfo.A[1, 0] += 0
+    frameInfo.A[1, 1] += 1
+    frameInfo.A[1, 2] += raCenter
+
+    frameInfo.A[2, 2] += raCenter*raCenter + decCenter*decCenter
+
+    # Now scale.  We don't actually solve for scale and axis updates
+    # simultanously, and we don't allow for the axis update when
+    # estimating the scale. 
+    frameInfo.b3 += raCenter*dRA + decCenter*dDec
+#...
+    
 def guideStep(actor, queues, cmd, inFile, oneExposure,
               plot=False, psPlot=False, sm=False):
     """ One step of the guide loop, based on the given guider file. 
@@ -336,8 +540,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     frameInfo.plugPlateScale = gState.plugPlateScale
     arcsecPerMM = 3600./gState.plugPlateScale   #arcsec per mm
 
-    A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
-    b = numpy.matrix(numpy.zeros(3).reshape([3,1])); b3 = 0.0
+    frameInfo.A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
+    frameInfo.b = numpy.matrix(numpy.zeros(3).reshape([3,1]))
+    frameInfo.b3 = 0.0
 
     if plot or sm:                           #setup arrays for sm
         size = len(gState.gprobes) + 1 # fibers are 1-indexed
@@ -347,13 +552,13 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         dRA_np = numpy.zeros(size)
         dDec_np = numpy.zeros(size)
 
-    guideRMS    = 0.0
-    guideXRMS   = 0.0
-    guideYRMS   = 0.0
-    nguideRMS   = 0
-    guideRaRMS  = 0.0
-    guideDecRMS = 0.0
-    inFocusFwhm = []
+    frameInfo.guideRMS    = 0.0
+    frameInfo.guideXRMS   = 0.0
+    frameInfo.guideYRMS   = 0.0
+    frameInfo.nguideRMS   = 0
+    frameInfo.guideRaRMS  = 0.0
+    frameInfo.guideDecRMS = 0.0
+    frameInfo.inFocusFwhm = []
 
     # Grab some times for refraction correction
     longitude = -105.82045
@@ -386,202 +591,13 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         frameInfo.decenterScale = 0.0
 
     # Manually set for now. CPL
-    wavelength = 16600
+    frameInfo.wavelength = 16600
+    frameInfo.refractionBalance = gState.refractionBalance
+
     for fiber in fibers:
-        # necessary?
-        if fiber.gprobe is None:
-            guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % fiber.fiberid)
-            continue
-        gp = fiber.gprobe
-        probe = gp.info
-        enabled = gp.enabled
-        tooFaint = False
+        _do_one_fiber(fiber,gState,guideCmd,frameInfo)
 
-        # Center up on acquisition fibers only.
-        if gState.centerUp and probe.fiber_type != "ACQUIRE":
-            enabled = False
-
-        if not enabled:
-            guideCmd.diag('text="Gprobe %d is not enabled"' % fiber.fiberid)
-            continue
-            
-        #
-        # dx, dy are the offsets on the ALTA guider image
-        #
-        fiber.dx = guideCameraScale*(fiber.xs - fiber.xcen) + (probe.xFerruleOffset / 1000.)
-        fiber.dy = guideCameraScale*(fiber.ys - fiber.ycen) + (probe.yFerruleOffset / 1000.)
-        poserr = fiber.xyserr
-
-        #
-        # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
-        #
-        # phi is the orientation of the alignment hole measured clockwise from N
-        # rotation is the anticlockwise rotation from x on the ALTA to the pin
-        #
-        theta = 90                   # allow for 90 deg rot of camera view, should be -90 
-        theta += probe.rotation # allow for intrinsic fibre rotation
-        try:
-            theta -= probe.phi      # allow for orientation of alignment hole
-        except Exception, e:
-            cmd.warn('text="skipping phi-less probe %s"' % (fiber.fiberid))
-            continue
-        
-        probe.rotStar2Sky = theta # Squirrel the real angle away.
-
-        isnan = numpy.isnan
-        #FIXME PH -- We should ignore gprobes not present on plate/pointing (MARVELS dual pointing)
-        #               and ignore fibers not found in flat.
-        #            However we probably want to record values of disabled fibers for diagnosis 
-        if isnan(fiber.dx) or isnan(fiber.dy) or isnan(poserr):
-            guideCmd.warn("text=%s" %
-                          qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber measured=(%g, %g), nominal=(%g,%g)" % (
-                              fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
-            continue
-
-        if fiber.flux < minStarFlux and enabled:
-            guideCmd.warn("text=%s" %
-                          qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
-                              fiber.fiberid, fiber.flux, minStarFlux)))
-            tooFaint = True      #PH should we add an extra bit for this.
-
-        if poserr == 0:
-            guideCmd.warn("text=%s" %
-                          qstr("position error is 0 for gprobe %d star=(%g, %g) fiber=(%g, %g) nominal=(%g,%g)" % (
-                              fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
-            continue
-
-        theta = math.radians(theta)
-        ct, st = math.cos(theta), math.sin(theta)
-        # error in guide star position; n.b. still in mm here
-        dRA   =  fiber.dx*ct + fiber.dy*st
-        dDec  = -fiber.dx*st + fiber.dy*ct
-        dDec *= -1
-
-        #FIXME PH -- calc dAlt and dAz for guiding diagnostics,(output as part of fiber?)
-        
-        # Apply refraction correction
-        xRefractCorr = 0.0
-        yRefractCorr = 0.0
-        haTime = 0.0
-        try:
-            if wavelength in probe.haOffsetTimes:
-                haTimes = probe.haOffsetTimes[wavelength]
-                if dHA < haTimes[0]:
-                    if not haLimWarn:
-                        cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (dHA, haTimes[0]))
-                        haLimWarn = True
-                    haTime = haTimes[0]
-                elif dHA > haTimes[-1]:
-                    if not haLimWarn:
-                        cmd.warn('text="dHA (%0.1f) is above interpolation table; using limit (%0.1f)"' % (dHA, haTimes[-1]))
-                        haLimWarn = True
-                    haTime = haTimes[-1]
-                else:
-                    haTime = dHA
-
-                # I'm now assuming 0...offset, but it should be offset1...offset2
-                xInterp = scipy.interpolate.interp1d(haTimes,
-                                                     probe.haXOffsets[wavelength])
-                xRefractCorr = gState.refractionBalance * xInterp(haTime)
-                yInterp = scipy.interpolate.interp1d(haTimes,
-                                                     probe.haYOffsets[wavelength])
-                yRefractCorr = gState.refractionBalance * yInterp(haTime)
-        except Exception, e:
-            guideCmd.diag('text="failed to calc refraction offsets for %s: %s"' % (wavelength, e))
-            pass
-
-        guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
-                                                                            gState.refractionBalance,
-                                                                            haTime,
-                                                                            xRefractCorr*arcsecPerMM,
-                                                                            yRefractCorr*arcsecPerMM))
-        dRA -= xRefractCorr
-        dDec -= yRefractCorr
-        
-        # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
-        # The guiderRMS will be calculated around the new effective fiber centers
-      
-        if gState.decenter:
-            # apply decenter offset so that telescope moves (not the star)
-            dRA  += frameInfo.decenterRA/arcsecPerMM
-            dDec += frameInfo.decenterDec/arcsecPerMM
-            #decenterRot applied after guide solution
-
-        #output the keywords only when the decenter changes
-        if gState.decenterChanged: 
-            guideCmd.inform("decenter=%d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
-                            frameNo, ("enabled" if gState.decenter else "disabled"), frameInfo.decenterRA, frameInfo.decenterDec,
-                            frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
-            gState.decenterChanged = False
-
-        fiber.dRA = dRA
-        fiber.dDec = dDec
-        raCenter  = probe.xFocal
-        decCenter = probe.yFocal
-
-        if plot:
-            try:
-                fiberid_np[fiber.fiberid] = fiber.fiberid
-                raCenter_np[fiber.fiberid] = raCenter
-                decCenter_np[fiber.fiberid] = decCenter
-                dRA_np[fiber.fiberid] = dRA
-                dDec_np[fiber.fiberid] = dDec
-            except IndexError, e:
-                #import pdb; pdb.set_trace()
-                pass
-
-        refmag = numpy.nan
-        guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
-            frameNo, fiber.fiberid, probe.flags,
-            fiber.dRA*arcsecPerMM, fiber.dDec*arcsecPerMM,
-            fiber.fwhm, probe.focusOffset,
-            fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
-                
-        print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
-            frameNo,
-            fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
-            probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
-            probe.focusOffset)
-
-        if not enabled or tooFaint:
-            continue
-
-        #Collect fwhms for good in focus stars
-        #Allow for a possible small range of focus offsets
-        if abs(probe.focusOffset) < 50 : inFocusFwhm.append(fiber.fwhm)
-
-        #accumulate guiding errors for good stars used in fit
-        guideRMS += fiber.dx**2 + fiber.dy**2
-        guideXRMS += fiber.dx**2
-        guideYRMS += fiber.dy**2        
-        nguideRMS += 1
-        guideRaRMS += dRA**2
-        guideDecRMS += dDec**2
-        #guideAzRMS += fiber.dAz**2
-        #guideAltRMS += fiber.dAlt**2        
-
-
-        b[0] += dRA
-        b[1] += dDec
-        b[2] += raCenter*dDec - decCenter*dRA
-
-        A[0, 0] += 1
-        A[0, 1] += 0
-        A[0, 2] += -decCenter
-
-        A[1, 0] += 0
-        A[1, 1] += 1
-        A[1, 2] += raCenter
-
-        A[2, 2] += raCenter*raCenter + decCenter*decCenter
-        #
-        # Now scale.  We don't actually solve for scale and axis updates
-        # simultanously, and we don't allow for the axis update when
-        # estimating the scale. 
-        #
-        b3 += raCenter*dRA + decCenter*dDec
-
-    nStar = A[0, 0]
+    nStar = frameInfo.A[0, 0]
     if nStar == 0 or gState.inMotion:
         if nStar == 0:
             guideCmd.warn('text="No stars are available for guiding."')
@@ -600,15 +616,15 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         #                            expTime=gState.expTime))
         return
         
-    A[2, 0] = A[0, 2]
-    A[2, 1] = A[1, 2]
+    frameInfo.A[2, 0] = frameInfo.A[0, 2]
+    frameInfo.A[2, 1] = frameInfo.A[1, 2]
     try:
         if nStar == 1:
             guideCmd.warn('text="Only one star is usable"')
-            x = b
+            x = frameInfo.b
             x[2, 0] = 0 # no rotation
         else:
-            x = numpy.linalg.solve(A, b)
+            x = numpy.linalg.solve(frameInfo.A, frameInfo.b)
 
         # convert from mm to degrees
         dRA = x[0, 0]/gState.plugPlateScale
@@ -648,15 +664,15 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                                                         "enabled" if gState.guideAxes else "disabled"))
         #calc FWHM with trimmed mean for 8 in focus fibers
         if True:
-            nFwhm = len(inFocusFwhm)
+            nFwhm = len(frameInfo.inFocusFwhm)
             trimLo = 1 if nFwhm > 4 else 0
             trimHi= nFwhm - trimLo
             nKept = nFwhm - 2*trimLo
             nReject = nFwhm - nKept
-            meanFwhm = (sum(inFocusFwhm))/nFwhm if nFwhm>0 else numpy.nan
-            tMeanFwhm = (sum(sorted(inFocusFwhm)[trimLo:trimHi]))/nKept if nKept>0 else numpy.nan
-            #loKept = inFocusFwhm[trimLo]
-            #hiKept = inFocusFwhm[(trimHi-1)]
+            meanFwhm = (sum(frameInfo.inFocusFwhm))/nFwhm if nFwhm>0 else numpy.nan
+            tMeanFwhm = (sum(sorted(frameInfo.inFocusFwhm)[trimLo:trimHi]))/nKept if nKept>0 else numpy.nan
+            #loKept = frameInfo.inFocusFwhm[trimLo]
+            #hiKept = frameInfo.inFocusFwhm[(trimHi-1)]
             print ("FWHM: %d, %7.2f, %d, %d, %7.2f" % (
                     frameNo, tMeanFwhm, nKept, nReject, meanFwhm))
 
@@ -668,22 +684,17 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
         #rms position error prior to this frames correction
         try:
-            guideRMS  = (math.sqrt(guideRMS/nguideRMS)) *arcsecPerMM
-            guideXRMS = (math.sqrt(guideXRMS/nguideRMS))*arcsecPerMM
-            guideYRMS = (math.sqrt(guideYRMS/nguideRMS))*arcsecPerMM
-            guideRaRMS = (math.sqrt(guideRaRMS/nguideRMS))*arcsecPerMM
-            guideDecRMS = (math.sqrt(guideDecRMS/nguideRMS))*arcsecPerMM
-
+            frameInfo.guideRMS  = math.sqrt(frameInfo.guideRMS/frameInfo.nguideRMS) *arcsecPerMM
+            frameInfo.guideXRMS = math.sqrt(frameInfo.guideXRMS/frameInfo.nguideRMS) *arcsecPerMM
+            frameInfo.guideYRMS = math.sqrt(frameInfo.guideYRMS/frameInfo.nguideRMS) *arcsecPerMM
+            frameInfo.guideRaRMS = math.sqrt(frameInfo.guideRaRMS/frameInfo.nguideRMS) *arcsecPerMM
+            frameInfo.guideDecRMS = math.sqrt(frameInfo.guideDecRMS/frameInfo.nguideRMS) *arcsecPerMM
         except:
-            guideRMS = numpy.nan; guideXRMS = numpy.nan; guideYRMS = numpy.nan; guideRaRMS = numpy.nan; guideDecRMS = numpy.nan
-
-        frameInfo.guideRMS  = guideRMS
-        frameInfo.nguideRMS = nguideRMS
-        frameInfo.guideXRMS = guideXRMS
-        frameInfo.guideYRMS = guideYRMS
-        frameInfo.guideRaRMS = guideRaRMS
-        frameInfo.guideDecRMS = guideDecRMS
-
+            frameInfo.guideRMS = numpy.nan
+            frameInfo.guideXRMS = numpy.nan
+            frameInfo.guideYRMS = numpy.nan
+            frameInfo.guideRaRMS = numpy.nan
+            frameInfo.guideDecRMS = numpy.nan
 
         #FIXME PH ---Need to calculate Az and Alt RMS in arcsec
         guideAzRMS  = numpy.nan
@@ -694,16 +705,14 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         if gState.guideAxes:
             offsetsOK = True
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                     cmdStr="offset arc %f, %f" % \
-                                         (-offsetRa, -offsetDec))
+                                     cmdStr="offset arc %f, %f"%(-offsetRa, -offsetDec))
             if cmdVar.didFail:
                 offsetsOK = False
                 guideCmd.warn('text="Failed to issue offset"')
 
             if offsetRot: 
                 cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                         cmdStr="offset guide %f, %f, %g" % \
-                                             (0.0, 0.0, -offsetRot))
+                                         cmdStr="offset guide %f, %f, %g"%(0.0, 0.0, -offsetRot))
             if cmdVar.didFail:
                 offsetsOK = False
                 guideCmd.warn('text="Failed to issue offset in rotator"')
@@ -810,7 +819,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     #
     # Scale
     #
-    dScale = b3/A[2, 2]
+    dScale = frameInfo.b3/frameInfo.A[2, 2]
     dScaleCorrection = -dScale * 100.    #value for operators to enter manually
     offsetScale = -gState.pid["scale"].update(dScale)
 
@@ -899,7 +908,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         # FIXME -- do we want to include ACQUISITION fibers?
         # PH -- currently all valid enabled fibers are used so OK.
         rms = fiber.fwhm / sigmaToFWHM
-        if isnan(rms):
+        if numpy.isnan(rms):
             continue
 
         micronsPerArcsec = 1/3600.0*gState.plugPlateScale*1e3 # convert arcsec to microns
@@ -1384,7 +1393,7 @@ def main(actor, queues):
                         enabled = False
 
                     gState.setGprobeState(id, enable=enabled, info=info, create=True, flags=info.flags)
-					
+                    
                 # Build and install an instrument block for this cartridge info
                 loadTccBlock(msg.cmd, actorState, gState)
                 loadAllProbes(msg.cmd, gState)
