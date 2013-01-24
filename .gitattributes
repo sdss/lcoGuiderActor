@@ -25,6 +25,7 @@ python/guiderActor/guiderActor_main.py -text
 python/guiderActor/loadGprobes.py -text
 python/guiderActor/masterThread.py -text
 python/guiderActor/myGlobals.py -text
+python/guiderActor/plotGuiderSM.py -text
 python/guiderActor/test_flat.py -text
 python/guiderActor/tests.py -text
 /setup.py -text

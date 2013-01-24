@@ -16,16 +16,11 @@ import PID
 
 from gimg.guiderImage import GuiderImageAnalysis
 import loadGprobes
+import plotGuiderSM
 
 import pyfits
 import os.path
 import scipy.interpolate
-
-try:
-    import sm
-except ImportError:
-    print "Failed to import SM"
-    sm = None
 
 def adiff(a1, a2):
     """ return a1-a2, all in degrees. """
@@ -158,8 +153,9 @@ except:
 
 class FrameInfo(object):
     """ Gather all info about the guiding . """
-
     def __init__(self):
+        """Sets all parameters to NaN, so that they at least exist."""
+        self.frameNo = numpy.nan
         self.dRA = numpy.nan
         self.dDec = numpy.nan
         self.dRot = numpy.nan
@@ -179,8 +175,15 @@ class FrameInfo(object):
         self.offsetScale = numpy.nan
 
         self.guideCameraScale = numpy.nan
+        self.arcsecPerMM = numpy.nan
         self.plugPlateScale = numpy.nan
         self.seeing = numpy.nan
+
+        # conversion for a Gaussian, use this eveywhere but in ipGguide.c
+        # conversion from sigma to FWHM for a JEG double Gaussian is done in ipGguide.c (sigmaToFWHMJEG = 2.468)
+        self.sigmaToFWHM = 2.354
+
+        self.minStarFlux = numpy.nan
 
         self.guideRMS = numpy.nan
         self.nguideRMS = numpy.nan
@@ -208,10 +211,6 @@ class FrameInfo(object):
         self.A = numpy.nan
         self.b = numpy.nan
 #...
-
-def postscriptDevice(psPlotDir, frameNo, prefix=""):
-    """Return the SM device to write the postscript file for guide frame frameNo"""
-    return "postencap %s%d.eps" % (prefix, frameNo)
 
 class FakeCommand(object):
     def _respond(self, tag, text):
@@ -271,7 +270,7 @@ def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None,
     gState.setCmd(guideCmd)
     guideStep(None, queues, cmd, cmd, guiderFile, True)
 
-def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
+def _do_one_fiber(fiber,gState,guideCmd,frameInfo,plotGuider=None):
     """
     Process one single fiber, computing various scales and corrections.
     """
@@ -324,10 +323,10 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
                           fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
         return
 
-    if fiber.flux < minStarFlux and enabled:
+    if fiber.flux < frameInfo.minStarFlux and enabled:
         guideCmd.warn("text=%s" %
                       qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
-                          fiber.fiberid, fiber.flux, minStarFlux)))
+                          fiber.fiberid, fiber.flux, frameInfo.minStarFlux)))
         tooFaint = True      #PH should we add an extra bit for this.
 
     if poserr == 0:
@@ -350,39 +349,44 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     yRefractCorr = 0.0
     haTime = 0.0
     try:
-        if frameInfo.wavelength in probe.haOffsetTimes:
-            haTimes = probe.haOffsetTimes[frameInfo.wavelength]
-            if dHA < haTimes[0]:
-                if not haLimWarn:
-                    cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (dHA, haTimes[0]))
-                    haLimWarn = True
-                haTime = haTimes[0]
-            elif dHA > haTimes[-1]:
-                if not haLimWarn:
-                    cmd.warn('text="dHA (%0.1f) is above interpolation table; using limit (%0.1f)"' % (dHA, haTimes[-1]))
-                    haLimWarn = True
-                haTime = haTimes[-1]
+        if gState.refractionBalance > 0:
+            if frameInfo.wavelength in probe.haOffsetTimes:
+                haTimes = probe.haOffsetTimes[frameInfo.wavelength]
+                if dHA < haTimes[0]:
+                    if not haLimWarn:
+                        cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (dHA, haTimes[0]))
+                        haLimWarn = True
+                    haTime = haTimes[0]
+                elif dHA > haTimes[-1]:
+                    if not haLimWarn:
+                        cmd.warn('text="dHA (%0.1f) is above interpolation table; using limit (%0.1f)"' % (dHA, haTimes[-1]))
+                        haLimWarn = True
+                    haTime = haTimes[-1]
+                else:
+                    haTime = dHA
+    
+                # I'm now assuming 0...offset, but it should be offset1...offset2
+                xInterp = scipy.interpolate.interp1d(haTimes,
+                                                     probe.haXOffsets[frameInfo.wavelength])
+                xRefractCorr = gState.refractionBalance * xInterp(haTime)
+                yInterp = scipy.interpolate.interp1d(haTimes,
+                                                     probe.haYOffsets[frameInfo.wavelength])
+                yRefractCorr = gState.refractionBalance * yInterp(haTime)
             else:
-                haTime = dHA
-
-            # I'm now assuming 0...offset, but it should be offset1...offset2
-            xInterp = scipy.interpolate.interp1d(haTimes,
-                                                 probe.haXOffsets[frameInfo.wavelength])
-            xRefractCorr = gState.refractionBalance * xInterp(haTime)
-            yInterp = scipy.interpolate.interp1d(haTimes,
-                                                 probe.haYOffsets[frameInfo.wavelength])
-            yRefractCorr = gState.refractionBalance * yInterp(haTime)
+                # JKP TBD: these warnings are excessive...
+                guideCmd.warn('text="No HA Offset Time available for probe %d at wavelength %d. No refraction offset calculated."'%(gp.id,frameInfo.wavelength))
         else:
-            guideCmd.warn('text="No HA Offset Time available for probe %d at wavelength %d. No refraction offset calculated."'%(gp.id,frameInfo.wavelength))
+            # Don't do anything if the refraction balance is 0.
+            pass
     except Exception, e:
         guideCmd.diag('text="failed to calc refraction offsets for %s: %s"' % (frameInfo.wavelength, e))
         pass
 
-    guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameNo, fiber.fiberid,
+    guideCmd.inform('refractionOffset=%d,%d,%0.1f,%0.4f,%0.6f,%0.6f' % (frameInfo.frameNo, fiber.fiberid,
                                                                         gState.refractionBalance,
                                                                         haTime,
-                                                                        xRefractCorr*arcsecPerMM,
-                                                                        yRefractCorr*arcsecPerMM))
+                                                                        xRefractCorr*frameInfo.arcsecPerMM,
+                                                                        yRefractCorr*frameInfo.arcsecPerMM))
     dRA -= xRefractCorr
     dDec -= yRefractCorr
     
@@ -391,14 +395,14 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
   
     if gState.decenter:
         # apply decenter offset so that telescope moves (not the star)
-        dRA  += frameInfo.decenterRA/arcsecPerMM
-        dDec += frameInfo.decenterDec/arcsecPerMM
+        dRA  += frameInfo.decenterRA/frameInfo.arcsecPerMM
+        dDec += frameInfo.decenterDec/frameInfo.arcsecPerMM
         #decenterRot applied after guide solution
 
     #output the keywords only when the decenter changes
     if gState.decenterChanged: 
         guideCmd.inform("decenter=%d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
-                        frameNo, ("enabled" if gState.decenter else "disabled"), frameInfo.decenterRA, frameInfo.decenterDec,
+                        frameInfo.frameNo, ("enabled" if gState.decenter else "disabled"), frameInfo.decenterRA, frameInfo.decenterDec,
                         frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
         gState.decenterChanged = False
 
@@ -407,28 +411,24 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     raCenter  = probe.xFocal
     decCenter = probe.yFocal
 
-    if plot:
-        try:
-            fiberid_np[fiber.fiberid] = fiber.fiberid
-            raCenter_np[fiber.fiberid] = raCenter
-            decCenter_np[fiber.fiberid] = decCenter
-            dRA_np[fiber.fiberid] = dRA
-            dDec_np[fiber.fiberid] = dDec
-        except IndexError, e:
-            #import pdb; pdb.set_trace()
-            pass
-
+    if plotGuider is not None:
+        plotGuider.fiberid_np[fiber.fiberid] = fiber.fiberid
+        plotGuider.raCenter_np[fiber.fiberid] = raCenter
+        plotGuider.decCenter_np[fiber.fiberid] = decCenter
+        plotGuider.dRA_np[fiber.fiberid] = dRA
+        plotGuider.dDec_np[fiber.fiberid] = dDec
+        
     refmag = numpy.nan
     guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
-        frameNo, fiber.fiberid, probe.flags,
-        fiber.dRA*arcsecPerMM, fiber.dDec*arcsecPerMM,
+        frameInfo.frameNo, fiber.fiberid, probe.flags,
+        fiber.dRA*frameInfo.arcsecPerMM, fiber.dDec*frameInfo.arcsecPerMM,
         fiber.fwhm, probe.focusOffset,
         fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
             
     print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
-        frameNo,
+        frameInfo.frameNo,
         fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
-        probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
+        probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
         probe.focusOffset)
 
     if not enabled or tooFaint:
@@ -467,21 +467,57 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     # estimating the scale. 
     frameInfo.b3 += raCenter*dRA + decCenter*dDec
 #...
-    
+
+def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b,plotGuider=None):
+    """Accumulate the focus for one fiber into A and b."""
+    # required?
+    if fiber.gprobe is None:
+        return
+    gp = gState.gprobes[fiber.fiberid]
+    if not gp.enabled:
+        return
+    probe = gp.info
+
+    # FIXME -- do we want to include ACQUISITION fibers?
+    # PH -- currently all valid enabled fibers are used so OK.
+    rms = fiber.fwhm / frameInfo.sigmaToFWHM
+    if numpy.isnan(rms):
+        return
+
+    rms *= frameInfo.micronsPerArcsec # in microns
+    rmsErr = 1
+
+    d = probe.focusOffset
+    x = rms*rms - C*d*d
+    xErr = 2*rms*rmsErr
+
+    try:
+        ivar = 1/(xErr*xErr)
+    except ZeroDivisionError:
+        ivar = 1e-5
+
+    b[0] += x*ivar
+    b[1] += x*d*ivar
+
+    A[0, 0] += ivar
+    A[0, 1] += d*ivar
+
+    A[1, 1] += d*d*ivar
+
+    if plotGuider is not None:
+        plotGuider.fiberid_np[fiber.fiberid] = fiber.fiberid
+        plotGuider.x_np[fiber.fiberid] = x
+        plotGuider.xErr_np[fiber.fiberid] = xErr
+        plotGuider.d_np[fiber.fiberid] = d
+#...
+
 def guideStep(actor, queues, cmd, inFile, oneExposure,
-              plot=False, psPlot=False, sm=False):
+              plot=False, psPlot=False):
     """ One step of the guide loop, based on the given guider file. 
 
     Args: (TOOOO MANY!!)
         actor      - 
 """
-    sigmaToFWHM = 2.354 # conversion for a Gaussian, use this eveywhere but in ipGguide.c
-    #conversion from sigma to FWHM for a JEG double Gaussian is done in ipGguide.c (sigmaToFWHMJEG = 2.468)
-
-    psPlotDir  = "/data/gcam/scratch/"
-    minStarFlux = 500 #ADU, avoid guiding on noise spikes during acquisitions
-                       #should be in photons, based on RON, Dark residual, SKY   
-
     actorState = guiderActor.myGlobals.actorState
     guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
@@ -526,6 +562,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     # Object to gather all per-frame guiding info into.
     frameInfo = FrameInfo()
 
+    #ADU, avoid guiding on noise spikes during acquisitions
+    #should be in photons, based on RON, Dark residual, SKY
+    frameInfo.minStarFlux = 500
+
+    frameInfo.frameNo = frameNo
+    
     # Setup to solve for the axis and maybe scale offsets.  We work consistently
     # in mm on the focal plane, only converting to angles to command the TCC
     #
@@ -539,18 +581,19 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     frameInfo.guideCameraScale = guideCameraScale
     frameInfo.plugPlateScale = gState.plugPlateScale
     arcsecPerMM = 3600./gState.plugPlateScale   #arcsec per mm
+    frameInfo.arcsecPerMM = arcsecPerMM
+    frameInfo.micronsPerArcsec = 1/3600.0*gState.plugPlateScale*1e3 # convert arcsec to microns
 
     frameInfo.A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
     frameInfo.b = numpy.matrix(numpy.zeros(3).reshape([3,1]))
     frameInfo.b3 = 0.0
 
-    if plot or sm:                           #setup arrays for sm
-        size = len(gState.gprobes) + 1 # fibers are 1-indexed
-        fiberid_np = numpy.zeros(size)
-        raCenter_np = numpy.zeros(size)
-        decCenter_np = numpy.zeros(size)
-        dRA_np = numpy.zeros(size)
-        dDec_np = numpy.zeros(size)
+    #setup arrays for sm
+    if plot:
+        # fibers are 1-indexed
+        plotGuider = plotGuiderSM.PlotGuider(len(gState.gprobes) + 1,psPlot=psPlot)
+    else:
+        plotGuider = None
 
     frameInfo.guideRMS    = 0.0
     frameInfo.guideXRMS   = 0.0
@@ -595,7 +638,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     frameInfo.refractionBalance = gState.refractionBalance
 
     for fiber in fibers:
-        _do_one_fiber(fiber,gState,guideCmd,frameInfo)
+        _do_one_fiber(fiber,gState,guideCmd,frameInfo,plotGuider=plotGuider)
 
     nStar = frameInfo.A[0, 0]
     if nStar == 0 or gState.inMotion:
@@ -663,26 +706,23 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetRa, -3600*offsetDec, -3600*offsetRot,
                                                         "enabled" if gState.guideAxes else "disabled"))
         #calc FWHM with trimmed mean for 8 in focus fibers
-        if True:
-            nFwhm = len(frameInfo.inFocusFwhm)
-            trimLo = 1 if nFwhm > 4 else 0
-            trimHi= nFwhm - trimLo
-            nKept = nFwhm - 2*trimLo
-            nReject = nFwhm - nKept
-            meanFwhm = (sum(frameInfo.inFocusFwhm))/nFwhm if nFwhm>0 else numpy.nan
-            tMeanFwhm = (sum(sorted(frameInfo.inFocusFwhm)[trimLo:trimHi]))/nKept if nKept>0 else numpy.nan
-            #loKept = frameInfo.inFocusFwhm[trimLo]
-            #hiKept = frameInfo.inFocusFwhm[(trimHi-1)]
-            print ("FWHM: %d, %7.2f, %d, %d, %7.2f" % (
-                    frameNo, tMeanFwhm, nKept, nReject, meanFwhm))
+        nFwhm = len(frameInfo.inFocusFwhm)
+        trimLo = 1 if nFwhm > 4 else 0
+        trimHi= nFwhm - trimLo
+        nKept = nFwhm - 2*trimLo
+        nReject = nFwhm - nKept
+        meanFwhm = (sum(frameInfo.inFocusFwhm))/nFwhm if nFwhm>0 else numpy.nan
+        tMeanFwhm = (sum(sorted(frameInfo.inFocusFwhm)[trimLo:trimHi]))/nKept if nKept>0 else numpy.nan
+        #loKept = frameInfo.inFocusFwhm[trimLo]
+        #hiKept = frameInfo.inFocusFwhm[(trimHi-1)]
+        infoString = "fwhm=%d, %7.2f, %d, %d, %7.2f" % (frameNo, tMeanFwhm, nKept, nReject, meanFwhm)
+        print infoString
+        guideCmd.inform(infoString)
+        
+        frameInfo.meanFwhm = meanFwhm
+        frameInfo.tMeanFwhm = tMeanFwhm
 
-            guideCmd.inform('fwhm=%d, %7.2f, %d, %d, %7.2f' % (
-                    frameNo, tMeanFwhm, nKept, nReject, meanFwhm))
-
-            frameInfo.meanFwhm = meanFwhm
-            frameInfo.tMeanFwhm = tMeanFwhm
-
-        #rms position error prior to this frames correction
+        #rms position error prior to this frame's correction
         try:
             frameInfo.guideRMS  = math.sqrt(frameInfo.guideRMS/frameInfo.nguideRMS) *arcsecPerMM
             frameInfo.guideXRMS = math.sqrt(frameInfo.guideXRMS/frameInfo.nguideRMS) *arcsecPerMM
@@ -732,88 +772,27 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
             else:
                 if not doCalibOffset:
                     gState.setGuideMode('axes', True)
-            
-        if sm: 
-            if plot:
-                try:
-                    sm.device('X11')
-                except:
-                    guideCmd.warn('text="X display error, cannot open sm guider window"')
-                    plot = False
 
-        else:
-            guideCmd.warn('text="Unable to plot as SM is not available"')
-            plot = False
-
-        if plot and psPlot:
-            if not (os.path.exists(psPlotDir)):
-                psPlot = False
-                guideCmd.warn('text="Unable to write SM hardcopies"')
-
+        # Try to generate some plots of fiber offsets via SM.
         if psPlot and not plot:
-            guideCmd.warn('text="Need to enable both plot & psPlot"')           
-
+            guideCmd.warn('text=%s'%qstr("Need to enable both plot & psPlot"))
         if plot:
-            for plotdev in ("X11 -device 0", "postscript"):
-                if plotdev == "postscript":
-                    if not psPlot:
-                        continue
-                    deviceCmd = postscriptDevice(psPlotDir, frameNo)
-                else:
-                    deviceCmd = plotdev
-
-                sm.device(deviceCmd)
-
-                sm.erase(False)
-                sm.limits([-400, 400], [-400, 400])
-                sm.box()
-                sm.frelocate(0.5, 1.03)
-                sm.putlabel(5, r"\1Offsets")
-                sm.xlabel(r"\2\delta Ra")
-                sm.ylabel(r"\2\delta Dec")
-
-                sm.ptype([63])
-                sm.frelocate(0.85, 0.95)
-                sm.putlabel(5, r"\1Frame %d" % frameNo)
-                vscale = 1000 # how much to multiply position error
-                sm.relocate(-350, 350)
-                asec = gState.plugPlateScale/3600.0
-                sm.draw(-350 + vscale*gState.plugPlateScale/3600.0, 350)
-                sm.label(r"  \raise-200{\1{1 arcsec}}")
-
-                for i in range(len(fiberid_np)):
-                    if fiberid_np[i] == 0:
-                        continue
-
-                    sm.relocate(raCenter_np[i], decCenter_np[i])
-                    sm.putlabel(6, r" %d" % fiberid_np[i])
-
-                    sm.relocate(raCenter_np[i], decCenter_np[i])
-
-                    sm.dot()
-
-                    if not gState.gprobes[fiberid_np[i]].enabled:
-                        sm.ltype(1)
-                        sm.ctype(sm.CYAN)
-
-                    sm.draw(raCenter_np[i] + vscale*dRA_np[i],
-                            decCenter_np[i] + vscale*dDec_np[i])
-
-                    sm.ltype()
-                    sm.ctype()
-
-                sm.ptype()
+            plotmsg = plotGuider.checkPlot(psPlot)
+            if plotmsg != True:
+                plot = False
+                guideCmd.warn('text=%s'%qstr(plotmsg))
+            else:
+                for plotdev in ("X11 -device 0", "postscript"):
+                    plotGuider.plotOffsets(plotdev)
 
     except numpy.linalg.LinAlgError:
         guideCmd.warn("text=%s" % qstr("Unable to solve for axis offsets"))
 
     if nStar <= 1 or gState.centerUp:      # don't bother with focus/scale!
         GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
-
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.setCmd(None)
-
         return
 
     #
@@ -864,10 +843,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     # RMS guiding error output has to be after scale estimation so the full fit residual can be reported
 
     print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f, RMS_X= %4.3f, RMS_Y=%4.3f, RMS_Ra= %4.3f, RMS_Dec=%4.3f" %(
-        guideRMS, nguideRMS, guideAzRMS, guideAltRMS, guideXRMS, guideYRMS, guideRaRMS, guideDecRMS) 
+        frameInfo.guideRMS, frameInfo.nguideRMS, frameInfo.guideAzRMS, frameInfo.guideAltRMS, frameInfo.guideXRMS, frameInfo.guideYRMS, frameInfo.guideRaRMS, frameInfo.guideDecRMS)
     guideCmd.inform("guideRMS=%5d,%4.3f,%4d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d,%4d" % (
-        frameNo, guideRMS, nguideRMS, guideAzRMS, guideAltRMS, 
-        guideXRMS, guideYRMS, guideFitRMS, nguideFitRMS, nguideRejectFitRMS))
+        frameInfo.frameNo, frameInfo.guideRMS, frameInfo.nguideRMS, frameInfo.guideAzRMS, frameInfo.guideAltRMS, 
+        frameInfo.guideXRMS, frameInfo.guideYRMS, guideFitRMS, nguideFitRMS, nguideRejectFitRMS))
 
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
@@ -887,58 +866,11 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     focalRatio = 5.0
     C = 5/(32.0*focalRatio*focalRatio)
 
-    # setup arrays for sm and saving to FITS
-    size = len(gState.gprobes) + 1 # fibers are 1-indexed
-    x_np = numpy.zeros(size)
-    xErr_np = numpy.zeros(size)
-    d_np = numpy.zeros(size)
-
     A = numpy.matrix(numpy.zeros(2*2).reshape([2,2]))
     b = numpy.matrix(numpy.zeros(2).reshape([2,1]))
 
     for fiber in fibers:
-        # required?
-        if fiber.gprobe is None:
-            continue
-        gp = gState.gprobes[fiber.fiberid]
-        if not gp.enabled:
-            continue
-        probe = gp.info
-
-        # FIXME -- do we want to include ACQUISITION fibers?
-        # PH -- currently all valid enabled fibers are used so OK.
-        rms = fiber.fwhm / sigmaToFWHM
-        if numpy.isnan(rms):
-            continue
-
-        micronsPerArcsec = 1/3600.0*gState.plugPlateScale*1e3 # convert arcsec to microns
-        rms *= micronsPerArcsec # in microns
-        rmsErr = 1
-
-        d = probe.focusOffset
-        x = rms*rms - C*d*d
-        xErr = 2*rms*rmsErr
-
-        try:
-            ivar = 1/(xErr*xErr)
-        except ZeroDivisionError:
-            ivar = 1e-5
-
-        b[0] += x*ivar
-        b[1] += x*d*ivar
-
-        A[0, 0] += ivar
-        A[0, 1] += d*ivar
-
-        A[1, 1] += d*d*ivar
-
-        try:
-            fiberid_np[fiber.fiberid] = fiber.fiberid
-            x_np[fiber.fiberid] = x
-            xErr_np[fiber.fiberid] = xErr
-            d_np[fiber.fiberid] = d
-        except IndexError, e:
-            pass
+        _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b,plotGuider=plotGuider)
 
     A[1, 0] = A[0, 1]
     try:
@@ -946,7 +878,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
         Delta = x[1, 0]/(2*C)
         try:
-            rms0 = math.sqrt(x[0, 0] - C*Delta*Delta)/micronsPerArcsec
+            rms0 = math.sqrt(x[0, 0] - C*Delta*Delta)/frameInfo.micronsPerArcsec
         except ValueError, e:
             rms0 = float("NaN")
 
@@ -957,9 +889,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         frameInfo.dFocus = dFocus
         frameInfo.filtFocus = offsetFocus
         frameInfo.offsetFocus = offsetFocus if gState.guideFocus else 0.0
-        frameInfo.seeing = rms0*sigmaToFWHM   #in arc sec
+        frameInfo.seeing = rms0*frameInfo.sigmaToFWHM   #in arc sec
 
-        guideCmd.respond("seeing=%g" % (rms0*sigmaToFWHM))
+        guideCmd.respond("seeing=%g" % (rms0*frameInfo.sigmaToFWHM))
         guideCmd.respond("focusError=%g" % (dFocus))
         guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
         if gState.guideFocus and not blockFocusMove:
@@ -977,75 +909,13 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     if plot:
         try:
             for plotdev in ("X11 -device 1", "postscript"):
-                if plotdev == "postscript":
-                    if not psPlot:
-                        continue
-                    deviceCmd = postscriptDevice(psPlotDir, frameNo, "Focus")
-                else:
-                    deviceCmd = plotdev
-
-                sm.device(deviceCmd)
-
-                sm.erase(False)
-                #
-                # Bravely convert to FWHM in arcsec (brave because of the sqrt)
-                #
-                f = sigmaToFWHM/micronsPerArcsec
-                X_np = f*numpy.sqrt(x_np)
-                XErr_np = f*xErr_np/(2*numpy.sqrt(x_np))
-
-                sm.limits(d_np, X_np)
-                sm.box()
-                sm.frelocate(0.5, 1.03)
-                sm.putlabel(5, r"\1Focus")
-
-                sm.xlabel(r"\2d_i \equiv{} fibre piston (\mu m)")
-                sm.ylabel(r"\2\ssqrt{\sigma_i^2 - C d_i^2} (FWHM, arcsec)")
-
-                sm.frelocate(0.85, 0.95)
-                sm.putlabel(5, r"\1Frame %d" % frameNo)
-
-                for i in range(len(fiberid_np)):
-                    if fiberid_np[i] == 0:
-                        continue
-
-                    sm.relocate(d_np[i], X_np[i])
-                    sm.putlabel(6, r" %d" % fiberid_np[i])
-
-                for l in (2, 4):
-                    sm.errorbar(d_np, X_np, XErr_np, l)
-
-                #dd_np = numpy.array([-1000, 1000])
-                dd_np = numpy.arange(-1000, 1000, 25)
-
-                sm.ctype(sm.CYAN)
-                if x != None: # I.e. we successfully fit for focus
-                    sm.connect(dd_np, f*numpy.sqrt(x[0, 0] + x[1, 0]*dd_np))
-                    sm.frelocate(0.1, 0.1); sm.label(r"\line 0 2000 \colour{default} Best fit")
-
-                    sm.ctype(sm.MAGENTA)
-                    sm.frelocate(0.1, 0.15)
-                    if False:
-                        sm.label(r"\line 1 2000 \colour{default} Seeing")
-                        sm.ltype(1)
-                        sm.connect(dd_np, 0*dd_np + rms0*sigmaToFWHM)
-                    else:
-                        sm.label(r"{\2\apoint 45 4 1} \colour{default} Seeing")
-                        sm.relocate(0, rms0*sigmaToFWHM)
-                        sm.expand(4); sm.angle(45)
-                        sm.dot()
-                        sm.expand(); sm.angle(0)
-
-                sm.ltype(); sm.ctype()
-
-                del dd_np
+                plotGuider.plotFWHM(plotdev,frameInfo)
         except Exception, e:
             guideCmd.warn('text="plot failed: %s"' % (e))
 
-            #
-            # Write output fits file for TUI
-            #
+    # Write output fits file for TUI
     GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+#...
 
 def loadAllProbes(cmd, gState):
     gState.allProbes = None
@@ -1119,9 +989,6 @@ def main(actor, queues):
     psPlot = False
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
     
-    minStarFlux = 2000 #ADU, avoid guiding on noise spikes during acquisitions
-                       #FIXME defined here and in GIA
-
     while True:
         try:
             msg = queues[MASTER].get(timeout=timeout)
@@ -1275,7 +1142,7 @@ def main(actor, queues):
                     continue
 
                 guideStep(actor, queues, msg.cmd, msg.filename, oneExposure,
-                          plot=plot, psPlot=psPlot, sm=sm)
+                          plot=plot, psPlot=psPlot)
                 gState.inMotion = False
                 if gState.centerUp:
                     gState.centerUp.finish('')
