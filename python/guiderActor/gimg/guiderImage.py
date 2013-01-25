@@ -286,10 +286,6 @@ class GuiderImageAnalysis(object):
             actorFits.extendHeader(cmd, imageHDU.header, guiderCards)
             self.addPixelWcs(imageHDU.header)
 
-            tccCards = actorFits.tccCards(models, cmd=cmd)
-            actorFits.extendHeader(cmd, imageHDU.header, tccCards)
-            mcpCards = actorFits.mcpCards(models, cmd=cmd)
-            actorFits.extendHeader(cmd, imageHDU.header, mcpCards)
             plateCards = actorFits.plateCards(models, cmd=cmd)
             actorFits.extendHeader(cmd, imageHDU.header, plateCards)
         except Exception, e:
