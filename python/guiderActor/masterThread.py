@@ -373,7 +373,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo,plotGuider=None):
                                                      probe.haYOffsets[frameInfo.wavelength])
                 yRefractCorr = gState.refractionBalance * yInterp(haTime)
             else:
-                # JKP TBD: these warnings are excessive...
+                # JKP: TODO: these warnings might be excessive?
                 guideCmd.warn('text="No HA Offset Time available for probe %d at wavelength %d. No refraction offset calculated."'%(gp.id,frameInfo.wavelength))
         else:
             # Don't do anything if the refraction balance is 0.
@@ -548,11 +548,11 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 flatcart, gState.cartridge)))
 
     try:
-        guideCmd.inform("text='GuiderImageAnalysis()...'")
+        guideCmd.inform('text="guideStep GuiderImageAnalysis()..."')
         GI = GuiderImageAnalysis(inFile, cmd=guideCmd)
-        guideCmd.inform("text='GuiderImageAnalysis.findFibers()...'")
+        guideCmd.inform('text="guideStep GuiderImageAnalysis.findFibers()..."')
         fibers = GI.findFibers(gState.gprobes)
-        guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
+        guideCmd.inform('text="guideStep GuiderImageAnalysis.findFibers() got %i fibers"' % len(fibers))
     except Exception, e:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("Error in processing guide images: %s" % e))
         gState.setCmd(None)
@@ -633,7 +633,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         frameInfo.decenterFocus = 0.0
         frameInfo.decenterScale = 0.0
 
-    # Manually set for now. CPL
+    # At present, only APOGEE uses refractionOffsets.
+    # So, only this wavelength will have haOffsetTime specified for each gprobe.
     frameInfo.wavelength = 16600
     frameInfo.refractionBalance = gState.refractionBalance
 
@@ -1213,9 +1214,9 @@ def main(actor, queues):
                     cmd.fail("text=%s" % qstr("No dark image available!!"))
                     continue
 
-                cmd.inform("text=GuiderImageAnalysis()...")
+                cmd.inform('text="flat_finished GuiderImageAnalysis()..."')
                 GI = GuiderImageAnalysis(msg.filename, cmd=cmd)
-                cmd.inform("text=GuiderImageAnalysis.findFibers()...")
+                cmd.inform('text="flat_finished GuiderImageAnalysis.findFibers()..."')
                 try:
                     fibers = GI.findFibers(gState.gprobes)
                 except Exception, e:
