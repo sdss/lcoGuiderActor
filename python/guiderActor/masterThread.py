@@ -552,7 +552,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         GI = GuiderImageAnalysis(inFile, cmd=guideCmd)
         guideCmd.inform('text="guideStep GuiderImageAnalysis.findFibers()..."')
         fibers = GI.findFibers(gState.gprobes)
-        guideCmd.inform('text="guideStep GuiderImageAnalysis.findFibers() got %i fibers"' % len(fibers))
+        if fibers is not None:
+            guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
+        else:
+            guideCmd.fail('guideState="failed"; text=%s' %qstr("Error reading/processing guider image.")
+            gState.setCmd(None)
+            return
     except Exception, e:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("Error in processing guide images: %s" % e))
         gState.setCmd(None)
@@ -1219,6 +1224,8 @@ def main(actor, queues):
                 cmd.inform('text="flat_finished GuiderImageAnalysis.findFibers()..."')
                 try:
                     fibers = GI.findFibers(gState.gprobes)
+                    if fibers is None:
+                          raise ValueError('Error reading/processing guider image.'))
                 except Exception, e:
                     tback.tback("findFibers", e)
                     cmd.fail('text="findFibers failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
