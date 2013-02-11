@@ -319,7 +319,9 @@ class GuiderImageAnalysis(object):
                 ('decenterDec',   'dcnDec',  'applied user supplied offset in Dec, arcsec'),
                 ('decenterRot',   'dcnRot',  'applied user supplied rotator offset, arcsec'),
                 ('decenterFocus', 'dcnFcus', 'applied user supplied focus offset, um'),
-                ('decenterScale', 'dcnScle', 'applied user supplied scale offset, %' ))
+                ('decenterScale', 'dcnScle', 'applied user supplied scale offset, %' ),
+                ('refractionBalance','refrBal','specified refraction balance between (0,1)'),
+                )
                 #FIXME PH --- do we change to 1e6 units for scale
         cards = []
         for name, fitsName, comment in defs:
@@ -556,6 +558,13 @@ class GuiderImageAnalysis(object):
         p = pyfits.open(self.gimgfn)
         image = p[0].data
         hdr = p[0].header
+        
+        # Occasionally there is a bad read from the camera.
+        # In this case, the bias level is ~35,000, and the stddev is low.
+        # We can just reject such frames, as they are useless.
+        if data.mean() > 20000 and data.std() < 2000:
+            self.warn('Bad guider read! This exposure is mangled and will not be used.')
+            return None
 
         #print 'image', image.min(), image.max()
         #print 'sat', self.saturationLevel
@@ -586,7 +595,8 @@ class GuiderImageAnalysis(object):
         self.debug('Using flat image %s' % flatfn)
         X = self.analyzeFlat(flatfn, cartridgeId, gprobes)
         if X is None:
-            # TBD: jkp: should we ever get here? What kind of crazy result is this?
+            self.warn('Error processsing flat!')
+            # e.g.: no fibers could be found in the flat
             return None
         (flat, mask, fibers) = X
         fibers = [f for f in fibers if not f.is_fake()]
