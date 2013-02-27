@@ -3,6 +3,9 @@ import Queue, threading
 import math, numpy, re
 import time
 import subprocess
+import pyfits
+import os.path
+import scipy.interpolate
 
 from guiderActor import *
 import guiderActor.myGlobals
@@ -14,12 +17,6 @@ import RO
 import PID
 
 from gimg.guiderImage import GuiderImageAnalysis
-import loadGprobes
-import plotGuiderSM
-
-import pyfits
-import os.path
-import scipy.interpolate
 
 def adiff(a1, a2):
     """ return a1-a2, all in degrees. """
@@ -244,7 +241,7 @@ def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None,
     gState.setCmd(guideCmd)
     guideStep(None, queues, cmd, cmd, guiderFile, True)
 
-def _do_one_fiber(fiber,gState,guideCmd,frameInfo,plotGuider=None):
+def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     """
     Process one single fiber, computing various scales and corrections.
     """
@@ -384,13 +381,6 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo,plotGuider=None):
     fiber.dDec = dDec
     raCenter  = probe.xFocal
     decCenter = probe.yFocal
-
-    if plotGuider is not None:
-        plotGuider.fiberid_np[fiber.fiberid] = fiber.fiberid
-        plotGuider.raCenter_np[fiber.fiberid] = raCenter
-        plotGuider.decCenter_np[fiber.fiberid] = decCenter
-        plotGuider.dRA_np[fiber.fiberid] = dRA
-        plotGuider.dDec_np[fiber.fiberid] = dDec
         
     refmag = numpy.nan
     guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
@@ -442,7 +432,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo,plotGuider=None):
     frameInfo.b3 += raCenter*dRA + decCenter*dDec
 #...
 
-def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b,plotGuider=None):
+def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     """Accumulate the focus for one fiber into A and b."""
     # required?
     if fiber.gprobe is None:
@@ -477,12 +467,6 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b,plotGuider=None):
     A[0, 1] += d*ivar
 
     A[1, 1] += d*d*ivar
-
-    if plotGuider is not None:
-        plotGuider.fiberid_np[fiber.fiberid] = fiber.fiberid
-        plotGuider.x_np[fiber.fiberid] = x
-        plotGuider.xErr_np[fiber.fiberid] = xErr
-        plotGuider.d_np[fiber.fiberid] = d
 #...
 
 def guideStep(actor, queues, cmd, inFile, oneExposure,
@@ -567,13 +551,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     frameInfo.b = numpy.matrix(numpy.zeros(3).reshape([3,1]))
     frameInfo.b3 = 0.0
 
-    #setup arrays for sm
-    if plot:
-        # fibers are 1-indexed
-        plotGuider = plotGuiderSM.PlotGuider(len(gState.gprobes) + 1,psPlot=psPlot)
-    else:
-        plotGuider = None
-
     frameInfo.guideRMS    = 0.0
     frameInfo.guideXRMS   = 0.0
     frameInfo.guideYRMS   = 0.0
@@ -618,7 +595,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     frameInfo.refractionBalance = gState.refractionBalance
 
     for fiber in fibers:
-        _do_one_fiber(fiber,gState,guideCmd,frameInfo,plotGuider=plotGuider)
+        _do_one_fiber(fiber,gState,guideCmd,frameInfo)
 
     nStar = frameInfo.A[0, 0]
     if nStar == 0 or gState.inMotion:
@@ -753,18 +730,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 if not doCalibOffset:
                     gState.setGuideMode('axes', True)
 
-        # Try to generate some plots of fiber offsets via SM.
-        if psPlot and not plot:
-            guideCmd.warn('text=%s'%qstr("Need to enable both plot & psPlot"))
-        if plot:
-            plotmsg = plotGuider.checkPlot(psPlot)
-            if plotmsg != True:
-                plot = False
-                guideCmd.warn('text=%s'%qstr(plotmsg))
-            else:
-                for plotdev in ("X11 -device 0", "postscript"):
-                    plotGuider.plotOffsets(plotdev)
-
     except numpy.linalg.LinAlgError:
         guideCmd.warn("text=%s" % qstr("Unable to solve for axis offsets"))
 
@@ -850,7 +815,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     b = numpy.matrix(numpy.zeros(2).reshape([2,1]))
 
     for fiber in fibers:
-        _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b,plotGuider=plotGuider)
+        _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b)
 
     A[1, 0] = A[0, 1]
     try:
@@ -885,13 +850,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideCmd.respond("focusChange=%g, %s" % (numpy.nan, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
         guideCmd.warn("text=%s" % qstr("Unable to solve for focus offset"))
         x = None
-
-    if plot:
-        try:
-            for plotdev in ("X11 -device 1", "postscript"):
-                plotGuider.plotFWHM(plotdev,frameInfo)
-        except Exception, e:
-            guideCmd.warn('text="plot failed: %s"' % (e))
 
     # Write output fits file for TUI
     GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
