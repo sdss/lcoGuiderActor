@@ -5,7 +5,6 @@ import time
 import subprocess
 
 from guiderActor import *
-import loadGprobes
 import guiderActor.myGlobals
 from opscore.utility.qstr import qstr
 import opscore.utility.tback as tback
@@ -145,7 +144,7 @@ class GuiderState(object):
             self.gcameraPixelSize = gcameraPixelSize
         if gcameraMagnification != None:
             self.gcameraMagnification = gcameraMagnification
-            
+
 try:
     gState
 except:
@@ -228,33 +227,8 @@ class FakeCommand(object):
     def fail(self, text):
         self._respond('f', text)
 
-def setupGstate(cartFile, plateFile, cartridgeId):
-    global gState
-
-    gState = GuiderState()
-    config = ConfigParser.ConfigParser()
-    config.read('etc/guider.cfg')
-    
-    plugPlateScale = float(config.get('telescope', "scale"))
-    dSecondary_dmm = float(config.get('telescope', "dSecondary_dmm"))
-    gcameraPixelSize = float(config.get('gcamera', "pixelSize"))
-    gcameraMagnification = float(config.get('gcamera', "magnification"))
-    gState.setScales(plugPlateScale=plugPlateScale,
-                     dSecondary_dmm=dSecondary_dmm,
-                     gcameraMagnification=gcameraMagnification,
-                     gcameraPixelSize=gcameraPixelSize)
-        
-    gState.setGuideMode('axes', False)
-    gState.setGuideMode('focus', False)
-    gState.setGuideMode('scale', False)
-    gState.setRefractionBalance(0.0)
-    gState.gprobes = loadGprobes.getGprobes(cartFile, plateFile, cartridgeId)
-    gState.cartridge = cartridgeId
-    cmd = FakeCommand()
-    gState.setCmd(cmd)
-
 def processOneFile(guiderFile):
-    queues = dict(MASTER=Queue.Queue())
+    queues = dict(MASTER=Queue.Queue())load
 
     guideStep(None, queues, gState.guideCmd, guiderFile, True)
 
@@ -555,7 +529,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         if fibers is not None:
             guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
         else:
-            guideCmd.fail('guideState="failed"; text=%s' %qstr("Error reading/processing guider image.")
+            guideCmd.warn('guideState="failed"; text=%s' %qstr("Error reading/processing guider image."))
             gState.setCmd(None)
             return
     except Exception, e:
@@ -924,6 +898,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 #...
 
 def loadAllProbes(cmd, gState):
+    """
+    Read in information about the current guide probes from the platedb.
+    """
     gState.allProbes = None
     try:
         path = os.path.join(os.environ['PLATEDB_DIR'],
@@ -942,8 +919,11 @@ def loadAllProbes(cmd, gState):
 
         ypm = YPF.YPF(fromString=plugmapBlob)
         pm = ypm.structs['PLUGMAPOBJ'].asArray()
-
-
+        
+        # It ise useful to keep the object information as well, 
+        # so that we can put "any star down any hole". This is potentially 
+        # very useful for testing.
+        # TBD: we'll probably need a new type here for MaNGA.
         keep = pm[numpy.where(((pm.holeType == "GUIDE") & (pm.objType == "NA"))
                               | (pm.holeType == "OBJECT"))]
         cmd.diag('text="kept %d probes"' % (len(keep)))
@@ -1225,7 +1205,7 @@ def main(actor, queues):
                 try:
                     fibers = GI.findFibers(gState.gprobes)
                     if fibers is None:
-                          raise ValueError('Error reading/processing guider image.'))
+                          raise ValueError('Error reading/processing guider image.')
                 except Exception, e:
                     tback.tback("findFibers", e)
                     cmd.fail('text="findFibers failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
@@ -1253,9 +1233,7 @@ def main(actor, queues):
                 gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
                 gState.boresight_ra, gState.boresight_dec = msg.boresight_ra, msg.boresight_dec
                 gState.design_ha = msg.design_ha
-                #
                 # Set the gState.gprobes array (actually a dictionary as we're not sure which fibre IDs are present)
-                #
                 gState.gprobes = {}
                 for id, info in msg.gprobes.items():
                     # FIXABLE HACK: set broken/unplugged probes to be !exists
@@ -1276,9 +1254,7 @@ def main(actor, queues):
                 if gState.cartridge > 0 and gState.cartridge < 10:
                     gState.setRefractionBalance(1.0)
 
-                #
                 # Report the cartridge status
-                #
                 queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
                 
             elif msg.type == Msg.SET_PID:

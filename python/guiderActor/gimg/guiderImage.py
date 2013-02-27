@@ -555,14 +555,12 @@ class GuiderImageAnalysis(object):
 
         # Load guider-cam image.
         self.debug('Reading guider-cam image %s' % self.gimgfn)
-        p = pyfits.open(self.gimgfn)
-        image = p[0].data
-        hdr = p[0].header
+        image,hdr = pyfits.getdata(self.gimgfn,0,header=True)
         
         # Occasionally there is a bad read from the camera.
         # In this case, the bias level is ~35,000, and the stddev is low.
         # We can just reject such frames, as they are useless.
-        if data.mean() > 20000 and data.std() < 2000:
+        if image.mean() > 20000 and image.std() < 2000:
             self.warn('Bad guider read! This exposure is mangled and will not be used.')
             return None
 
@@ -697,12 +695,12 @@ class GuiderImageAnalysis(object):
     # some will have xcen=ycen=NaN; test with fiber.is_fake()
     @staticmethod
     def readProcessedFlat(flatfn, gprobes, stamps=False):
-        p = pyfits.open(flatfn)
-        flat = p[0].data
-        mask = p[1].data
+        flatfits = pyfits.open(flatfn)
+        flat = flatfits[0].data
+        mask = flatfits[1].data
         # small fiber stamps & masks
         # big fiber stamps & masks
-        table = p[6].data
+        table = flatfits[6].data
         x = table.field('xcenter')
         y = table.field('ycenter')
         radius = table.field('radius')
@@ -715,10 +713,10 @@ class GuiderImageAnalysis(object):
 
         if stamps:
             # add stamp,mask fields to fibers.
-            smallstamps = p[2].data
-            smallmasks  = p[3].data
-            bigstamps = p[4].data
-            bigmasks  = p[5].data
+            smallstamps = flatfits[2].data
+            smallmasks  = flatfits[3].data
+            bigstamps = flatfits[4].data
+            bigmasks  = flatfits[5].data
 
             # 1=small, 2=big
             stampsize = table.field('stampSize')
