@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-""" Wrap top-level ICC functions. """
+""" Wrap top-level guider functions. """
 
 import pdb
 import logging
@@ -289,11 +289,11 @@ class GuiderCmd(object):
                                                                 cartfile=cmd.cmd.keywords["cartfile"].values[0]))
 
     def loadCartridge(self, cmd):
-        """Load a cartridge
-
-If the cartridge ID is omitted the currently-mounted cartridge is used.  It's an error to specify a cartridge
-that isn't actually mounted (unless you specify force)
-"""
+        """
+        Load a cartridge.
+        If the cartridge ID is omitted the currently-mounted cartridge is used.
+        Error if cartridge that isn't actually mounted is specified (unless force is also given).
+        """
 
         force = "force" in cmd.cmd.keywords
         cartridge = cmd.cmd.keywords["cartridge"].values[0] if "cartridge" in cmd.cmd.keywords else -1
@@ -457,7 +457,9 @@ that isn't actually mounted (unless you specify force)
                 gprobes=gprobes))
 
     def addGuideOffsets(self, cmd, plate, pointingID, gprobes):
-        """ Read in the new (needed for APOGEE/MARVELS) plateGuideOffsets interpolation arrays. """
+        """
+        Read in the new (needed for APOGEE/MARVELS) plateGuideOffsets interpolation arrays.
+        """
         
         # Get .par file name in the platelist product.
         # plates/0046XX/004671/plateGuideOffsets-004671-p1-l16600.par

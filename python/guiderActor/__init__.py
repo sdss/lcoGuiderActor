@@ -76,7 +76,9 @@ def flushQueue(queue):
             return
 
 class GprobeInfo(object):
-    """Capture information about a guider probe"""
+    """
+    Capture information about a guider probe.
+    """
     def __init__(self, exists, enabled, xCenter, yCenter, radius, rotation,
                  xFerruleOffset, yFerruleOffset, focusOffset, fiber_type, flags):
         self.exists = exists
