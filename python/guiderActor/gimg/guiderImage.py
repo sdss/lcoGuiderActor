@@ -100,7 +100,6 @@ class GuiderImageAnalysis(object):
     # run guider control loop...
 
     GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
-
     '''
 
     # According to
@@ -348,7 +347,7 @@ class GuiderImageAnalysis(object):
         for f in fibers:
             xc = int(f.xcen + 0.5)
             yc = int(f.ycen + 0.5)
-            rot = -f.gprobe.info.rotStar2Sky
+            rot = -f.gprobe.probeInfo.rotStar2Sky
             self.debug("rotating fiber %d at (%d,%d) by %0.1f degrees" % (f.fiberid, xc, yc, rot))
             # Rotate the fiber image...
             stamp = image[yc-r:yc+r+1, xc-r:xc+r+1].astype(int16)
@@ -490,7 +489,7 @@ class GuiderImageAnalysis(object):
                 if fitsname is None:
                     fitsname = name
                 cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
-                                          array=numpy.array([getattr(f.gprobe.info, name, nilval) for f in fibers])))
+                                          array=numpy.array([getattr(f.gprobe.probeInfo, name, nilval) for f in fibers])))
             for name,atname,fitstype,units in ffields:
                 cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
                                           array=numpy.array([getattr(f, atname or name) for f in fibers])))
@@ -851,7 +850,7 @@ class GuiderImageAnalysis(object):
 
         # Filter fibers that are not within X% of the size of a probe.
         # This should drop small objects (eg, cosmic rays)
-        proberads = unique([p.info.radius for p in gprobes.values()])
+        proberads = unique([p.probeInfo.radius for p in gprobes.values()])
         keepfibers = []
         for f in fibers:
             dr = abs((f.radius - proberads)/proberads).min()
@@ -874,8 +873,8 @@ class GuiderImageAnalysis(object):
         best = None
         FX = array([f.xcen for f in fibers])
         FY = array([f.ycen for f in fibers])
-        PX = array([p.info.xCenter for p in gprobes.values()])
-        PY = array([p.info.yCenter for p in gprobes.values()])
+        PX = array([p.probeInfo.xCenter for p in gprobes.values()])
+        PY = array([p.probeInfo.yCenter for p in gprobes.values()])
         (H,W) = img.shape
         for i,f in enumerate(fibers):
             for j,(px,py) in enumerate(zip(PX,PY)):
@@ -888,14 +887,14 @@ class GuiderImageAnalysis(object):
                 fmatch = []
                 for k,pp in gprobes.items():
                     # Find the distance from this probe to each fiber...
-                    D = sqrt(((pp.info.yCenter + dy) - FY)**2 + ((pp.info.xCenter + dx) - FX)**2)
+                    D = sqrt(((pp.probeInfo.yCenter + dy) - FY)**2 + ((pp.probeInfo.xCenter + dx) - FX)**2)
                     a = argmin(D)
                     # If the nearest one is within range...
                     if D[a] < fibers[a].radius:
                         # Fiber "a" is probe id "k".
                         # Compute the dx,dy implied by this match...
-                        mydx = FX[a] - (pp.info.xCenter + dx)
-                        mydy = FY[a] - (pp.info.yCenter + dy)
+                        mydx = FX[a] - (pp.probeInfo.xCenter + dx)
+                        mydy = FY[a] - (pp.probeInfo.yCenter + dy)
                         fmatch.append((a,k, mydx, mydy))
 
                 nhits = len(fmatch)
@@ -988,8 +987,8 @@ class GuiderImageAnalysis(object):
 
         # For writing fiber postage stamps, fill in rotation fields.
         for p in gprobes.values():
-            if not hasattr(p.info, 'rotStar2Sky'):
-                p.info.rotStar2Sky = 90 + p.info.rotation - p.info.phi
+            if not hasattr(p.probeInfo, 'rotStar2Sky'):
+                p.probeInfo.rotStar2Sky = 90 + p.probeInfo.rotation - p.probeInfo.phi
 
         hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binimg)
         if hdulist is None:

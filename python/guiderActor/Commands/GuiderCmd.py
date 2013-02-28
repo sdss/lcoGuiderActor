@@ -29,27 +29,12 @@ class GuiderCmd(object):
     DISABLE = 0x4
     UNKNOWN = 0xff                      # shouldn't ever happen.
 
-    class GprobeInfo(object):
-        """Capture information about a guider probe"""
-        def __init__(self, exists, enabled, xCenter, yCenter, radius, rotation,
-                     xFerruleOffset, yFerruleOffset, focusOffset, fiber_type, flags):
-            self.exists = exists
-            self.enabled = enabled
-            self.xCenter = xCenter
-            self.yCenter = yCenter
-            self.radius = radius
-            self.xFerruleOffset = xFerruleOffset
-            self.yFerruleOffset = yFerruleOffset
-            self.rotation = rotation
-            self.focusOffset = focusOffset
-            self.fiber_type = fiber_type
-            self.rotStar2Sky = numpy.nan
-            self.flags = flags
-            self.haOffsetTimes = {}
-            self.haXOffsets = {}
-            self.haYOffsets = {}
-            
     def __init__(self, actor):
+        """
+        Declares keys that this actor uses, and available commands that can be sent to it.
+        
+        actor is the actor that this is part of (guiderActor, in this case).
+        """
         self.actor = actor
         #
         # Declare keys that we're going to use
@@ -395,10 +380,10 @@ class GuiderCmd(object):
         gprobes = {}
         for cartridgeID, gpID, exists, xCenter, yCenter, radius, rotation, \
                 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type in cmdVar.getKeyVarData(gprobeKey):
-            gprobes[gpID] = GuiderCmd.GprobeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius,
-                                                 rotation, xFerruleOffset, yFerruleOffset, focusOffset,
-                                                 fiber_type, 
-                                                 flags.get(gpID, GuiderCmd.UNKNOWN) | GuiderCmd.NOSTAR)
+            gprobes[gpID] = ProbeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius,
+                                       rotation, xFerruleOffset, yFerruleOffset, focusOffset,
+                                       fiber_type, 
+                                       flags.get(gpID, GuiderCmd.UNKNOWN) | GuiderCmd.NOSTAR)
 
         #
         # Add in the plate/fibre geometry from plPlugMapM
