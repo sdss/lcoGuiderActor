@@ -32,7 +32,7 @@ def adiff(a1, a2):
 try:
     gState
 except:
-    gState = GuiderState()
+    gState = GuiderState.GuiderState()
 
 class FrameInfo(object):
     """ Gather all info about the guiding . """
@@ -76,7 +76,7 @@ class FrameInfo(object):
         self.guideDecRMS = numpy.nan
 
         self.guideAzRMS = numpy.nan      #not implemented yet
-        self.guideAltRMS = numpy.nan     
+        self.guideAltRMS = numpy.nan
 
         self.guideFitRMS = numpy.nan     #not implemented yet
         self.nguideFitRMS = numpy.nan
@@ -1280,17 +1280,17 @@ def main(actor, queues):
                 
                 fiberState = []
                 gprobeBitsDict = {}
-                for f in gState.gprobes.values():
-                    if f:
-                        fiberState.append("\"(%d=%s)\"" % (f.id, f.enabled))
-                        gprobeBitsDict[f.id] = ("0x%x" % f.flags)
+                for gprobe in gState.gprobes.values():
+                    if gprobe:
+                        fiberState.append("\"(%d=%s)\"" % (gprobe.id, gprobe.enabled))
+                        gprobeBitsDict[gprobe.id] = ("0x%x" % gprobe.flags)
 
                 if len(fiberState) > 0:
                     cmd.respond("gprobes=%s" % ", ".join(fiberState))
 
                 # Some fiber IDs may be absent from gprobeBits.keys(), so make a filled list
                 if gprobeBitsDict:
-                    gprobeBits = [0xff,]*(1 + sorted([int(k) for k in gprobeBitsDict.keys()])[-1])
+                    gprobeBits = [GuiderState.UNKNOWN,]*(1 + sorted([int(k) for k in gprobeBitsDict.keys()])[-1])
                     for k, f in gprobeBitsDict.items():
                         gprobeBits[k] = f
                     cmd.respond("gprobeBits=%s" % ", ".join(gprobeBits[1:]))

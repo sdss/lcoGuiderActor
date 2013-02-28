@@ -7,14 +7,13 @@ import math
 
 from guiderActor import *
 
-class GProbeBits(object):
-    """To help manage the guide probe status bits."""
-    GOOD   =  0x0                       # N.b. these are repeated in PlatedbCmd.py. Caveat editor
-    BROKEN =  0x1                       # Worse, they are repeated in 
-    NOSTAR =  0x2
-    DISABLE = 0x4
-    UNKNOWN = 0xff                      # shouldn't ever happen.
-#...
+# gprobebits
+# To help manage the guide probe status bits.
+GOOD   =  0x0    # N.b. these are repeated (twice!) in PlatedbCmd.py. Caveat editor
+BROKEN =  0x1    # Worse, they are repeated in ???
+NOSTAR =  0x2
+DISABLE = 0x4
+UNKNOWN = 0xff   # shouldn't ever happen.
 
 class ProbeInfo(object):
     """
@@ -87,7 +86,14 @@ class GuiderState(object):
     """
 
     class Gprobe(object):
-        """Contains information about a single guide probe."""
+        """
+        Contains information about a single guide probe.
+        
+        id: the number of the probe in this cart.
+        probeInfo: a ProbeInfo instance, containing other data about this probe.
+        enable: whether this probe is currently enabled.
+        flags: the gprobebits for this probe.
+        """
         def __init__(self, id, probeInfo, enable=True, flags=None):
             self.id = id
             self.probeInfo = probeInfo
@@ -102,6 +108,7 @@ class GuiderState(object):
                 self.flags |= self._ENABLED
             else:
                 self.flags &= ~self._ENABLED
+    #...
 
     def __init__(self):
         self.cartridge = -1
@@ -138,8 +145,6 @@ class GuiderState(object):
         self.decenterChanged = True
         self.decenterFocus = numpy.nan
         self.decenterScale = numpy.nan
-        
-        self.gProbebits = GProbeBits()
     #...
 
     def deleteAllGprobes(self):
