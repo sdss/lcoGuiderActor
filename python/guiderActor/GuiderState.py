@@ -5,6 +5,17 @@ Classes related to the current state of the guider.
 import numpy as np
 import math 
 
+from guiderActor import *
+
+class GProbeBits(object):
+    """To help manage the guide probe status bits."""
+    GOOD   =  0x0                       # N.b. these are repeated in PlatedbCmd.py. Caveat editor
+    BROKEN =  0x1                       # Worse, they are repeated in 
+    NOSTAR =  0x2
+    DISABLE = 0x4
+    UNKNOWN = 0xff                      # shouldn't ever happen.
+#...
+
 class ProbeInfo(object):
     """
     Contains information about a single guide probe.
@@ -27,6 +38,7 @@ class ProbeInfo(object):
         self.haXOffsets = {}
         self.haYOffsets = {}
         self.ugriz = np.nan
+    #...
 
     def set_magnitude(self,ugriz):
         """
@@ -34,29 +46,34 @@ class ProbeInfo(object):
         Fibermag originates in plPlugMapP.par, mag through 2arcsec fiber. 
         """
         self.ugriz = ugriz
-    
+
     def get_ref_mag(self):
         """
-        Reference magnitude for this probe's target is mag the guider 
-        should measure for this star/fiber at the current telescope position
-        Guider effective wavelength is 5400A, so calc guidermag from g and r.
-        Then correct for atmospheric extinction
+        Return the reference magnitude for this probe's target.
+
+        The magnitude the guider should measure for this star/fiber at
+        the current telescope position. Guider effective wavelength is
+        5400A, so calculate guidermag from g and r. Then correct for
+        atmospheric extinction.
         
-        APO atmospheric extinction coeff at airmass=1 taken from ubercal paper
-        Padmanabhan etal. 2008 ApJ.  g:k0=0.17,  r:0.10
+        APO atmospheric extinction coeff at airmass=1 taken from table 3 of the
+        ubercal paper, Padmanabhan et al. 2008 ApJ.
+        with the k0 value for the filters, g:0.17, r:0.10
 
         Color terms for transformation from a*g + b*r = guidermag 
         a=xx, b=yy
         """
-        roughmag = (ugriz[2] + ugriz[1])/2
-        #get airmass form tcc  only gives alt = tcc.axePos[2] 
+        actorState = myGlobals.actorState
+        k0_g = 0.17
+        k0_r = 0.10
+        #get airmass from tcc only gives alt = tcc.axePos[2] 
         zd = 90. - actorState.models["tcc"].keyVarDict["axcPos"][1]
-        #zd=0 never occurs for tracking, but need to test for zd=0 for simulate
+        # TBD: zd=0 never occurs for tracking, but need to test for zd=0 for simulate
         airmass = 1./math.cos(math.radians(zd))
-        gobs = ugriz[1] + airmass*0.17
-        robs = ugriz[1] + airmass*0.10
+        gobs = ugriz[1] + airmass*k0_g
+        robs = ugriz[2] + airmass*k0_r
         #guidermag = xx*gobs + yy*robs
-        return roughmag
+        return guidermag
 #...
 
 class GuiderState(object):
@@ -66,7 +83,7 @@ class GuiderState(object):
     Contains information about the currently loaded cartridge, the target of
     each guide probe, custom parameters (decentering, stacking, exposure time, etc.).
     
-    Does not know about any gcamera exposures: that's in FrameInfo.
+    Does not know about any gcamera exposures: that data is stored in FrameInfo.
     """
 
     class Gprobe(object):
@@ -98,13 +115,13 @@ class GuiderState(object):
 
         self.fscanMJD = self.fscanID = -1
         self.design_ha = numpy.nan
-        self.deleteAllGprobes()
 
         self.plugPlateScale = numpy.nan
         self.dSecondary_dmm = numpy.nan
         self.gcameraPixelSize = numpy.nan
         self.gcameraMagnification = numpy.nan
         
+        # Start with all fibers 
         self.setGuideMode("axes")
         self.setGuideMode("focus")
         self.setGuideMode("scale")
@@ -121,6 +138,9 @@ class GuiderState(object):
         self.decenterChanged = True
         self.decenterFocus = numpy.nan
         self.decenterScale = numpy.nan
+        
+        self.gProbebits = GProbeBits()
+    #...
 
     def deleteAllGprobes(self):
         """Delete all fibers """
@@ -140,15 +160,16 @@ class GuiderState(object):
             else:
                 self.gprobes[fiber].enabled = enable
 
-    def setGuideMode(self, what, enabled=True):
-        if what == "axes":
+    def setGuideMode(self, mode, enabled=True):
+        """Enable a guide mode, from "axes", "focus", or "scale"."""
+        if mode == "axes":
             self.guideAxes = enabled
-        elif what == "focus":
+        elif mode == "focus":
             self.guideFocus = enabled
-        elif what == "scale":
+        elif mode == "scale":
             self.guideScale = enabled
         else:
-            raise RuntimeError, ("Unknown guide mode %s" % what)
+            raise RuntimeError, ("Unknown guide mode %s" % mode)
 
     def setRefractionBalance(self, value=0.0):
         self.refractionBalance = value
@@ -156,15 +177,16 @@ class GuiderState(object):
     def setCmd(self, cmd=None):
         self.guideCmd = cmd
 
-    def setDecenter(self, what, value=0):
-        if what == "decenterRA":
+    def setDecenter(self, axis, value=0):
+        """Set axis="decenter[RA,Dec,Rot]" to value."""
+        if axis == "decenterRA":
             self.decenterRA = value
-        elif what == "decenterDec":
+        elif axis == "decenterDec":
             self.decenterDec = value
-        elif what == "decenterRot":
+        elif axis == "decenterRot":
             self.decenterRot = value
         else:
-            raise RuntimeError, ("Unknown decenter axis name %s" % what)
+            raise RuntimeError, ("Unknown decenter axis name %s" % axis)
 
     def setScales(self, plugPlateScale=None,
                   dSecondary_dmm=None,
