@@ -11,6 +11,7 @@ include/shLegacy.h -text
 python/guiderActor/Commands/GuiderCmd.py -text
 python/guiderActor/Commands/TCCCmd.py -text
 python/guiderActor/Commands/__init__.py -text
+python/guiderActor/GuiderState.py -text
 python/guiderActor/PID.py -text
 python/guiderActor/__init__.py -text
 python/guiderActor/gcameraThread.py -text
