@@ -23,12 +23,6 @@ import gcameraThread
 class GuiderCmd(object):
     """ Wrap commands to the guider actor"""
 
-    GOOD   =  0x0                       # N.b. these are repeated in PlatedbCmd.py. Caveat editor
-    BROKEN =  0x1                       # Worse, they are repeated in 
-    NOSTAR =  0x2
-    DISABLE = 0x4
-    UNKNOWN = 0xff                      # shouldn't ever happen.
-
     def __init__(self, actor):
         """
         Declares keys that this actor uses, and available commands that can be sent to it.
@@ -371,19 +365,19 @@ class GuiderCmd(object):
             return
 
         enabled = {}; flags = {}
-        for el in cmdVar.getLastKeyVarData(gprobesInUseKey):
-            mat = re.search(r"^\((\d+)\s*=\s*(\S+)\s*\)$", el)
+        for gprobesInUse in cmdVar.getLastKeyVarData(gprobesInUseKey):
+            mat = re.search(r"^\((\d+)\s*=\s*(\S+)\s*\)$", gprobesInUse)
             id, flags[id] = int(mat.group(1)), int(mat.group(2), 16)
 
-            enabled[id] = True if flags[id] == GuiderCmd.GOOD else False
+            enabled[id] = True if flags[id] == GuiderState.GOOD else False
 
         gprobes = {}
         for cartridgeID, gpID, exists, xCenter, yCenter, radius, rotation, \
                 xFerruleOffset, yFerruleOffset, focusOffset, fiber_type in cmdVar.getKeyVarData(gprobeKey):
-            gprobes[gpID] = ProbeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius,
-                                       rotation, xFerruleOffset, yFerruleOffset, focusOffset,
-                                       fiber_type, 
-                                       flags.get(gpID, GuiderCmd.UNKNOWN) | GuiderCmd.NOSTAR)
+            gprobes[gpID] = GuiderState.ProbeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius,
+                                                  rotation, xFerruleOffset, yFerruleOffset, focusOffset,
+                                                  fiber_type, 
+                                                  flags.get(gpID, GuiderState.UNKNOWN) | GuiderState.NOSTAR)
 
         #
         # Add in the plate/fibre geometry from plPlugMapM
@@ -401,22 +395,19 @@ class GuiderCmd(object):
         fscanMJD = cmdVar.getLastKeyVarData(plPlugMapMKey)[1]
         fscanID = cmdVar.getLastKeyVarData(plPlugMapMKey)[2]
 
-        for el in cmdVar.getKeyVarData(guideInfoKey):
-            i = 0
-            id = int(el[0]); i += 1
-
+        for guideInfo in cmdVar.getKeyVarData(guideInfoKey):
+            id = int(guideInfo[0])
             if id < 0:                  # invalid; typically -9999
                 continue
             
             try:
-                gprobes[id].ra = float(el[i]); i += 1
-                gprobes[id].dec = float(el[i]); i += 1
-                gprobes[id].xFocal = float(el[i]); i += 1
-                gprobes[id].yFocal = float(el[i]); i += 1
-                gprobes[id].phi = float(el[i]); i += 1
-                gprobes[id].throughput = float(el[i]); i += 1
-                gprobes[id].flags &= ~GuiderCmd.NOSTAR
-
+                gprobes[id].ra = float(guideInfo[1])
+                gprobes[id].dec = float(guideInfo[2])
+                gprobes[id].xFocal = float(guideInfo[3])
+                gprobes[id].yFocal = float(guideInfo[4])
+                gprobes[id].phi = float(guideInfo[5])
+                gprobes[id].throughput = float(guideInfo[6])
+                gprobes[id].flags &= ~GuiderState.NOSTAR
             except KeyError:
                 cmd.warn("text=\"Unknown fiberId %d from plugmap file (%s)\"" % (id, ", ".join([str(e) for e in el[1:]])))
                 continue
