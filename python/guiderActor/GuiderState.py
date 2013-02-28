@@ -3,6 +3,7 @@ Classes related to the current state of the guider.
 """
 
 import numpy as np
+import math 
 
 class ProbeInfo(object):
     """
@@ -28,17 +29,33 @@ class ProbeInfo(object):
         self.ugriz = np.nan
 
     def set_magnitude(self,ugriz):
-        """Set the plPlugMap fibermag (ugriz array) for this probe."""
+        """
+        Set the fibermag (ugriz array) for this probe.
+        Fibermag originates in plPlugMapP.par, mag through 2arcsec fiber. 
+        """
         self.ugriz = ugriz
     
     def get_ref_mag(self):
         """
-        Reference magnitude for this probe's target.
+        Reference magnitude for this probe's target is mag the guider 
+        should measure for this star/fiber at the current telescope position
+        Guider effective wavelength is 5400A, so calc guidermag from g and r.
+        Then correct for atmospheric extinction
         
-        This number is calculated by ...
+        APO atmospheric extinction coeff at airmass=1 taken from ubercal paper
+        Padmanabhan etal. 2008 ApJ.  g:k0=0.17,  r:0.10
+
+        Color terms for transformation from a*g + b*r = guidermag 
+        a=xx, b=yy
         """
-        #paul: please sketch the pseudocode (or actual code, if you prefer) here.
         roughmag = (ugriz[2] + ugriz[1])/2
+        #get airmass form tcc  only gives alt = tcc.axePos[2] 
+        zd = 90. - actorState.models["tcc"].keyVarDict["axcPos"][1]
+        #zd=0 never occurs for tracking, but need to test for zd=0 for simulate
+        airmass = 1./math.cos(math.radians(zd))
+        gobs = ugriz[1] + airmass*0.17
+        robs = ugriz[1] + airmass*0.10
+        #guidermag = xx*gobs + yy*robs
         return roughmag
 #...
 
