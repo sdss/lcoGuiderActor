@@ -29,119 +29,6 @@ def adiff(a1, a2):
 
     return dd
 
-class GuiderState(object):
-    """Save the state of the guider"""
-
-    class Gprobe(object):
-        def __init__(self, id, info, enable=True, flags=None):
-            self.id = id
-            self.info = info
-            self.enabled = enable
-            self.flags = flags
-
-        def isEnabled(self):
-            raise NotImplementedError()
-
-        def setEnabled(self, enabled):
-            if enabled:
-                self.flags |= self._ENABLED
-            else:
-                self.flags &= ~self._ENABLED
-
-    def __init__(self):
-        self.cartridge = -1
-        self.plate = -1
-        self.pointing = "?"
-        self.expTime = 0
-        self.stack = 1
-        self.inMotion = False
-        self.centerUp = False
-        self.guideCmd = None
-
-        self.fscanMJD = self.fscanID = -1
-        self.design_ha = numpy.nan
-        self.deleteAllGprobes()
-
-        self.plugPlateScale = numpy.nan
-        self.dSecondary_dmm = numpy.nan
-        self.gcameraPixelSize = numpy.nan
-        self.gcameraMagnification = numpy.nan
-        
-        self.setGuideMode("axes")
-        self.setGuideMode("focus")
-        self.setGuideMode("scale")
-        self.setRefractionBalance(0.0)
-        
-        self.pid = {}               # PIDs for various axes
-        for what in ["raDec", "rot", "scale", "focus"]:
-            self.pid[what] = PID.PID(self.expTime, 0, 0, 0)
-
-        self.decenter = False                #gstate only
-        self.setDecenter("decenterRA")       
-        self.setDecenter("decenterDec")      
-        self.setDecenter("decenterRot")
-        self.decenterChanged = True
-        self.decenterFocus = numpy.nan
-        self.decenterScale = numpy.nan
-
-    def deleteAllGprobes(self):
-        """Delete all fibers """
-        self.gprobes = {}
-
-    def setGprobeState(self, fiber, enable=True, info=None, create=False, flags=None):
-        """Set a fiber's state"""
-
-        if fiber in ("ACQUIRE", "GUIDE"):
-            fiber_type = fiber
-            for gp in self.gprobes.values():
-                if gp.info.fiber_type == fiber_type:
-                    gp.enabled = enable
-        else:
-            if not self.gprobes.has_key(fiber) and create:
-                self.gprobes[fiber] = GuiderState.Gprobe(fiber, info, enable, flags)
-            else:
-                self.gprobes[fiber].enabled = enable
-
-    def setGuideMode(self, what, enabled=True):
-        if what == "axes":
-            self.guideAxes = enabled
-        elif what == "focus":
-            self.guideFocus = enabled
-        elif what == "scale":
-            self.guideScale = enabled
-        else:
-            raise RuntimeError, ("Unknown guide mode %s" % what)
-
-    def setRefractionBalance(self, value=0.0):
-        self.refractionBalance = value
-        
-    def setCmd(self, cmd=None):
-        self.guideCmd = cmd
-
-    def setDecenter(self, what, value=0):
-        if what == "decenterRA":
-            self.decenterRA = value
-        elif what == "decenterDec":
-            self.decenterDec = value
-        elif what == "decenterRot":
-            self.decenterRot = value
-        else:
-            raise RuntimeError, ("Unknown decenter axis name %s" % what)
-
-    def setScales(self, plugPlateScale=None,
-                  dSecondary_dmm=None,
-                  gcameraPixelSize=None,
-                  gcameraMagnification=None):
-
-        if plugPlateScale != None:
-            self.plugPlateScale = plugPlateScale
-        if dSecondary_dmm != None:
-            self.dSecondary_dmm = dSecondary_dmm
-        if gcameraPixelSize != None:
-            self.gcameraPixelSize = gcameraPixelSize
-        if gcameraMagnification != None:
-            self.gcameraMagnification = gcameraMagnification
-
 try:
     gState
 except:
@@ -250,12 +137,12 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
         guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % fiber.fiberid)
         return
     gp = fiber.gprobe
-    probe = gp.info
+    probeInfo = gp.info
     enabled = gp.enabled
     tooFaint = False
 
     # Center up on acquisition fibers only.
-    if gState.centerUp and probe.fiber_type != "ACQUIRE":
+    if gState.centerUp and probeInfo.fiber_type != "ACQUIRE":
         enabled = False
 
     if not enabled:
@@ -265,8 +152,8 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     #
     # dx, dy are the offsets on the ALTA guider image
     #
-    fiber.dx = frameInfo.guideCameraScale*(fiber.xs - fiber.xcen) + (probe.xFerruleOffset / 1000.)
-    fiber.dy = frameInfo.guideCameraScale*(fiber.ys - fiber.ycen) + (probe.yFerruleOffset / 1000.)
+    fiber.dx = frameInfo.guideCameraScale*(fiber.xs - fiber.xcen) + (probeInfo.xFerruleOffset / 1000.)
+    fiber.dy = frameInfo.guideCameraScale*(fiber.ys - fiber.ycen) + (probeInfo.yFerruleOffset / 1000.)
     poserr = fiber.xyserr
 
     #
@@ -276,14 +163,14 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     # rotation is the anticlockwise rotation from x on the ALTA to the pin
     #
     theta = 90                   # allow for 90 deg rot of camera view, should be -90 
-    theta += probe.rotation # allow for intrinsic fibre rotation
+    theta += probeInfo.rotation # allow for intrinsic fibre rotation
     try:
-        theta -= probe.phi      # allow for orientation of alignment hole
+        theta -= probeInfo.phi      # allow for orientation of alignment hole
     except Exception, e:
         cmd.warn('text="skipping phi-less probe %s"' % (fiber.fiberid))
         return
     
-    probe.rotStar2Sky = theta # Squirrel the real angle away.
+    probeInfo.rotStar2Sky = theta # Squirrel the real angle away.
 
     #FIXME PH -- We should ignore gprobes not present on plate/pointing (MARVELS dual pointing)
     #               and ignore fibers not found in flat.
@@ -291,7 +178,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     if numpy.isnan(fiber.dx) or numpy.isnan(fiber.dy) or numpy.isnan(poserr):
         guideCmd.warn("text=%s" %
                       qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber measured=(%g, %g), nominal=(%g,%g)" % (
-                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
+                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probeInfo.xCenter, probeInfo.yCenter)))
         return
 
     if fiber.flux < frameInfo.minStarFlux and enabled:
@@ -303,7 +190,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     if poserr == 0:
         guideCmd.warn("text=%s" %
                       qstr("position error is 0 for gprobe %d star=(%g, %g) fiber=(%g, %g) nominal=(%g,%g)" % (
-                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probe.xCenter, probe.yCenter)))
+                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probeInfo.xCenter, probeInfo.yCenter)))
         return
 
     theta = math.radians(theta)
@@ -321,8 +208,8 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     haTime = 0.0
     try:
         if gState.refractionBalance > 0:
-            if frameInfo.wavelength in probe.haOffsetTimes:
-                haTimes = probe.haOffsetTimes[frameInfo.wavelength]
+            if frameInfo.wavelength in probeInfo.haOffsetTimes:
+                haTimes = probeInfo.haOffsetTimes[frameInfo.wavelength]
                 if dHA < haTimes[0]:
                     if not haLimWarn:
                         cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (dHA, haTimes[0]))
@@ -338,10 +225,10 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     
                 # I'm now assuming 0...offset, but it should be offset1...offset2
                 xInterp = scipy.interpolate.interp1d(haTimes,
-                                                     probe.haXOffsets[frameInfo.wavelength])
+                                                     probeInfo.haXOffsets[frameInfo.wavelength])
                 xRefractCorr = gState.refractionBalance * xInterp(haTime)
                 yInterp = scipy.interpolate.interp1d(haTimes,
-                                                     probe.haYOffsets[frameInfo.wavelength])
+                                                     probeInfo.haYOffsets[frameInfo.wavelength])
                 yRefractCorr = gState.refractionBalance * yInterp(haTime)
             else:
                 # JKP: TODO: these warnings might be excessive?
@@ -379,28 +266,27 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
 
     fiber.dRA = dRA
     fiber.dDec = dDec
-    raCenter  = probe.xFocal
-    decCenter = probe.yFocal
+    raCenter  = probeInfo.xFocal
+    decCenter = probeInfo.yFocal
         
-    refmag = numpy.nan
     guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
-        frameInfo.frameNo, fiber.fiberid, probe.flags,
+        frameInfo.frameNo, fiber.fiberid, probeInfo.flags,
         fiber.dRA*frameInfo.arcsecPerMM, fiber.dDec*frameInfo.arcsecPerMM,
-        fiber.fwhm, probe.focusOffset,
-        fiber.flux, fiber.mag, refmag, fiber.sky, fiber.skymag))
-            
+        fiber.fwhm, probeInfo.focusOffset,
+        fiber.flux, fiber.mag, probeInfo.get_ref_mag(), fiber.sky, fiber.skymag))
+    
     print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
         frameInfo.frameNo,
         fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
-        probe.xFocal, probe.yFocal, probe.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
-        probe.focusOffset)
+        probeInfo.xFocal, probeInfo.yFocal, probeInfo.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
+        probeInfo.focusOffset)
 
     if not enabled or tooFaint:
         return
 
     #Collect fwhms for good in focus stars
     #Allow for a possible small range of focus offsets
-    if abs(probe.focusOffset) < 50 : frameInfo.inFocusFwhm.append(fiber.fwhm)
+    if abs(probeInfo.focusOffset) < 50 : frameInfo.inFocusFwhm.append(fiber.fwhm)
 
     #accumulate guiding errors for good stars used in fit
     frameInfo.guideRMS += fiber.dx**2 + fiber.dy**2
@@ -440,7 +326,7 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     gp = gState.gprobes[fiber.fiberid]
     if not gp.enabled:
         return
-    probe = gp.info
+    probeInfo = gp.probeInfo
 
     # FIXME -- do we want to include ACQUISITION fibers?
     # PH -- currently all valid enabled fibers are used so OK.
@@ -451,7 +337,7 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     rms *= frameInfo.micronsPerArcsec # in microns
     rmsErr = 1
 
-    d = probe.focusOffset
+    d = probeInfo.focusOffset
     x = rms*rms - C*d*d
     xErr = 2*rms*rmsErr
 
@@ -1193,17 +1079,17 @@ def main(actor, queues):
                 gState.design_ha = msg.design_ha
                 # Set the gState.gprobes array (actually a dictionary as we're not sure which fibre IDs are present)
                 gState.gprobes = {}
-                for id, info in msg.gprobes.items():
+                for id, probeInfo in msg.gprobes.items():
                     # FIXABLE HACK: set broken/unplugged probes to be !exists
                     # # The fix is to unify all the probe structures
-                    if info.flags & 0x3:
-                        info.exists = False
-                    if info.exists:
-                        enabled = False if info.fiber_type == "TRITIUM" else info.enabled
+                    if probeInfo.flags & 0x3:
+                        probeInfo.exists = False
+                    if probeInfo.exists:
+                        enabled = False if probeInfo.fiber_type == "TRITIUM" else probeInfo.enabled
                     else:
                         enabled = False
 
-                    gState.setGprobeState(id, enable=enabled, info=info, create=True, flags=info.flags)
+                    gState.setGprobeState(id, enable=enabled, probeInfo=probeInfo, create=True, flags=probeInfo.flags)
                     
                 # Build and install an instrument block for this cartridge info
                 loadTccBlock(msg.cmd, actorState, gState)
