@@ -18,15 +18,15 @@ ABOVEFOCUS = 0x08  # star in probe is out of focus, above focal plane
 BELOWFOCUS = 0x10  # star in probe is out of focus, below focal plane
 UNKNOWN = 0xff     # shouldn't ever happen
 
-class ProbeInfo(object):
+class GProbe(object):
     """
     Contains information about a single guide probe.
     
     ugriz is an array of fiber magnitudes  (through 2arcsec fibers) from in plPlugMapP.par.
     
-    Probe flag bits are set via the corresponding property:
-        broken, disabled, noStar, notExist, outOfFocus
-    and probeInfo.good will tell you if all bits are in the OK state.
+    GProbe flag bits are set via the corresponding property:
+        broken, disabled (enabled), noStar, notExist, outOfFocus
+    and gProbe.good will tell you if all bits are in the OK state.
     """
     def __init__(self,gprobeKey=None,guideInfo=None):
         """Pass the contents of the platedb.probe keyword to initialize"""
@@ -142,12 +142,20 @@ class ProbeInfo(object):
         self._set(NOSTAR) if value else self._unset(NOSTAR)
     
     @property
-    def outOfFocus(self):
-        """True if the star in this probe is out of focus."""
-        return (self._bits & OUTOFFOCUS)
-    @outOfFocus.setter
-    def outOfFocus(self,value):
-        self._set(OUTOFFOCUS) if value else self._unset(OUTOFFOCUS)
+    def aboveFocus(self):
+        """True if the star in this probe is out of focus, above the focal plane."""
+        return (self._bits & ABOVEFOCUS)
+    @aboveFocus.setter
+    def aboveFocus(self,value):
+        self._set(ABOVEFOCUS) if value else self._unset(ABOVEFOCUS)
+
+    @property
+    def belowFocus(self):
+        """True if the star in this probe is out of focus, below the focal plane."""
+        return (self._bits & BELOWFOCUS)
+    @belowFocus.setter
+    def belowFocus(self,value):
+        self._set(BELOWFOCUS) if value else self._unset(BELOWFOCUS)
 
     @property
     def gprobebits(self):
@@ -223,7 +231,7 @@ class GuiderState(object):
         self.setGuideMode("scale")
         self.setRefractionBalance(0.0)
         
-        # Will contain [id]:probeInfo pairs
+        # Will contain [id]:gProbe pairs
         self.gprobes = {}
         
         self.pid = {}               # PIDs for various axes
@@ -244,19 +252,20 @@ class GuiderState(object):
         """Delete all fibers """
         self.gprobes = {}
 
-    def setGprobeState(self, fiber, enable=True, info=None, create=False):
-        """Set a fiber's state"""
-
-        if fiber in ("ACQUIRE", "GUIDE"):
+    def setGprobeState(self, fiber, enable=True):
+        """
+        Set the enable/disable state of either one fiber, or all fibers of type fiber.
+        
+        fiber types: ACQUIRE GUIDE TRITIUM
+        If an integer, must refer to a currently loaded probe.
+        """
+        if fiber in ("ACQUIRE", "GUIDE", "TRITIUM"):
             fiber_type = fiber
             for gp in self.gprobes.values():
                 if gp.info.fiber_type == fiber_type:
                     gp.enabled = enable
         else:
-            if not self.gprobes.has_key(fiber) and create:
-                self.gprobes[fiber] = ProbeInfo(info)
-            else:
-                self.gprobes[fiber].enabled = enable
+            self.gprobes[fiber].enabled = enable
 
     def setGuideMode(self, mode, enabled=True):
         """Enable a guide mode, from "axes", "focus", or "scale"."""

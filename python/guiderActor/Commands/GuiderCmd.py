@@ -119,12 +119,12 @@ class GuiderCmd(object):
         self.status(cmd)                # finishes this command
 
     def disableFibers(self, cmd):
-        """Disable a set of fibers"""
+        """Disable a set of fibers, by probe number."""
 
         self.disableFibersImpl(cmd, enable=False)
 
     def enableFibers(self, cmd):
-        """Enable a set of fibers"""
+        """Enable a set of fibers, by probe number."""
 
         self.disableFibersImpl(cmd, enable=True)
 
@@ -363,10 +363,10 @@ class GuiderCmd(object):
             cmd.fail("text=\"Failed to lookup gprobes for cartridge %d\"" % (cartridge))
             return
         
-        # unpack the various platedb guider keys into a ProbeInfo instance for each probe
+        # unpack the various platedb guider keys into a Probe instance for each probe
         gprobes = {}
         for key in cmdVar.getKeyVarData(gprobeKey):
-            gprobes[key[1]] = ProbeInfo(gprobeKey=Key)
+            gprobes[key[1]] = Probe(gprobeKey=Key)
 
         for key in cmdVar.getKeyVarData(gprobesInUseKey):
             probeId,flags = gprobesInUse.strip('()').split('=')
@@ -390,7 +390,7 @@ class GuiderCmd(object):
         fscanMJD = cmdVar.getLastKeyVarData(plPlugMapMKey)[1]
         fscanID = cmdVar.getLastKeyVarData(plPlugMapMKey)[2]
         
-        # unpack the platedb guideInfo keys into the probeInfo
+        # unpack the platedb guideInfo keys into the probe
         for key in cmdVar.getKeyVarData(guideInfoKey):
             try:
                 gprobes[key[0]].from_platedb_guideInfo(key)
