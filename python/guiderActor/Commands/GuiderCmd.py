@@ -349,9 +349,8 @@ class GuiderCmd(object):
         design_ha = cmdVar.getLastKeyVarData(pointingInfoKey)[5]
         if design_ha < 0:
             design_ha += 360
-        #
+
         # Lookup the valid gprobes
-        #
         extraArgs = ""
         if plate: extraArgs += "plate=%s" % (plate)
         gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
@@ -363,53 +362,41 @@ class GuiderCmd(object):
         if cmdVar.didFail:
             cmd.fail("text=\"Failed to lookup gprobes for cartridge %d\"" % (cartridge))
             return
-
-        enabled = {}; flags = {}
-        for gprobesInUse in cmdVar.getLastKeyVarData(gprobesInUseKey):
-            mat = re.search(r"^\((\d+)\s*=\s*(\S+)\s*\)$", gprobesInUse)
-            id, flags[id] = int(mat.group(1)), int(mat.group(2), 16)
-
-            enabled[id] = True if flags[id] == GuiderState.GOOD else False
-
+        
+        # unpack the various platedb guider keys into a ProbeInfo instance for each probe
         gprobes = {}
-        for cartridgeID, gpID, exists, xCenter, yCenter, radius, rotation, \
-                xFerruleOffset, yFerruleOffset, focusOffset, fiber_type in cmdVar.getKeyVarData(gprobeKey):
-            gprobes[gpID] = GuiderState.ProbeInfo(exists, enabled.get(gpID, False), xCenter, yCenter, radius,
-                                                  rotation, xFerruleOffset, yFerruleOffset, focusOffset,
-                                                  fiber_type, 
-                                                  flags.get(gpID, GuiderState.UNKNOWN) | GuiderState.NOSTAR)
+        for key in cmdVar.getKeyVarData(gprobeKey):
+            gprobes[key[1]] = ProbeInfo(gprobeKey=Key)
 
-        #
+        for key in cmdVar.getKeyVarData(gprobesInUseKey):
+            probeId,flags = gprobesInUse.strip('()').split('=')
+            try:
+                gprobes[int(probeId)].gprobebits(int(flags))
+            except (KeyError,ValueError),e:
+                cmd.warn('text=%s'%e)
+                cmd.warn('text="Unknown probeId %s from gprobesInUse. %s"'%(probeId,str(key)))
+                continue
+            
         # Add in the plate/fibre geometry from plPlugMapM
-        #
-        guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
         plPlugMapMKey = actorState.models["platedb"].keyVarDict["plPlugMapM"]
+        guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
                                             cmdStr="getGprobesPlateGeom cartridge=%d %s" % (cartridge, extraArgs),
                                             keyVars=[guideInfoKey, plPlugMapMKey])
         if cmdVar.didFail:
             cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
             return
-
         assert int(cmdVar.getLastKeyVarData(plPlugMapMKey)[0]) == plate
         fscanMJD = cmdVar.getLastKeyVarData(plPlugMapMKey)[1]
         fscanID = cmdVar.getLastKeyVarData(plPlugMapMKey)[2]
-
-        for guideInfo in cmdVar.getKeyVarData(guideInfoKey):
-            id = int(guideInfo[0])
-            if id < 0:                  # invalid; typically -9999
-                continue
-            
+        
+        # unpack the platedb guideInfo keys into the probeInfo
+        for key in cmdVar.getKeyVarData(guideInfoKey):
             try:
-                gprobes[id].ra = float(guideInfo[1])
-                gprobes[id].dec = float(guideInfo[2])
-                gprobes[id].xFocal = float(guideInfo[3])
-                gprobes[id].yFocal = float(guideInfo[4])
-                gprobes[id].phi = float(guideInfo[5])
-                gprobes[id].throughput = float(guideInfo[6])
-                gprobes[id].flags &= ~GuiderState.NOSTAR
-            except KeyError:
-                cmd.warn("text=\"Unknown fiberId %d from plugmap file (%s)\"" % (id, ", ".join([str(e) for e in el[1:]])))
+                gprobes[key[0]].from_platedb_guideInfo(key)
+            except (KeyError,ValueError),e:
+                cmd.warn('text=%s'%e)
+                cmd.warn('text="Unknown probeId %d from plugmap file. %s"'%(key[0],str(key)))
                 continue
 
         # Add in the refraction functions from plateGeomCoeffs
