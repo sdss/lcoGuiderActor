@@ -35,10 +35,13 @@ except:
     gState = GuiderState.GuiderState()
 
 class FrameInfo(object):
-    """ Gather all info about the guiding . """
-    def __init__(self):
+    """
+    Holds data about the most recently read image frame.
+    """
+    def __init__(self,frameNo):
         """Sets all parameters to NaN, so that they at least exist."""
-        self.frameNo = numpy.nan
+        frameInfo.frameNo = frameNo
+
         self.dRA = numpy.nan
         self.dDec = numpy.nan
         self.dRot = numpy.nan
@@ -65,6 +68,9 @@ class FrameInfo(object):
         # conversion for a Gaussian, use this eveywhere but in ipGguide.c
         # conversion from sigma to FWHM for a JEG double Gaussian is done in ipGguide.c (sigmaToFWHMJEG = 2.468)
         self.sigmaToFWHM = 2.354
+        #ADU, avoid guiding on noise spikes during acquisitions
+        #should be in photons, based on RON, Dark residual, SKY
+        frameInfo.minStarFlux = 500
 
         self.minStarFlux = numpy.nan
 
@@ -250,18 +256,17 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     
     # Apply RA & Dec user guiding offsets to mimic different xy fibers centers
     # The guiderRMS will be calculated around the new effective fiber centers
-  
     if gState.decenter:
         # apply decenter offset so that telescope moves (not the star)
-        dRA  += frameInfo.decenterRA/frameInfo.arcsecPerMM
-        dDec += frameInfo.decenterDec/frameInfo.arcsecPerMM
+        dRA  += gState.decenterRA/gState.arcsecPerMM
+        dDec += gState.decenterDec/gState.arcsecPerMM
         #decenterRot applied after guide solution
 
     #output the keywords only when the decenter changes
-    if gState.decenterChanged: 
+    if gState.decenterChanged:
         guideCmd.inform("decenter=%d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
-                        frameInfo.frameNo, ("enabled" if gState.decenter else "disabled"), frameInfo.decenterRA, frameInfo.decenterDec,
-                        frameInfo.decenterRot, frameInfo.decenterFocus, frameInfo.decenterScale))
+                        frameInfo.frameNo, ("enabled" if gState.decenter else "disabled"), gState.decenterRA, gState.decenterDec,
+                        gState.decenterRot, gState.decenterFocus, gState.decenterScale))
         gState.decenterChanged = False
 
     fiber.dRA = dRA
@@ -291,7 +296,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     #accumulate guiding errors for good stars used in fit
     frameInfo.guideRMS += fiber.dx**2 + fiber.dy**2
     frameInfo.guideXRMS += fiber.dx**2
-    frameInfo.guideYRMS += fiber.dy**2        
+    frameInfo.guideYRMS += fiber.dy**2
     frameInfo.nguideRMS += 1
     frameInfo.guideRaRMS += dRA**2
     frameInfo.guideDecRMS += dDec**2
@@ -409,13 +414,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         return
 
     # Object to gather all per-frame guiding info into.
-    frameInfo = FrameInfo()
-
-    #ADU, avoid guiding on noise spikes during acquisitions
-    #should be in photons, based on RON, Dark residual, SKY
-    frameInfo.minStarFlux = 500
-
-    frameInfo.frameNo = frameNo
+    frameInfo = FrameInfo(frameNo)
     
     # Setup to solve for the axis and maybe scale offsets.  We work consistently
     # in mm on the focal plane, only converting to angles to command the TCC
@@ -459,6 +458,12 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     guideCmd.diag('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
                   (LST, RA, HA, gState.design_ha,dHA))
 
+    # !!!!!!!!!!!!!!!!!!
+    # !!!!!!!!!!!!!!!!!!
+    # jkp TBD: we can probably remove all of this copying of decenter keywords, 
+    # if we just pass the full guider state in to GuiderImageAnalysis()
+    # !!!!!!!!!!!!!!!!!!
+    # !!!!!!!!!!!!!!!!!!
     # Setup the decentered guiding parameteres
     if gState.decenter:  #PH moved outside the fiber loop so write once per frame, not once per fiber
         # Keep decenter values as entered (in arcsec) and only convert them when
@@ -519,7 +524,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 
 #        #PH Kludge add the decenter guiding rotation offset here for now (in degrees)
 #        if gState.decenter:
-#            dRot += frameInfo.decenterRot/3600.0
+#            dRot += gState.decenterRot/3600.0
 
         frameInfo.dRA  = dRA
         frameInfo.dDec = dDec
@@ -744,6 +749,9 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
 def loadAllProbes(cmd, gState):
     """
     Read in information about the current guide probes from the platedb.
+    
+    The contents of the plPlugMap table are documented in the data model here:
+    http://data.sdss3.org/datamodel/files/PLATELIST_DIR/runs/PLATERUN/plPlugMap.html
     """
     gState.allProbes = None
     try:
@@ -1077,19 +1085,8 @@ def main(actor, queues):
                 gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
                 gState.boresight_ra, gState.boresight_dec = msg.boresight_ra, msg.boresight_dec
                 gState.design_ha = msg.design_ha
-                # Set the gState.gprobes array (actually a dictionary as we're not sure which fibre IDs are present)
-                gState.gprobes = {}
-                for id, probeInfo in msg.gprobes.items():
-                    # FIXABLE HACK: set broken/unplugged probes to be !exists
-                    # # The fix is to unify all the probe structures
-                    if probeInfo.flags & 0x3:
-                        probeInfo.exists = False
-                    if probeInfo.exists:
-                        enabled = False if probeInfo.fiber_type == "TRITIUM" else probeInfo.enabled
-                    else:
-                        enabled = False
-
-                    gState.setGprobeState(id, enable=enabled, probeInfo=probeInfo, create=True, flags=probeInfo.flags)
+                for id, gProbe in msg.gprobes.items():
+                    gState.gprobes[id] = gProbe
                     
                 # Build and install an instrument block for this cartridge info
                 loadTccBlock(msg.cmd, actorState, gState)
@@ -1185,7 +1182,7 @@ def main(actor, queues):
                             gState.inMotion = False
                             msg.cmd.fail('text="Failed to offset"')
                             continue
-                    
+                
                 msg.cmd.finish()
                 
             elif msg.type == Msg.SET_GUIDE_MODE:
@@ -1198,10 +1195,12 @@ def main(actor, queues):
 
             elif msg.type == Msg.ENABLE_FIBER:
                 if gState.plate < 0:
-                    msg.cmd.fail("test=\"no plate is loaded\"")
+                    msg.cmd.fail("text=\"no plate is loaded\"")
                     continue
-                
-                gState.setGprobeState(msg.fiber, enable=msg.enable)
+                try:
+                    gState.setGprobeState(msg.fiber, enable=msg.enable)
+                except KeyError:
+                    msg.cmd.fail('text="Unknown fiber id or fiber type: %s."'%str(msg.fiber))
 
             elif msg.type == Msg.CHANGE_SCALE:
                 """ Change telescope scale by a factor of (1 + 0.01*delta), or to scale
@@ -1252,13 +1251,14 @@ def main(actor, queues):
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
-
-                #Allow decenters to be setup prior to guiding
+                
             elif msg.type == Msg.DECENTER:
-                        gState.setDecenter("decenterRA",msg.decenterRA)
-                        gState.setDecenter("decenterDec",msg.decenterDec)
-                        gState.setDecenter("decenterRot",msg.decenterRot)
-                        gState.decenterChanged = True
+                #Allow decenters to be setup prior to guiding
+                gState.setDecenter("decenterRA",msg.decenterRA)
+                gState.setDecenter("decenterDec",msg.decenterDec)
+                gState.setDecenter("decenterRot",msg.decenterRot)
+                gState.decenterChanged = True
+                
             elif msg.type == Msg.STATUS:
                 # Try to generate status even after we have failed.
                 cmd = msg.cmd if msg.cmd.alive else actor.bcast
