@@ -13,7 +13,7 @@ from guiderActor import *
 GOOD   =  0x00     # A happy, working, in-use probe has all bits set to 0.
 BROKEN =  0x01     # a known broken probe, labeled as such in plPlugMap
 NOSTAR =  0x02     # probe with no star in plPlugMap (e.g. tritium)
-DISABLE = 0x04     # probe that has been disabled by the observers (e.g. no star present, double star, wrong position)
+DISABLED = 0x04     # probe that has been disabled by the observers (e.g. no star present, double star, wrong position)
 ABOVEFOCUS = 0x08  # star in probe is out of focus, above focal plane
 BELOWFOCUS = 0x10  # star in probe is out of focus, below focal plane
 UNKNOWN = 0xff     # shouldn't ever happen
@@ -40,7 +40,7 @@ class GProbe(object):
     def checkTritium(self):
         """If this probe is labeled a tritium star, disable it."""
         if self.fiberType == 'TRITIUM':
-            self.disable =True
+            self.disabled =True
     #...
 
     def _check_id(self,id,fromName):
@@ -112,18 +112,18 @@ class GProbe(object):
     @property
     def disabled(self):
         """True if this probe is disabled (negation of enabled)."""
-        return (self._bits & DISABLE)
+        return (self._bits & DISABLED)
     @disabled.setter
     def disabled(self,value):
-        self._set(DISABLE) if value else self._unset(DISABLE)
+        self._set(DISABLED) if value else self._unset(DISABLED)
 
     @property
     def enabled(self):
         """True if this probe is enabled (negation of disabled)."""
-        return not (self._bits & DISABLE)
+        return not (self._bits & DISABLED)
     @enabled.setter
     def enabled(self,value):
-        self._unset(DISABLE) if value else self._set(DISABLE)
+        self._unset(DISABLED) if value else self._set(DISABLED)
 
     @property
     def broken(self):
