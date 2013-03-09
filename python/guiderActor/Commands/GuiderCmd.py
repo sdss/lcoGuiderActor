@@ -363,20 +363,23 @@ class GuiderCmd(object):
             cmd.fail("text=\"Failed to lookup gprobes for cartridge %d\"" % (cartridge))
             return
         
-        # unpack the various platedb guider keys into a Probe instance for each probe
+        # Unpack the various platedb guider keys into a Probe instance for each probe
+        # NOTE: ordered so that we first set the gprobebits, then fill in the rest of the values.
+        # as otherwise the gprobebits would overwrite some of the state we set.
         gprobes = {}
-        for key in cmdVar.getKeyVarData(gprobeKey):
-            gprobes[key[1]] = Probe(gprobeKey=Key)
+        for key in cmdVar.getLastKeyVarData(gprobesInUseKey):
+            probeId,flags = key.strip('()').split('=')
+            gprobes[int(probeId)] = GuiderState.GProbe(int(probeId))
+            gprobes[int(probeId)].gprobebits = int(flags,16)
 
-        for key in cmdVar.getKeyVarData(gprobesInUseKey):
-            probeId,flags = gprobesInUse.strip('()').split('=')
+        for key in cmdVar.getKeyVarData(gprobeKey):
             try:
-                gprobes[int(probeId)].gprobebits(int(flags))
+                gprobes[key[1]].from_platedb_gprobe(key)
             except (KeyError,ValueError),e:
                 cmd.warn('text=%s'%e)
-                cmd.warn('text="Unknown probeId %s from gprobesInUse. %s"'%(probeId,str(key)))
+                cmd.warn('text="Unknown probeId %s from platedb.gprobe. %s"'%(probeId,str(key)))
                 continue
-            
+
         # Add in the plate/fibre geometry from plPlugMapM
         plPlugMapMKey = actorState.models["platedb"].keyVarDict["plPlugMapM"]
         guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]

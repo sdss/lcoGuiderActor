@@ -2,10 +2,10 @@
 Classes related to the current state of the guider.
 """
 
-import numpy as np
+import numpy
 import math 
 
-from guiderActor import *
+import PID
 
 # gprobebits
 # To help manage the guide probe status bits.
@@ -28,14 +28,14 @@ class GProbe(object):
         broken, disabled (enabled), noStar, notExist, outOfFocus
     and gProbe.good will tell you if all bits are in the OK state.
     """
-    def __init__(self,gprobeKey=None,guideInfo=None):
-        """Pass the contents of the platedb.probe keyword to initialize"""
-        self.id = -9999
+    def __init__(self,id=-9999,gprobeKey=None,guideInfo=None):
+        """Pass the contents of the platedb.gprobe and/or platedb.guideInfo keyword to initialize"""
+        self.id = id
         self._bits = GOOD
         if gprobeKey is not None:
-            self.from_gprobeKey(gprobeKey)
+            self.from_platedb_gprobe(gprobeKey)
         if guideInfo is not None:
-            self.from_guideInfoKey(guideInfoKey)
+            self.from_platedb_guideInfo(guideInfoKey)
     
     def checkTritium(self):
         """If this probe is labeled a tritium star, disable it."""
@@ -65,7 +65,7 @@ class GProbe(object):
         Expects a list, as output by CmdVar.getKeyVarData()
         """
         self._check_id(gprobeKey[1],'platedb.gprobe')        
-        self.broken = False if gprobeKey[2] else self.broken = True
+        self.broken = False if gprobeKey[2] else True
         self.xCenter = gprobeKey[3]
         self.yCenter = gprobeKey[4]
         self.radius = gprobeKey[5]
@@ -79,7 +79,7 @@ class GProbe(object):
         self.haOffsetTimes = {}
         self.haXOffsets = {}
         self.haYOffsets = {}
-        self.ugriz = np.nan
+        self.ugriz = numpy.nan
     #...
     
     def from_platedb_guideInfo(self,guideInfoKey):
@@ -160,7 +160,7 @@ class GProbe(object):
     @property
     def gprobebits(self):
         """The hex bitstring for this probe's status."""
-        return "0x%x"self._bits
+        return "0x%0x"%self._bits
     @gprobebits.setter
     def gprobebits(self,value):
         if not isinstance(value,int):

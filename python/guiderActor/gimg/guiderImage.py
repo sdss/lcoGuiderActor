@@ -556,6 +556,7 @@ class GuiderImageAnalysis(object):
         self.debug('Reading guider-cam image %s' % self.gimgfn)
         image,hdr = pyfits.getdata(self.gimgfn,0,header=True)
         
+        print '111'
         # Occasionally there is a bad read from the camera.
         # In this case, the bias level is ~35,000, and the stddev is low.
         # We can just reject such frames, as they are useless.
