@@ -32,6 +32,7 @@ class GProbe(object):
         """Pass the contents of the platedb.gprobe and/or platedb.guideInfo keyword to initialize"""
         self.id = id
         self._bits = GOOD
+        self.ugriz = [numpy.nan,]*5
         if gprobeKey is not None:
             self.from_platedb_gprobe(gprobeKey)
         if guideInfo is not None:
@@ -79,7 +80,6 @@ class GProbe(object):
         self.haOffsetTimes = {}
         self.haXOffsets = {}
         self.haYOffsets = {}
-        self.ugriz = numpy.nan
     #...
     
     def from_platedb_guideInfo(self,guideInfoKey):
@@ -159,18 +159,23 @@ class GProbe(object):
 
     @property
     def gprobebits(self):
-        """The hex bitstring for this probe's status."""
-        return "0x%0x"%self._bits
+        """The bits for this probe's status (int)."""
+        return self._bits
     @gprobebits.setter
     def gprobebits(self,value):
         if not isinstance(value,int):
             raise ValueError("gprobebits must be set as an integer!")
         else:
             self._bits = value
-
+ 
+    # !!!!!!!!!!!
+    # jkp TBD: this calculation should happen *once*,
+    # when ugriz is set. We might want to make a magnitude property, that
+    # can be set with ugriz, and returns this?
+    # !!!!!!!!!!!
     def get_ref_mag(self):
         """
-        Return the reference magnitude for this probe's target.
+        The reference magnitude for this probe's target.
 
         The magnitude the guider should measure for this star/fiber at
         the current telescope position. Guider effective wavelength is

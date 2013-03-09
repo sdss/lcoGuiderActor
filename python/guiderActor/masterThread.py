@@ -139,7 +139,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     Process one single fiber, computing various scales and corrections.
     """
     # necessary?
-    if fiber.gprobe is None:
+    if fiber.gProbe is None:
         guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % fiber.fiberid)
         return
     gProbe = fiber.gProbe
@@ -273,7 +273,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     raCenter  = gProbe.xFocal
     decCenter = gProbe.yFocal
         
-    guideCmd.inform("probe=%d,%2d,%s, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
+    guideCmd.inform("probe=%d,%2d,0x%0x, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
         frameInfo.frameNo, fiber.fiberid, gProbe.gprobebits,
         fiber.dRA*frameInfo.arcsecPerMM, fiber.dDec*frameInfo.arcsecPerMM,
         fiber.fwhm, gProbe.focusOffset,
@@ -325,7 +325,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
 def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     """Accumulate the focus for one fiber into A and b."""
     # required?
-    if fiber.gprobe is None:
+    if fiber.gProbe is None:
         return
     gProbe = gState.gprobes[fiber.fiberid]
     if not gProbe.enabled:
@@ -778,11 +778,6 @@ def loadAllProbes(cmd, gState):
                               | (pm.holeType == "OBJECT"))]
         cmd.diag('text="kept %d probes"' % (len(keep)))
         gState.allProbes = keep
-        print "!!!!!!!!!!!!!!!!!!!!!!!!!!1"
-        print "read in magnitudes from platedb?"
-        test = keep.holeType == 'GUIDE'
-        print keep.mag[test]
-        print "!!!!!!!!!!!!!!!!!!!!!!!!!!1"
     except Exception, e:
         cmd.warn('text=%s' % (qstr("could not load all probe info: %s" % (e))))
     
@@ -1094,6 +1089,10 @@ def main(actor, queues):
                 # Build and install an instrument block for this cartridge info
                 loadTccBlock(msg.cmd, actorState, gState)
                 loadAllProbes(msg.cmd, gState)
+                for id,gProbe in gState.gprobes.items():
+                    test = (gState.allProbes.fiberId == id) & (gState.allProbes.holeType == 'GUIDE')
+                    if test.any(): # should only be one
+                        gProbe.ugriz = gState.allProbes.mag[test][0]
 
                 if gState.cartridge > 0 and gState.cartridge < 10:
                     gState.setRefractionBalance(1.0)
@@ -1285,8 +1284,10 @@ def main(actor, queues):
                 gprobeBitsDict = {}
                 for gProbe in gState.gprobes.values():
                     if gProbe:
-                        fiberState.append('"(%d=%s)"'%(gProbe.id,gProbe.gprobebits))
-
+                        strbits = "0x%0x"%gProbe.gprobebits
+                        fiberState.append('"(%d=%s)"'%(gProbe.id,strbits))
+                        gprobeBitsDict[gProbe.id] = strbits
+                
                 if len(fiberState) > 0:
                     cmd.respond("gprobes=%s" % ", ".join(fiberState))
 
