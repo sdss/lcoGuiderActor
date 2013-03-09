@@ -75,4 +75,4 @@ def flushQueue(queue):
         except Queue.Empty:
             return
 
-__all__ = ["MASTER", "GCAMERA", "Msg"]
+__all__ = ["MASTER", "GCAMERA", "Msg", "GuiderState"]

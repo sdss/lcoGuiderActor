@@ -40,7 +40,7 @@ class FrameInfo(object):
     """
     def __init__(self,frameNo):
         """Sets all parameters to NaN, so that they at least exist."""
-        frameInfo.frameNo = frameNo
+        self.frameNo = frameNo
 
         self.dRA = numpy.nan
         self.dDec = numpy.nan
@@ -70,7 +70,7 @@ class FrameInfo(object):
         self.sigmaToFWHM = 2.354
         #ADU, avoid guiding on noise spikes during acquisitions
         #should be in photons, based on RON, Dark residual, SKY
-        frameInfo.minStarFlux = 500
+        self.minStarFlux = 500
 
         self.minStarFlux = numpy.nan
 
@@ -118,7 +118,7 @@ class FakeCommand(object):
         self._respond('f', text)
 
 def processOneFile(guiderFile):
-    queues = dict(MASTER=Queue.Queue())load
+    queues = dict(MASTER=Queue.Queue())
 
     guideStep(None, queues, gState.guideCmd, guiderFile, True)
 
@@ -142,13 +142,12 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     if fiber.gprobe is None:
         guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % fiber.fiberid)
         return
-    gp = fiber.gprobe
-    probeInfo = gp.info
-    enabled = gp.enabled
+    gProbe = fiber.gProbe
+    enabled = gProbe.enabled
     tooFaint = False
 
     # Center up on acquisition fibers only.
-    if gState.centerUp and probeInfo.fiber_type != "ACQUIRE":
+    if gState.centerUp and gProbe.fiberType != "ACQUIRE":
         enabled = False
 
     if not enabled:
@@ -158,8 +157,8 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     #
     # dx, dy are the offsets on the ALTA guider image
     #
-    fiber.dx = frameInfo.guideCameraScale*(fiber.xs - fiber.xcen) + (probeInfo.xFerruleOffset / 1000.)
-    fiber.dy = frameInfo.guideCameraScale*(fiber.ys - fiber.ycen) + (probeInfo.yFerruleOffset / 1000.)
+    fiber.dx = frameInfo.guideCameraScale*(fiber.xs - fiber.xcen) + (gProbe.xFerruleOffset / 1000.)
+    fiber.dy = frameInfo.guideCameraScale*(fiber.ys - fiber.ycen) + (gProbe.yFerruleOffset / 1000.)
     poserr = fiber.xyserr
 
     #
@@ -169,14 +168,14 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     # rotation is the anticlockwise rotation from x on the ALTA to the pin
     #
     theta = 90                   # allow for 90 deg rot of camera view, should be -90 
-    theta += probeInfo.rotation # allow for intrinsic fibre rotation
+    theta += gProbe.rotation # allow for intrinsic fibre rotation
     try:
-        theta -= probeInfo.phi      # allow for orientation of alignment hole
+        theta -= gProbe.phi      # allow for orientation of alignment hole
     except Exception, e:
         cmd.warn('text="skipping phi-less probe %s"' % (fiber.fiberid))
         return
     
-    probeInfo.rotStar2Sky = theta # Squirrel the real angle away.
+    gProbe.rotStar2Sky = theta # Squirrel the real angle away.
 
     #FIXME PH -- We should ignore gprobes not present on plate/pointing (MARVELS dual pointing)
     #               and ignore fibers not found in flat.
@@ -184,7 +183,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     if numpy.isnan(fiber.dx) or numpy.isnan(fiber.dy) or numpy.isnan(poserr):
         guideCmd.warn("text=%s" %
                       qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber measured=(%g, %g), nominal=(%g,%g)" % (
-                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probeInfo.xCenter, probeInfo.yCenter)))
+                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, gProbe.xCenter, gProbe.yCenter)))
         return
 
     if fiber.flux < frameInfo.minStarFlux and enabled:
@@ -196,7 +195,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     if poserr == 0:
         guideCmd.warn("text=%s" %
                       qstr("position error is 0 for gprobe %d star=(%g, %g) fiber=(%g, %g) nominal=(%g,%g)" % (
-                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, probeInfo.xCenter, probeInfo.yCenter)))
+                          fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, gProbe.xCenter, gProbe.yCenter)))
         return
 
     theta = math.radians(theta)
@@ -214,8 +213,8 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     haTime = 0.0
     try:
         if gState.refractionBalance > 0:
-            if frameInfo.wavelength in probeInfo.haOffsetTimes:
-                haTimes = probeInfo.haOffsetTimes[frameInfo.wavelength]
+            if frameInfo.wavelength in gProbe.haOffsetTimes:
+                haTimes = gProbe.haOffsetTimes[frameInfo.wavelength]
                 if dHA < haTimes[0]:
                     if not haLimWarn:
                         cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (dHA, haTimes[0]))
@@ -231,14 +230,14 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     
                 # I'm now assuming 0...offset, but it should be offset1...offset2
                 xInterp = scipy.interpolate.interp1d(haTimes,
-                                                     probeInfo.haXOffsets[frameInfo.wavelength])
+                                                     gProbe.haXOffsets[frameInfo.wavelength])
                 xRefractCorr = gState.refractionBalance * xInterp(haTime)
                 yInterp = scipy.interpolate.interp1d(haTimes,
-                                                     probeInfo.haYOffsets[frameInfo.wavelength])
+                                                     gProbe.haYOffsets[frameInfo.wavelength])
                 yRefractCorr = gState.refractionBalance * yInterp(haTime)
             else:
                 # JKP: TODO: these warnings might be excessive?
-                guideCmd.warn('text="No HA Offset Time available for probe %d at wavelength %d. No refraction offset calculated."'%(gp.id,frameInfo.wavelength))
+                guideCmd.warn('text="No HA Offset Time available for probe %d at wavelength %d. No refraction offset calculated."'%(gProbe.id,frameInfo.wavelength))
         else:
             # Don't do anything if the refraction balance is 0.
             pass
@@ -271,27 +270,27 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
 
     fiber.dRA = dRA
     fiber.dDec = dDec
-    raCenter  = probeInfo.xFocal
-    decCenter = probeInfo.yFocal
+    raCenter  = gProbe.xFocal
+    decCenter = gProbe.yFocal
         
-    guideCmd.inform("probe=%d,%2d,0x%02d, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
-        frameInfo.frameNo, fiber.fiberid, probeInfo.flags,
+    guideCmd.inform("probe=%d,%2d,%s, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
+        frameInfo.frameNo, fiber.fiberid, gProbe.gprobebits,
         fiber.dRA*frameInfo.arcsecPerMM, fiber.dDec*frameInfo.arcsecPerMM,
-        fiber.fwhm, probeInfo.focusOffset,
-        fiber.flux, fiber.mag, probeInfo.get_ref_mag(), fiber.sky, fiber.skymag))
+        fiber.fwhm, gProbe.focusOffset,
+        fiber.flux, fiber.mag, gProbe.get_ref_mag(), fiber.sky, fiber.skymag))
     
     print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
         frameInfo.frameNo,
         fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
-        probeInfo.xFocal, probeInfo.yFocal, probeInfo.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
-        probeInfo.focusOffset)
+        gProbe.xFocal, gProbe.yFocal, gProbe.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
+        gProbe.focusOffset)
 
     if not enabled or tooFaint:
         return
 
     #Collect fwhms for good in focus stars
     #Allow for a possible small range of focus offsets
-    if abs(probeInfo.focusOffset) < 50 : frameInfo.inFocusFwhm.append(fiber.fwhm)
+    if abs(gProbe.focusOffset) < 50 : frameInfo.inFocusFwhm.append(fiber.fwhm)
 
     #accumulate guiding errors for good stars used in fit
     frameInfo.guideRMS += fiber.dx**2 + fiber.dy**2
@@ -328,10 +327,9 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     # required?
     if fiber.gprobe is None:
         return
-    gp = gState.gprobes[fiber.fiberid]
-    if not gp.enabled:
+    gProbe = gState.gprobes[fiber.fiberid]
+    if not gProbe.enabled:
         return
-    probeInfo = gp.probeInfo
 
     # FIXME -- do we want to include ACQUISITION fibers?
     # PH -- currently all valid enabled fibers are used so OK.
@@ -342,7 +340,7 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     rms *= frameInfo.micronsPerArcsec # in microns
     rmsErr = 1
 
-    d = probeInfo.focusOffset
+    d = gProbe.focusOffset
     x = rms*rms - C*d*d
     xErr = 2*rms*rmsErr
 
@@ -780,6 +778,11 @@ def loadAllProbes(cmd, gState):
                               | (pm.holeType == "OBJECT"))]
         cmd.diag('text="kept %d probes"' % (len(keep)))
         gState.allProbes = keep
+        print "!!!!!!!!!!!!!!!!!!!!!!!!!!1"
+        print "read in magnitudes from platedb?"
+        test = keep.holeType == 'GUIDE'
+        print keep.mag[test]
+        print "!!!!!!!!!!!!!!!!!!!!!!!!!!1"
     except Exception, e:
         cmd.warn('text=%s' % (qstr("could not load all probe info: %s" % (e))))
     
@@ -1280,10 +1283,9 @@ def main(actor, queues):
                 
                 fiberState = []
                 gprobeBitsDict = {}
-                for gprobe in gState.gprobes.values():
-                    if gprobe:
-                        fiberState.append("\"(%d=%s)\"" % (gprobe.id, gprobe.enabled))
-                        gprobeBitsDict[gprobe.id] = ("0x%x" % gprobe.flags)
+                for gProbe in gState.gprobes.values():
+                    if gProbe:
+                        fiberState.append('"(%d=%s)"'%(gProbe.id,gProbe.gprobebits))
 
                 if len(fiberState) > 0:
                     cmd.respond("gprobes=%s" % ", ".join(fiberState))
@@ -1310,7 +1312,7 @@ def main(actor, queues):
                 else:
                     cmd.respond('refractionBalance=%0.1f' % (gState.refractionBalance))
                 cmd.diag('text="design_ha=%0.1f"' % (gState.design_ha))
-                
+
                 if msg.finish:
                     cmd.finish()
             else:
@@ -1323,8 +1325,8 @@ def main(actor, queues):
                 gState.guideCmd.warn('text="%s"' % errMsg)
             actor.bcast.warn('text="%s"' % errMsg)
             gState.setCmd(False)
-            # I (dstn) get infinite recursion from this...
-            #tback(errMsg, e)
+            # NOTE: I (dstn) get infinite recursion from this...
+            #tback.tback(errMsg, e)
 
             #import pdb; pdb.set_trace()
             try:
