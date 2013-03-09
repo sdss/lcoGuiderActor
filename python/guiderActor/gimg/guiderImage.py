@@ -33,7 +33,7 @@ class fiber(object):
         self.dRA = numpy.nan
         self.dDec = numpy.nan
 
-        self.gprobe = None
+        self.gProbe = None
 
     def __str__(self):
         return ('Fiber id %i: center %g,%g; star %g,%g; radius %g' %
@@ -347,7 +347,7 @@ class GuiderImageAnalysis(object):
         for f in fibers:
             xc = int(f.xcen + 0.5)
             yc = int(f.ycen + 0.5)
-            rot = -f.gprobe.probeInfo.rotStar2Sky
+            rot = -f.gProbe.rotStar2Sky
             self.debug("rotating fiber %d at (%d,%d) by %0.1f degrees" % (f.fiberid, xc, yc, rot))
             # Rotate the fiber image...
             stamp = image[yc-r:yc+r+1, xc-r:xc+r+1].astype(int16)
@@ -399,8 +399,7 @@ class GuiderImageAnalysis(object):
 
         try:
             # List the fibers by fiber id.
-            fiberids = gprobes.keys()
-            fiberids.sort()
+            fiberids = sorted(gprobes.keys())
             sfibers = []
             myfibs = dict([(f.fiberid,f) for f in fibers])
             for fid in fiberids:
@@ -409,7 +408,7 @@ class GuiderImageAnalysis(object):
                 else:
                     # Put in NaN fake fibers for ones that weren't found.
                     fake = fiber(fid)
-                    fake.gprobe = gprobes[fid]
+                    fake.gProbe = gprobes[fid]
                     sfibers.append(fake)
             fibers = sfibers
 
@@ -440,15 +439,14 @@ class GuiderImageAnalysis(object):
             hdulist += self.getStampHDUs(smalls, bg, stampImage, mask)
             hdulist += self.getStampHDUs(bigs, bg, stampImage, mask)
 
+            # !!!!
+            # jkp TBD: rework this to make it more legible/extensible.
+            # !!!!
             pixunit = 'guidercam pixels (binned)'
-            gpfields = [
-                        # FITScol,      FITStype, unit
-                        ('enabled',        'L',   None),
-                        ('flags',          'L',   None),
-                        ]
             gpinfofields = [
                            # python attr, FITScol (if diff), FITStype, NIL val, unit
-                           ('exists',         None,    'L',   numpy.nan,     None),
+                           ('enabled',        None,    'L',   numpy.nan,     None),
+                           ('gprobebits',     None,    'B',   numpy.nan,     None),
                            ('xFocal',         None,    'E',   numpy.nan,     'plate mm'),
                            ('yFocal',         None,    'E',   numpy.nan,     'plate mm'),
                            ('radius',         None,    'E',   numpy.nan,     pixunit),
@@ -457,8 +455,8 @@ class GuiderImageAnalysis(object):
                            ('rotation',       None,    'E',   numpy.nan,     None),
                            ('rotStar2Sky',    None,    'E',   numpy.nan,     None),
                            ('focusOffset',    None,    'E',   numpy.nan,     'micrometers'),
-                           ('fiber_type',     None,    'A20', numpy.nan,     None),
-                           ('mag',            'ugriz', '5E',  [numpy.nan]*5, 'mag'),
+                           ('fiberType',      None,    'A20', numpy.nan,     None),
+                           ('ugriz',          None,    '5E',  [numpy.nan,]*5, 'mag'),
                            ]
 
             ffields = [
@@ -482,14 +480,11 @@ class GuiderImageAnalysis(object):
 
             # FIXME -- rotStar2Sky -- should check with "hasattr"...
             cols = []
-            for name,fitstype,units in gpfields:
-                cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
-                                          array=numpy.array([getattr(f.gprobe, name) for f in fibers])))
             for name,fitsname,fitstype,nilval,units in gpinfofields:
                 if fitsname is None:
                     fitsname = name
                 cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
-                                          array=numpy.array([getattr(f.gprobe.probeInfo, name, nilval) for f in fibers])))
+                                          array=numpy.array([getattr(f.gProbe, name, nilval) for f in fibers])))
             for name,atname,fitstype,units in ffields:
                 cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
                                           array=numpy.array([getattr(f, atname or name) for f in fibers])))
@@ -500,7 +495,7 @@ class GuiderImageAnalysis(object):
             hdulist.append(pyfits.new_table(cols))
         except Exception, e:
             self.warn('could not write proc- guider file: %s' % (e,))
-            tback('Narf', e)
+            #tback('Narf', e)
             return None
         return hdulist
 
@@ -556,7 +551,6 @@ class GuiderImageAnalysis(object):
         self.debug('Reading guider-cam image %s' % self.gimgfn)
         image,hdr = pyfits.getdata(self.gimgfn,0,header=True)
         
-        print '111'
         # Occasionally there is a bad read from the camera.
         # In this case, the bias level is ~35,000, and the stddev is low.
         # We can just reject such frames, as they are useless.
@@ -708,7 +702,7 @@ class GuiderImageAnalysis(object):
         fibers = []
         for xi,yi,ri,fi in zip(x,y,radius,fiberid):
             f = fiber(fi, xi, yi, ri, 0)
-            f.gprobe = gprobes.get(fi)
+            f.gProbe = gprobes.get(fi)
             fibers.append(f)
 
         if stamps:
@@ -851,7 +845,7 @@ class GuiderImageAnalysis(object):
 
         # Filter fibers that are not within X% of the size of a probe.
         # This should drop small objects (eg, cosmic rays)
-        proberads = unique([p.probeInfo.radius for p in gprobes.values()])
+        proberads = unique([p.gProbe.radius for p in gprobes.values()])
         keepfibers = []
         for f in fibers:
             dr = abs((f.radius - proberads)/proberads).min()
@@ -874,8 +868,8 @@ class GuiderImageAnalysis(object):
         best = None
         FX = array([f.xcen for f in fibers])
         FY = array([f.ycen for f in fibers])
-        PX = array([p.probeInfo.xCenter for p in gprobes.values()])
-        PY = array([p.probeInfo.yCenter for p in gprobes.values()])
+        PX = array([p.gProbe.xCenter for p in gprobes.values()])
+        PY = array([p.gProbe.yCenter for p in gprobes.values()])
         (H,W) = img.shape
         for i,f in enumerate(fibers):
             for j,(px,py) in enumerate(zip(PX,PY)):
@@ -888,14 +882,14 @@ class GuiderImageAnalysis(object):
                 fmatch = []
                 for k,pp in gprobes.items():
                     # Find the distance from this probe to each fiber...
-                    D = sqrt(((pp.probeInfo.yCenter + dy) - FY)**2 + ((pp.probeInfo.xCenter + dx) - FX)**2)
+                    D = sqrt(((pp.gProbe.yCenter + dy) - FY)**2 + ((pp.gProbe.xCenter + dx) - FX)**2)
                     a = argmin(D)
                     # If the nearest one is within range...
                     if D[a] < fibers[a].radius:
                         # Fiber "a" is probe id "k".
                         # Compute the dx,dy implied by this match...
-                        mydx = FX[a] - (pp.probeInfo.xCenter + dx)
-                        mydy = FY[a] - (pp.probeInfo.yCenter + dy)
+                        mydx = FX[a] - (pp.gProbe.xCenter + dx)
+                        mydy = FY[a] - (pp.gProbe.yCenter + dy)
                         fmatch.append((a,k, mydx, mydy))
 
                 nhits = len(fmatch)
@@ -988,8 +982,8 @@ class GuiderImageAnalysis(object):
 
         # For writing fiber postage stamps, fill in rotation fields.
         for p in gprobes.values():
-            if not hasattr(p.probeInfo, 'rotStar2Sky'):
-                p.probeInfo.rotStar2Sky = 90 + p.probeInfo.rotation - p.probeInfo.phi
+            if not hasattr(p.gProbe, 'rotStar2Sky'):
+                p.gProbe.rotStar2Sky = 90 + p.gProbe.rotation - p.gProbe.phi
 
         hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binimg)
         if hdulist is None:

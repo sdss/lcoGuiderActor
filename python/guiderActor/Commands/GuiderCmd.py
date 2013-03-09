@@ -447,8 +447,8 @@ class GuiderCmd(object):
                 cmd.warn('text="failed to read plateGuideOffsets file %s: %s"' % (path, e))
                 continue
 
-            for gpID, gp in gprobes.items():
-                if gp.fiber_type == 'TRITIUM':
+            for gpID, gProbe in gprobes.items():
+                if gProbe.fiberType == 'TRITIUM':
                     next
 
                 offset = [o for o in guideOffsets if o.holetype == "GUIDE" and o.iguide == gpID]
@@ -456,9 +456,9 @@ class GuiderCmd(object):
                     cmd.warn('text="no or too many (%d) guideOffsets for probe %s"' % (len(offset), gpID))
                     continue
 
-                gp.haOffsetTimes[wavelength] = offset[0].delha
-                gp.haXOffsets[wavelength] = offset[0].xfoff
-                gp.haYOffsets[wavelength] = offset[0].yfoff
+                gProbe.haOffsetTimes[wavelength] = offset[0].delha
+                gProbe.haXOffsets[wavelength] = offset[0].xfoff
+                gProbe.haYOffsets[wavelength] = offset[0].yfoff
 
     def setRefractionBalance(self, cmd):
         """ Top-level 'setRefractionBalance <ratio> command """
