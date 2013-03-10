@@ -6,6 +6,7 @@ import numpy
 import math 
 
 import PID
+from guiderActor import myGlobals
 
 # gprobebits
 # To help manage the guide probe status bits.
@@ -23,43 +24,42 @@ class GProbe(object):
     Contains information about a single guide probe.
     
     ugriz is an array of fiber magnitudes  (through 2arcsec fibers) from in plPlugMapP.par.
+    When set, it computes self.ref_mag, which is the synthetic predicted magnitude for this fiber.
     
     GProbe flag bits are set via the corresponding property:
-        broken, disabled (enabled), noStar, notExist, outOfFocus
+        broken, disabled (enabled), noStar, notExist, aboveFocus, belowFocus
     and gProbe.good will tell you if all bits are in the OK state.
     """
     def __init__(self,id=-9999,gprobeKey=None,guideInfo=None):
         """Pass the contents of the platedb.gprobe and/or platedb.guideInfo keyword to initialize"""
         self.id = id
         self._bits = GOOD
-        self.ugriz = [numpy.nan,]*5
+        self._ugriz = [numpy.nan,]*5
+        self.ref_mag = numpy.nan
         if gprobeKey is not None:
             self.from_platedb_gprobe(gprobeKey)
         if guideInfo is not None:
             self.from_platedb_guideInfo(guideInfoKey)
     
+    def checkFocus(self):
+        """Return True if this star is in focus, and set above/below bits if not."""
+        # allow a small range of allowed focus offsets.
+        if self.focusOffset > 50:
+            self.aboveFocus = True
+            return False
+        elif self.focusOffset < -50:
+            self.belowFocus = True
+            return False
+        else:
+            self.aboveFocus = False
+            self.belowFocus = False
+            return True
+        
     def checkTritium(self):
         """If this probe is labeled a tritium star, disable it."""
         if self.fiberType == 'TRITIUM':
             self.disabled =True
-    #...
 
-    def _check_id(self,id,fromName):
-        """
-        Verify that the id is correct for this probe,
-        or set it if it hasn't been set yet.
-        
-        fromName is the name of the actorkey the new id came from.
-        """
-        if self.id == -9999:
-            self.id = id
-        elif id != self.id:
-            raise ValueError("%s id does not match current probe id!"%fromName)
-        else:
-            # otherwise, everything's fine.
-            pass
-    #...
-    
     def from_platedb_gprobe(self,gprobeKey):
         """
         Fill in data from the platedb.gprobe key.
@@ -96,6 +96,22 @@ class GProbe(object):
         self.throughput = guideInfoKey[6]
     #...
 
+    def _check_id(self,id,fromName):
+        """
+        Verify that the id is correct for this probe,
+        or set it if it hasn't been set yet.
+        
+        fromName is the name of the actorkey the new id came from.
+        """
+        if self.id == -9999:
+            self.id = id
+        elif id != self.id:
+            raise ValueError("%s id does not match current probe id!"%fromName)
+        else:
+            # otherwise, everything's fine.
+            pass
+    #...
+    
     def _unset(self,bit):
         """Set bit to 0."""
         self._bits = self._bits & (~bit)
@@ -147,6 +163,8 @@ class GProbe(object):
         return (self._bits & ABOVEFOCUS)
     @aboveFocus.setter
     def aboveFocus(self,value):
+        if value:
+            self._unset(BELOWFOCUS) # can't be both above and below focus!
         self._set(ABOVEFOCUS) if value else self._unset(ABOVEFOCUS)
 
     @property
@@ -155,6 +173,8 @@ class GProbe(object):
         return (self._bits & BELOWFOCUS)
     @belowFocus.setter
     def belowFocus(self,value):
+        if value:
+            self._unset(ABOVEFOCUS) # can't be both above and below focus!
         self._set(BELOWFOCUS) if value else self._unset(BELOWFOCUS)
 
     @property
@@ -168,14 +188,17 @@ class GProbe(object):
         else:
             self._bits = value
  
-    # !!!!!!!!!!!
-    # jkp TBD: this calculation should happen *once*,
-    # when ugriz is set. We might want to make a magnitude property, that
-    # can be set with ugriz, and returns this?
-    # !!!!!!!!!!!
-    def get_ref_mag(self):
+    @property
+    def ugriz(self):
+        '''
+        The 2" fiber magnitudes of the object in this fiber.        
+        Computes the synthetic predicted reference magnitude (self.ref_mag) when set.
+        '''
+        return self._ugriz
+    @ugriz.setter
+    def ugriz(self,value):
         """
-        The reference magnitude for this probe's target.
+        Compute the reference magnitude for this probe's target.
 
         The magnitude the guider should measure for this star/fiber at
         the current telescope position. Guider effective wavelength is
@@ -189,17 +212,18 @@ class GProbe(object):
         Color terms for transformation from a*g + b*r = guidermag 
         a=xx, b=yy
         """
+        self._ugriz = value
         actorState = myGlobals.actorState
         k0_g = 0.17
         k0_r = 0.10
         #get airmass from tcc only gives alt = tcc.axePos[2] 
-        zd = 90. - actorState.models["tcc"].keyVarDict["axcPos"][1]
+        zd = 90. - actorState.models["tcc"].keyVarDict["axePos"][1]
         # TBD: zd=0 never occurs for tracking, but need to test for zd=0 for simulate
         airmass = 1./math.cos(math.radians(zd))
-        gobs = ugriz[1] + airmass*k0_g
-        robs = ugriz[2] + airmass*k0_r
-        #guidermag = xx*gobs + yy*robs
-        return guidermag
+        gobs = value[1] + airmass*k0_g
+        robs = value[2] + airmass*k0_r
+        #self.ref_mag = xx*gobs + yy*robs
+        self.ref_mag = (gobs+robs)/2. #jkp TBD: placeholder
 #...
 
 class GuiderState(object):
@@ -312,5 +336,5 @@ class GuiderState(object):
         if gcameraPixelSize != None:
             self.gcameraPixelSize = gcameraPixelSize
         if gcameraMagnification != None:
-            self.gcameraMagnification = gcameraMagnificatio
+            self.gcameraMagnification = gcameraMagnification
 
