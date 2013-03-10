@@ -327,7 +327,7 @@ class GuiderImageAnalysis(object):
             try:
                 val = None
                 val = getattr(frameInfo, name)
-                print name, val
+                #print name, val
                 if isnan(val):
                     val = -99999.9 # F.ing F.TS
                 c = actorFits.makeCard(cmd, fitsName, val, comment)
@@ -382,7 +382,7 @@ class GuiderImageAnalysis(object):
         # HACKery....
         #stamps[maskstamps > 0] = maximum(bg - 500, 0)
         stamps[maskstamps > 0] = bg
-        print 'bg=', bg
+        #print 'bg=', bg
         return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
 
     def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask, stampImage=None):
@@ -440,7 +440,7 @@ class GuiderImageAnalysis(object):
             hdulist += self.getStampHDUs(bigs, bg, stampImage, mask)
 
             # !!!!
-            # jkp TBD: rework this to make it more legible/extensible.
+            # jkp TBD: rework this to make it more legible/easily extensible.
             # !!!!
             pixunit = 'guidercam pixels (binned)'
             gpinfofields = [
@@ -457,6 +457,7 @@ class GuiderImageAnalysis(object):
                            ('focusOffset',    None,    'E',   numpy.nan,     'micrometers'),
                            ('fiberType',      None,    'A20', numpy.nan,     None),
                            ('ugriz',          None,    '5E',  [numpy.nan,]*5, 'mag'),
+                           ('ref_mag',        None,    'E',   numpy.nan,     'synthetic predicted fiber mag'),
                            ]
 
             ffields = [
@@ -472,7 +473,7 @@ class GuiderImageAnalysis(object):
                       ('dDec',    None,     'E', 'residual in mm, plate frame'),
                       ('fwhm',    None,     'E', 'arcsec'),
                       ('flux',    None,     'E', 'total DN'),
-                      ('mag',     None,     'E', '(g+r)/2 mag'),
+                      ('mag',     None,     'E', 'mag'),
                       ('sky',     None,     'E', 'DN/pixel'),
                       ('skymag',  None,     'E', 'mag/(arcsec^2)'),
                       ('poserr',  'xyserr', 'E', pixunit),
@@ -575,7 +576,7 @@ class GuiderImageAnalysis(object):
         #   we'll need hdr['EXPTIME'] if we do.
         # FIXME -- filter probes here for !exists, !tritium ?
         exptime = hdr.get('EXPTIME', 0)
-        print 'Exposure time', exptime
+        #print 'Exposure time', exptime
 
         if hdr['IMAGETYP'] == 'flat':
             flatfn = self.gimgfn

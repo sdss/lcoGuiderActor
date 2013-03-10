@@ -272,25 +272,26 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     fiber.dDec = dDec
     raCenter  = gProbe.xFocal
     decCenter = gProbe.yFocal
-        
-    guideCmd.inform("probe=%d,%2d,0x%0x, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
+    
+    guideCmd.inform("probe=%d,%2d,0x%02x, %7.2f,%7.2f, %7.3f,%4.0f, %7.2f,%6.2f,%6.2f, %7.2f,%6.2f" % (
         frameInfo.frameNo, fiber.fiberid, gProbe.gprobebits,
         fiber.dRA*frameInfo.arcsecPerMM, fiber.dDec*frameInfo.arcsecPerMM,
         fiber.fwhm, gProbe.focusOffset,
-        fiber.flux, fiber.mag, gProbe.get_ref_mag(), fiber.sky, fiber.skymag))
+        fiber.flux, fiber.mag, gProbe.ref_mag, fiber.sky, fiber.skymag))
     
-    print "%d %2d  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
-        frameInfo.frameNo,
-        fiber.fiberid, dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
-        gProbe.xFocal, gProbe.yFocal, gProbe.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
-        gProbe.focusOffset)
+    #print "%d %2d 0x%02x  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
+    #    frameInfo.frameNo, fiber.fiberid, gProbe.gprobebits,
+    #    dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
+    #    gProbe.xFocal, gProbe.yFocal, gProbe.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
+    #    gProbe.focusOffset)
 
     if not enabled or tooFaint:
         return
 
     #Collect fwhms for good in focus stars
-    #Allow for a possible small range of focus offsets
-    if abs(gProbe.focusOffset) < 50 : frameInfo.inFocusFwhm.append(fiber.fwhm)
+    if gProbe.checkFocus():
+        frameInfo.inFocusFwhm.append(fiber.fwhm)
+    #if abs(gProbe.focusOffset) < 50 : frameInfo.inFocusFwhm.append(fiber.fwhm)
 
     #accumulate guiding errors for good stars used in fit
     frameInfo.guideRMS += fiber.dx**2 + fiber.dy**2
@@ -1284,7 +1285,7 @@ def main(actor, queues):
                 gprobeBitsDict = {}
                 for gProbe in gState.gprobes.values():
                     if gProbe:
-                        strbits = "0x%0x"%gProbe.gprobebits
+                        strbits = "0x%02x"%gProbe.gprobebits
                         fiberState.append('"(%d=%s)"'%(gProbe.id,strbits))
                         gprobeBitsDict[gProbe.id] = strbits
                 
@@ -1307,7 +1308,7 @@ def main(actor, queues):
                     cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w, 
                                                            gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
                                                            gState.pid[w].Imax, gState.pid[w].nfilt))
-                cmd.diag('text="guideCmd=%s"' % (qstr(gState.guideCmd)))
+                cmd.diag('text="guideCmd=%s"' % (gState.guideCmd))
                 if gState.refractionBalance != 0.0:
                     cmd.warn('refractionBalance=%0.1f' % (gState.refractionBalance))
                 else:
