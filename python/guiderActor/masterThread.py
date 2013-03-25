@@ -1301,6 +1301,7 @@ def main(actor, queues):
                     
                 cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 cmd.respond("expTime=%g" % (gState.expTime))
+                cmd.respond("stack=%g" % (gState.stack))
                 cmd.respond("scales=%g, %g, %g, %g" % (gState.plugPlateScale,
                                                        gState.gcameraMagnification, gState.gcameraPixelSize,
                                                        gState.dSecondary_dmm,))
