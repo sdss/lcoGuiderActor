@@ -279,7 +279,7 @@ showstatus
                                                (tccState.binX, tccState.binY,
                                                 tccState.ctrX, tccState.ctrY,
                                                 tccState.sizeX, tccState.sizeY,
-                                                tccState.gImCamID, temp,
+                                                tccState.itime, tccState.gImCamID, temp,
                                                 "image: binXY begXY sizeXY expTime camID temp"))))
 #        time.sleep(0.4)
         cmd.respond('txtForTcc=%s' % (qstr('8.00 9999 "%s"' % \
