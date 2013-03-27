@@ -1,16 +1,20 @@
 import os.path
+from operator import attrgetter
+import ctypes
+
+import pyfits
 import numpy
 from numpy import *
-import ctypes
-import pyfits
+
 from scipy.ndimage.morphology import binary_closing, binary_dilation, binary_fill_holes, binary_erosion
 from scipy.ndimage.measurements import label, center_of_mass, find_objects
 
+from GuiderExceptions import *
 import actorcore.utility.fits as actorFits
 from opscore.utility.tback import tback
 
 # A guider fiber and the star image seen through it.
-class fiber(object):
+class Fiber(object):
     def __init__(self, fibid, xc=numpy.nan, yc=numpy.nan, r=numpy.nan, illr=numpy.nan):
         self.fiberid = fibid
         self.xcen = xc
@@ -44,7 +48,7 @@ class fiber(object):
 
     def is_fake(self):
         return isnan(self.xcen)
-
+#...
 
 # The following are ctypes classes for interaction with the ipGguide.c code.
 class REGION(ctypes.Structure):
@@ -86,7 +90,19 @@ def numpy_array_to_MASK(A):
     H, W = A.shape
     ptrtype = ctypes.POINTER(ctypes.c_uint8)
     rows = (ptrtype*H)(*[row.ctypes.data_as(ptrtype) for row in A])
-    return MASK(H, W, rows) 
+    return MASK(H, W, rows)
+
+
+def binImage(img, BIN):
+    """Return an image rebinned by BINxBIN pixels."""
+    binned = zeros((img.shape[0]/BIN, img.shape[1]/BIN), numpy.float32)
+    for i in range(BIN):
+        for j in range(BIN):
+            binned += img[i::BIN,j::BIN]
+    binned /= (BIN*BIN)
+    return binned
+
+
 
 class GuiderImageAnalysis(object):
     '''
@@ -287,7 +303,7 @@ class GuiderImageAnalysis(object):
 
             plateCards = actorFits.plateCards(models, cmd=cmd)
             actorFits.extendHeader(cmd, imageHDU.header, plateCards)
-        except Exception, e:
+        except Exception as e:
             self.warn('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e))
 
     def getGuideloopCards(self, cmd, frameInfo):
@@ -332,11 +348,12 @@ class GuiderImageAnalysis(object):
                     val = -99999.9 # F.ing F.TS
                 c = actorFits.makeCard(cmd, fitsName, val, comment)
                 cards.append(c)
-            except Exception, e:
+            except Exception as e:
                 self.warn('failed to make guider card %s=%s (%s)' % (name, val, e))
         return cards
 
     def getStampHDUs(self, fibers, bg, image, mask):
+        """Get the FITS HDUs for the image stamps."""
         if len(fibers) == 0:
             return [pyfits.ImageHDU(array([[]]).astype(int16)),
                     pyfits.ImageHDU(array([[]]).astype(uint8))]
@@ -386,6 +403,7 @@ class GuiderImageAnalysis(object):
         return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
 
     def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask, stampImage=None):
+        """Generate an HDU list to be inserted into the proc-file header."""
         if stampImage is None:
             stampImage = image
 
@@ -407,8 +425,9 @@ class GuiderImageAnalysis(object):
                     sfibers.append(myfibs[fid])
                 else:
                     # Put in NaN fake fibers for ones that weren't found.
-                    fake = fiber(fid)
+                    fake = Fiber(fid)
                     fake.gProbe = gprobes[fid]
+                    fake.gProbe.disabled = True
                     sfibers.append(fake)
             fibers = sfibers
 
@@ -445,6 +464,7 @@ class GuiderImageAnalysis(object):
             pixunit = 'guidercam pixels (binned)'
             gpinfofields = [
                            # python attr, FITScol (if diff), FITStype, NIL val, unit
+                           ('exists',         None,    'L',   numpy.nan,     None),
                            ('enabled',        None,    'L',   numpy.nan,     None),
                            ('gprobebits',     None,    'B',   numpy.nan,     None),
                            ('xFocal',         None,    'E',   numpy.nan,     'plate mm'),
@@ -494,10 +514,10 @@ class GuiderImageAnalysis(object):
             cols.append(pyfits.Column(name='stampIdx', format='I', array=numpy.array(stampInds)))
 
             hdulist.append(pyfits.new_table(cols))
-        except Exception, e:
+        except Exception as e:
             self.warn('could not write proc- guider file: %s' % (e,))
-            #tback('Narf', e)
-            return None
+            tback('guiderImage write', e)
+            raise e
         return hdulist
 
 
@@ -507,7 +527,6 @@ class GuiderImageAnalysis(object):
         """
         if not self.fibers:
             raise Exception('must call findFibers() before writeFITS()')
-        fibers = self.fibers
         gimg = self.guiderImage
         hdr = self.guiderHeader
 
@@ -515,7 +534,7 @@ class GuiderImageAnalysis(object):
         objectname = os.path.splitext(self.gimgfn)[0]
 
         try:
-            hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, gimg, self.maskImage)
+            hdulist = self._getProcGimgHDUList(hdr, gprobes, self.fibers, gimg, self.maskImage)
             imageHDU = hdulist[0]
             imageHDU.header.update('SEEING', frameInfo.seeing if numpy.isfinite(frameInfo.seeing) else 0.0,
                            'Estimate of current seeing, arcsec fwhm')
@@ -523,7 +542,7 @@ class GuiderImageAnalysis(object):
             hdulist.writeto(procpath, clobber=True)
             dirname, filename = os.path.split(procpath)
             self.inform('file=%s/,%s' % (dirname, filename), hasKey=True)
-        except Exception, e:
+        except Exception as e:
             cmd.warn('text="failed to write FITS file %s: %r"' % (procpath, e))
 
     def findFibers(self, gprobes):
@@ -557,7 +576,7 @@ class GuiderImageAnalysis(object):
         # We can just reject such frames, as they are useless.
         if image.mean() > 20000 and image.std() < 2000:
             self.warn('Bad guider read! This exposure is mangled and will not be used.')
-            return None
+            raise BadReadError
 
         #print 'image', image.min(), image.max()
         #print 'sat', self.saturationLevel
@@ -576,22 +595,25 @@ class GuiderImageAnalysis(object):
         #   we'll need hdr['EXPTIME'] if we do.
         # FIXME -- filter probes here for !exists, !tritium ?
         exptime = hdr.get('EXPTIME', 0)
-        #print 'Exposure time', exptime
 
         if hdr['IMAGETYP'] == 'flat':
             flatfn = self.gimgfn
             self.debug('Analysing flat image %s' % (flatfn))
-            (flat, mask, fibers) = self.analyzeFlat(flatfn, cartridgeId, gprobes)
+            try:
+                (flat, mask, fibers) = self.analyzeFlat(flatfn, cartridgeId, gprobes)
+            except FlatError as e:
+                self.warn('Error processing this flat!')
+                raise e
             flatoutname = self.getProcessedOutputName(flatfn)
             return fibers
 
         self.debug('Using flat image %s' % flatfn)
-        X = self.analyzeFlat(flatfn, cartridgeId, gprobes)
-        if X is None:
-            self.warn('Error processsing flat!')
+        try:
+            (flat, mask, fibers) = self.analyzeFlat(flatfn, cartridgeId, gprobes)
+        except FlatError as e:
             # e.g.: no fibers could be found in the flat
-            return None
-        (flat, mask, fibers) = X
+            self.warn('Error processsing flat!')
+            raise e
         fibers = [f for f in fibers if not f.is_fake()]
         # mask the saturated pixels with the appropriate value.
         mask[sat] |= GuiderImageAnalysis.mask_saturated
@@ -675,22 +697,13 @@ class GuiderImageAnalysis(object):
         self.fibers = fibers
         return fibers
 
-    @staticmethod
-    def binImage(img, BIN):
-        binned = zeros((img.shape[0]/BIN, img.shape[1]/BIN), numpy.float32)
-        for i in range(BIN):
-            for j in range(BIN):
-                binned += img[i::BIN,j::BIN]
-        binned /= (BIN*BIN)
-        return binned
-        
-
-    # Returns (flat, mask, fibers)
-    # NOTE, returns a list of fibers the same length as 'gprobes';
-    # some will have xcen=ycen=NaN; test with fiber.is_fake()
-    @staticmethod
-    def readProcessedFlat(flatfn, gprobes, stamps=False):
-        flatfits = pyfits.open(flatfn)
+    def readProcessedFlat(self,flatFileName, gprobes, stamps=False):
+        """
+        Read processed flatFileName and return (flat, mask, fibers).
+        NOTE, returns a list of fibers the same length as 'gprobes';
+        some will have xcen=ycen=NaN; test with fiber.is_fake()
+        """
+        flatfits = pyfits.open(flatFileName)
         flat = flatfits[0].data
         mask = flatfits[1].data
         # small fiber stamps & masks
@@ -702,7 +715,7 @@ class GuiderImageAnalysis(object):
         fiberid = table.field('fiberid')
         fibers = []
         for xi,yi,ri,fi in zip(x,y,radius,fiberid):
-            f = fiber(fi, xi, yi, ri, 0)
+            f = Fiber(fi, xi, yi, ri, 0)
             f.gProbe = gprobes.get(fi)
             fibers.append(f)
 
@@ -750,7 +763,7 @@ class GuiderImageAnalysis(object):
         if os.path.exists(darkout):
             self.inform('Reading processed flat-field from %s' % flatout)
             try:
-                return GuiderImageAnalysis.readProcessedDark(darkout, gprobes, stamps)
+                return self.readProcessedDark(darkout, gprobes, stamps)
             except:
                 self.warn('Failed to read processed dark-field from %s; regenerating it.' % darkout)
 
@@ -761,7 +774,7 @@ class GuiderImageAnalysis(object):
         self.imageBias = bias
     #...
     
-    def analyzeFlat(self, flatfn, cartridgeId, gprobes, stamps=False):
+    def analyzeFlat(self, flatFileName, cartridgeId, gprobes, stamps=False):
         """
         Return (flat,mask,fibers): with the processed flat, mask to apply
         to the image and flat to mask everything but the fibers, and a list
@@ -769,18 +782,17 @@ class GuiderImageAnalysis(object):
         
         NOTE: returns a list of fibers the same length as 'gprobes';
         some will have xcen=ycen=NaN; test with fiber.is_fake()
-
         """
-        flatout = self.getProcessedOutputName(flatfn)
+        flatout = self.getProcessedOutputName(flatFileName)
 
         if os.path.exists(flatout):
             self.inform('Reading processed flat-field from %s' % flatout)
             try:
-                return GuiderImageAnalysis.readProcessedFlat(flatout, gprobes, stamps)
+                return self.readProcessedFlat(flatout, gprobes, stamps)
             except:
                 self.warn('Failed to read processed flat-field from %s; regenerating it.' % flatout)
 
-        img = pyfits.getdata(flatfn)
+        img = pyfits.getdata(flatFileName)
 
         bias = self.find_bias_level(img,binning=1)
         self.inform('subtracting bias level: %g' % bias)
@@ -811,7 +823,7 @@ class GuiderImageAnalysis(object):
 
         # Find the background in regions below the threshold.
         background = median(img[logical_not(T)].ravel())
-        self.debug('Background in flat %s: %g' % (flatfn, background))
+        self.debug('Background in flat %s: %g' % (flatFileName, background))
     
         # Make the mask a bit smaller than the thresholded fibers.
         mask = binary_erosion(T, iterations=3)
@@ -831,7 +843,7 @@ class GuiderImageAnalysis(object):
             # find pixels labelled as belonging to object i.
             obji = (fiber_labels == i)
             # ri,ci = nonzero(obji)
-            # print 'fiber', i, 'extent', ci.min(), ci.max(), ri.min(), ri.max()
+            #print 'fiber', i, 'extent', ci.min(), ci.max(), ri.min(), ri.max()
             npix = sum(obji)
             # center_of_mass returns row,column... swap to x,y
             (yc,xc) = center_of_mass(obji)
@@ -840,13 +852,13 @@ class GuiderImageAnalysis(object):
             # The 0.25 pixel offset makes these centroids agree with gfindstar's
             # pixel coordinate convention.
             self.debug('fiber %d (%d,%g,%g,%g)' % (i,npix,xc,yc,sqrt(npix/pi)))
-            fibers.append(fiber(-1, xc/BIN - 0.25, yc/BIN - 0.25, sqrt(npix/pi)/BIN, -1))
+            fibers.append(Fiber(-1, xc/BIN - 0.25, yc/BIN - 0.25, sqrt(npix/pi)/BIN, -1))
 
         # Match up the fibers with the known probes.
 
         # Filter fibers that are not within X% of the size of a probe.
         # This should drop small objects (eg, cosmic rays)
-        proberads = unique([p.gProbe.radius for p in gprobes.values()])
+        proberads = unique([p.radius for p in gprobes.values()])
         keepfibers = []
         for f in fibers:
             dr = abs((f.radius - proberads)/proberads).min()
@@ -859,8 +871,8 @@ class GuiderImageAnalysis(object):
         fibers = keepfibers
 
         if len(fibers) == 0:
-            self.warn('Failed to find any fibers in guider flat!')
-            return None
+            self.fail('Failed to find any fibers in guider flat!')
+            raise NoFibersFoundError
 
         # Find a single x,y offset by testing possibly corresponding
         # pairs of fibers/probes and checking how many fibers are
@@ -869,8 +881,8 @@ class GuiderImageAnalysis(object):
         best = None
         FX = array([f.xcen for f in fibers])
         FY = array([f.ycen for f in fibers])
-        PX = array([p.gProbe.xCenter for p in gprobes.values()])
-        PY = array([p.gProbe.yCenter for p in gprobes.values()])
+        PX = array([p.xCenter for p in gprobes.values()])
+        PY = array([p.yCenter for p in gprobes.values()])
         (H,W) = img.shape
         for i,f in enumerate(fibers):
             for j,(px,py) in enumerate(zip(PX,PY)):
@@ -883,14 +895,14 @@ class GuiderImageAnalysis(object):
                 fmatch = []
                 for k,pp in gprobes.items():
                     # Find the distance from this probe to each fiber...
-                    D = sqrt(((pp.gProbe.yCenter + dy) - FY)**2 + ((pp.gProbe.xCenter + dx) - FX)**2)
+                    D = sqrt(((pp.yCenter + dy) - FY)**2 + ((pp.xCenter + dx) - FX)**2)
                     a = argmin(D)
                     # If the nearest one is within range...
                     if D[a] < fibers[a].radius:
                         # Fiber "a" is probe id "k".
                         # Compute the dx,dy implied by this match...
-                        mydx = FX[a] - (pp.gProbe.xCenter + dx)
-                        mydy = FY[a] - (pp.gProbe.yCenter + dy)
+                        mydx = FX[a] - (pp.xCenter + dx)
+                        mydy = FY[a] - (pp.yCenter + dy)
                         fmatch.append((a,k, mydx, mydy))
 
                 nhits = len(fmatch)
@@ -903,8 +915,8 @@ class GuiderImageAnalysis(object):
 
         if best is None:
             # How can this happen?  No fibers or no probes...
-            self.warn("This can't happen?  No match fibers/probes")
-            return None
+            self.warn("This can't happen?  No matched fibers/probes.")
+            raise FlatError
 
         fmatch = best
         # Check for duplicates...
@@ -922,7 +934,6 @@ class GuiderImageAnalysis(object):
         dx = mean([dx for fi,probei,dx,dy in fmatch])
         dy = mean([dy for fi,probei,dx,dy in fmatch])
         self.inform('Matched %i fibers, with dx,dy = (%g,%g)' % (len(fmap), dx, dy))
-        # import pdb; pdb.set_trace()
 
         # Record the fiber id, and remember the gprobe...
         for i,f in enumerate(fibers):
@@ -930,13 +941,12 @@ class GuiderImageAnalysis(object):
                 self.debug('probe %d (%d) not matched; skipping...' % (i, f.fiberid))
                 continue
             f.fiberid = fmap[i]
-            f.gprobe = gprobes[f.fiberid]
+            f.gProbe = gprobes[f.fiberid]
         # Filter out those with no match...
         fibers = [f for i,f in enumerate(fibers) if i in fmap and f.fiberid >= 0]
 
         # Reorder fibers by fiberid.
-        I = argsort(array([f.fiberid for f in fibers]))
-        fibers = [fibers[i] for i in I]
+        fibers.sort(key=attrgetter('fiberid'))
         for f in fibers:
             self.debug('Fiber id %i at (%.1f, %.1f)' % (f.fiberid, f.xcen-dx, f.ycen-dy))
 
@@ -964,27 +974,28 @@ class GuiderImageAnalysis(object):
         mask = where(bmask, 0, GuiderImageAnalysis.mask_masked)
         mask = mask.astype(uint8)
 
-        flat = GuiderImageAnalysis.binImage(flat, BIN)
+        flat = binImage(flat, BIN)
         # Now clip the flat to be within a reasonable range.
         # Have to do it post-binning, otherwise the fiber edges get wonky.
         # This prevents dividing by really big/small numbers when using the flat.
         numpy.clip(flat, 0.5, 1.5, out=flat)
 
         #int16 for the rotation code in C
-        binimg = GuiderImageAnalysis.binImage(img, BIN).astype(int16)
+        binimg = flat.astype(int16)
+        #binimg = binImage(img, BIN).astype(int16)
 
         # Write output file... copy header cards from input image.
         # DX?  DY?  Any other stats in here?
-        hdr = pyfits.getheader(flatfn)
+        hdr = pyfits.getheader(flatFileName)
         # we don't want the bzero header keyword set.
         # it somehow is ending up in the raw flat files, but not the object files.
         del hdr['BZERO']
-        pixunit = 'binned guider-camera pixels'
+        pixunit = 'binned guider-camera pixels' # jkp TBD: unused?
 
         # For writing fiber postage stamps, fill in rotation fields.
         for p in gprobes.values():
-            if not hasattr(p.gProbe, 'rotStar2Sky'):
-                p.gProbe.rotStar2Sky = 90 + p.gProbe.rotation - p.gProbe.phi
+            if not hasattr(p, 'rotStar2Sky'):
+                p.rotStar2Sky = 90 + p.rotation - p.phi
 
         hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binimg)
         if hdulist is None:
@@ -994,4 +1005,4 @@ class GuiderImageAnalysis(object):
         hdulist.writeto(flatout, clobber=True)
         # Now read that file we just wrote...
 
-        return GuiderImageAnalysis.readProcessedFlat(flatout, gprobes, stamps)
+        return self.readProcessedFlat(flatout, gprobes, stamps)

@@ -17,6 +17,7 @@ import RO
 import PID
 
 from gimg.guiderImage import GuiderImageAnalysis
+from gimg.GuiderExceptions import *
 
 def adiff(a1, a2):
     """ return a1-a2, all in degrees. """
@@ -96,6 +97,7 @@ class FrameInfo(object):
         
         self.refractionBalance = numpy.nan
         self.wavelength = numpy.nan
+        self.dHA = numpy.nan
         
         self.A = numpy.nan
         self.b = numpy.nan
@@ -215,18 +217,18 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
         if gState.refractionBalance > 0:
             if frameInfo.wavelength in gProbe.haOffsetTimes:
                 haTimes = gProbe.haOffsetTimes[frameInfo.wavelength]
-                if dHA < haTimes[0]:
+                if frameInfo.dHA < haTimes[0]:
                     if not haLimWarn:
-                        cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (dHA, haTimes[0]))
+                        cmd.warn('text="dHA (%0.1f) is below interpolation table; using limit (%0.1f)"' % (frameInfo.dHA, haTimes[0]))
                         haLimWarn = True
                     haTime = haTimes[0]
-                elif dHA > haTimes[-1]:
+                elif frameInfo.dHA > haTimes[-1]:
                     if not haLimWarn:
-                        cmd.warn('text="dHA (%0.1f) is above interpolation table; using limit (%0.1f)"' % (dHA, haTimes[-1]))
+                        cmd.warn('text="dHA (%0.1f) is above interpolation table; using limit (%0.1f)"' % (frameInfo.dHA, haTimes[-1]))
                         haLimWarn = True
                     haTime = haTimes[-1]
                 else:
-                    haTime = dHA
+                    haTime = frameInfo.dHA
     
                 # I'm now assuming 0...offset, but it should be offset1...offset2
                 xInterp = scipy.interpolate.interp1d(haTimes,
@@ -400,14 +402,16 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         GI = GuiderImageAnalysis(inFile, cmd=guideCmd)
         guideCmd.inform('text="guideStep GuiderImageAnalysis.findFibers()..."')
         fibers = GI.findFibers(gState.gprobes)
-        if fibers is not None:
-            guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
-        else:
-            guideCmd.warn('guideState="failed"; text=%s' %qstr("Error reading/processing guider image."))
-            gState.setCmd(None)
-            return
-    except Exception, e:
-        guideCmd.fail('guideState="failed"; text=%s' % qstr("Error in processing guide images: %s" % e))
+        guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
+    except BadReadError as e:
+        guideCmd.warn('text=%s' %qstr("Skipping badly formatted image."))
+        return
+    except FlatError as e:
+        guideCmd.fail('guideState="failed"; text=%s' %qstr("Error reading/processing guider flat."))
+        gState.setCmd(None)
+        return
+    except Exception as e:
+        guideCmd.fail('guideState="failed"; text=%s' % qstr("Unknown error in processing guide images: %s" % e))
         gState.setCmd(None)
         tback.tback("GuideTest", e)
         return
@@ -452,10 +456,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
     RAkey = actorState.models["tcc"].keyVarDict["objNetPos"][0]
     RA = RAkey.getPos()
     HA = adiff(LST, RA)     # The corrections are indexed by degrees, happily.
-    dHA = adiff(HA, gState.design_ha)
+    frameInfo.dHA = adiff(HA, gState.design_ha)
     haLimWarn = False
     guideCmd.diag('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
-                  (LST, RA, HA, gState.design_ha,dHA))
+                  (LST, RA, HA, gState.design_ha,frameInfo.dHA))
 
     # !!!!!!!!!!!!!!!!!!
     # !!!!!!!!!!!!!!!!!!
@@ -1057,9 +1061,14 @@ def main(actor, queues):
                     fibers = GI.findFibers(gState.gprobes)
                     if fibers is None:
                           raise ValueError('Error reading/processing guider image.')
+                except GuiderError, e:
+                    guideCmd.fail('guideState="failed"; text=%s' %qstr("findFibers failed. Error reading/processing guider flat."))
+                    gState.setCmd(None)
+                    return
                 except Exception, e:
                     tback.tback("findFibers", e)
-                    cmd.fail('text="findFibers failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
+                    cmd.fail('text="findFibers failed for an unknown reason: %s' % (e))
+                    #cmd.fail('text="findFibers failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
                     continue
                 
                 try:
@@ -1329,7 +1338,7 @@ def main(actor, queues):
             actor.bcast.warn('text="%s"' % errMsg)
             gState.setCmd(False)
             # NOTE: I (dstn) get infinite recursion from this...
-            #tback.tback(errMsg, e)
+            tback.tback(errMsg, e)
 
             #import pdb; pdb.set_trace()
             try:
