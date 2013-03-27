@@ -122,8 +122,13 @@ class GProbe(object):
     
     @property
     def good(self):
-        """True if all probe bits are OK."""
-        return True if not self._bits else False
+        """True if all probe bits except [above|below]Focus are 0."""
+        return True if not (self._bits & ~ABOVEFOCUS & ~BELOWFOCUS) else False
+
+    @property
+    def exists(self):
+        """True if this probe is not broken and has a star defined."""
+        return False if ((self.broken) or (self.nostar)) else True
 
     @property
     def disabled(self):
