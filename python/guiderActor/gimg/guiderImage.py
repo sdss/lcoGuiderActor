@@ -176,10 +176,10 @@ class GuiderImageAnalysis(object):
         # In arcsec/pixel
         self.pixelscale = 0.428
 
-        # The photometric zero-point for (g + r)/2 band
+        # The photometric zero-point for (g + r)/2 band was 25.34
         # This was calibrated vs MJD 55246, with AZ~=73 deg, airmass~=1.046
-        # Masayuki zero average point 25.70
-        #self.zeropoint = 25.70
+        # Masayuki zero average point 25.70 for use for his color transform
+        self.zeropoint = 25.70
         
     def pixels2arcsec(self, pix):
         return pix * self.pixelscale
