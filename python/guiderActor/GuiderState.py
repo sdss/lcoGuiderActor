@@ -214,21 +214,24 @@ class GProbe(object):
         ubercal paper, Padmanabhan et al. 2008 ApJ.
         with the k0 value for the filters, g:0.17, r:0.10
 
-        Color terms for transformation from a*g + b*r = guidermag 
-        a=xx, b=yy
+        Color terms for transformation from r + a1 + a2*(g-r) + a3*(g-r)**2 = ref_mag 
+        a1=0.535, a2=0.506, a3=-0.0312
+        Coefficient are from Masayuki, Gunn&Strkyer stds observed through modeled guider & g,r passbands 
         """
         self._ugriz = value
         actorState = myGlobals.actorState
         k0_g = 0.17
         k0_r = 0.10
+        a1 = 0.535, a2 = 0.506, a3 = -0.0312
+        
         #get airmass from tcc only gives alt = tcc.axePos[2] 
         zd = 90. - actorState.models["tcc"].keyVarDict["axePos"][1]
         # TBD: zd=0 never occurs for tracking, but need to test for zd=0 for simulate
         airmass = 1./math.cos(math.radians(zd))
         gobs = value[1] + airmass*k0_g
         robs = value[2] + airmass*k0_r
-        #self.ref_mag = xx*gobs + yy*robs
-        self.ref_mag = (gobs+robs)/2. #jkp TBD: placeholder
+        self.ref_mag = robs + a1 + a2*(gobs-robs) + a3*(gobs-robs)**2
+        #self.ref_mag = (gobs+robs)/2. #jkp TBD: placeholder
 #...
 
 class GuiderState(object):
