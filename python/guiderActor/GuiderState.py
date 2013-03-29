@@ -10,13 +10,13 @@ from guiderActor import myGlobals
 
 # gprobebits
 # To help manage the guide probe status bits.
-# WARNING: ensure the usage in platedb and STUI are consistent with this!
+# WARNING: ensure the usage in guiderActor, platedbActor, STUI are consistent with this!
 GOOD   =  0x00     # A happy, working, in-use probe has all bits set to 0.
 BROKEN =  0x01     # a known broken probe, labeled as such in plPlugMap
 NOSTAR =  0x02     # probe with no star in plPlugMap (e.g. tritium)
 DISABLED = 0x04     # probe that has been disabled by the observers (e.g. no star present, double star, wrong position)
-ABOVEFOCUS = 0x08  # star in probe is out of focus, above focal plane
-BELOWFOCUS = 0x10  # star in probe is out of focus, below focal plane
+ABOVEFOCUS = 0x08  # fiber is above the focal plane
+BELOWFOCUS = 0x10  # fiber is below the focal plane
 UNKNOWN = 0xff     # shouldn't ever happen
 
 class GProbe(object):
@@ -27,7 +27,7 @@ class GProbe(object):
     When set, it computes self.ref_mag, which is the synthetic predicted magnitude for this fiber.
     
     GProbe flag bits are set via the corresponding property:
-        broken, disabled (enabled), noStar, notExist, aboveFocus, belowFocus
+        broken, disabled (enabled), noStar, notExist, atFocus (aboveFocus,belowFocus)
     and gProbe.good will tell you if all bits are in the OK state.
     """
     def __init__(self,id=-9999,gprobeKey=None,guideInfo=None):
@@ -42,18 +42,15 @@ class GProbe(object):
             self.from_platedb_guideInfo(guideInfoKey)
     
     def checkFocus(self):
-        """Return True if this star is in focus, and set above/below bits if not."""
+        """Set the above/below focus bits based on the focusOffset value."""
         # allow a small range of allowed focus offsets.
-        if self.focusOffset > 50:
+        if self.focusOffset < -50:
             self.aboveFocus = True
-            return False
-        elif self.focusOffset < -50:
+        elif self.focusOffset > 50:
             self.belowFocus = True
-            return False
         else:
             self.aboveFocus = False
             self.belowFocus = False
-            return True
         
     def checkTritium(self):
         """If this probe is labeled a tritium star, disable it."""
@@ -80,6 +77,7 @@ class GProbe(object):
         self.haOffsetTimes = {}
         self.haXOffsets = {}
         self.haYOffsets = {}
+        self.checkFocus()
     #...
     
     def from_platedb_guideInfo(self,guideInfoKey):
@@ -161,10 +159,15 @@ class GProbe(object):
     @noStar.setter
     def noStar(self,value):
         self._set(NOSTAR) if value else self._unset(NOSTAR)
-    
+
+    @property
+    def atFocus(self):
+        """True if this fiber is at the focal plane."""
+        return not ((self._bits & ABOVEFOCUS) & (self._bits & BELOWFOCUS))
+
     @property
     def aboveFocus(self):
-        """True if the star in this probe is out of focus, above the focal plane."""
+        """True if this fiber is above the focal plane."""
         return (self._bits & ABOVEFOCUS)
     @aboveFocus.setter
     def aboveFocus(self,value):
@@ -174,7 +177,7 @@ class GProbe(object):
 
     @property
     def belowFocus(self):
-        """True if the star in this probe is out of focus, below the focal plane."""
+        """True if this fiber is below the focal plane."""
         return (self._bits & BELOWFOCUS)
     @belowFocus.setter
     def belowFocus(self,value):
@@ -222,7 +225,9 @@ class GProbe(object):
         actorState = myGlobals.actorState
         k0_g = 0.17
         k0_r = 0.10
-        a1 = 0.535, a2 = 0.506, a3 = -0.0312
+        a1 = 0.535
+        a2 = 0.506
+        a3 = -0.0312
         
         #get airmass from tcc only gives alt = tcc.axePos[2] 
         zd = 90. - actorState.models["tcc"].keyVarDict["axePos"][1]
