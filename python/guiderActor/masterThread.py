@@ -192,6 +192,8 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
                       qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
                           fiber.fiberid, fiber.flux, frameInfo.minStarFlux)))
         gProbe.tooFaint = True
+    else:
+        gProbe.tooFaint = False
 
     if poserr == 0:
         guideCmd.warn("text=%s" %
@@ -773,7 +775,15 @@ def loadAllProbes(cmd, gState):
         ypm = YPF.YPF(fromString=plugmapBlob)
         pm = ypm.structs['PLUGMAPOBJ'].asArray()
         
-        # It ise useful to keep the object information as well, 
+        # output information about the science program for this plate.
+        # jkp TBD: may need to conver these to strings in some way
+        # to catch ["marvels","apogee"], but I need to see how lists are
+        # handled in the YPF, which requires an example...
+        #instruments = ypm['instruments'].value
+        #platetype = ypm['platetype'].value
+        #cmd.info('scienceProgram=%s,%s'%(instruments,platetype))
+        
+        # It is useful to keep the object information as well, 
         # so that we can put "any star down any hole". This is potentially 
         # very useful for testing.
         # TBD: we'll probably need a new type here for MaNGA.
@@ -785,6 +795,13 @@ def loadAllProbes(cmd, gState):
         cmd.warn('text=%s' % (qstr("could not load all probe info: %s" % (e))))
     
 def loadTccBlock(cmd, actorState, gState):
+    """
+    !!!!!!!!!!!!!!!!!!11
+    jkp TBD: Why do we do this separately from loadAllProbes?
+    They issue the same catPlPlugMapM command, right?
+    I think we can merge them together
+    !!!!!!!!!!!!!!!!!!11
+    """
     try:
         cmd1 = "catPlPlugMapM -c %s -m %s -p %s -f %s %s" % (gState.cartridge, gState.fscanMJD,
                                                              gState.pointing, gState.fscanID,

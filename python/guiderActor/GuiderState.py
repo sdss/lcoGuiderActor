@@ -190,8 +190,8 @@ class GProbe(object):
     def tooFaint(self):
         """True if this star in this fiber is too faint to use for guiding."""
         return (self._bits & TOOFAINT)
-    @noStar.setter
-    def noStar(self,value):
+    @tooFaint.setter
+    def tooFaint(self,value):
         self._set(TOOFAINT) if value else self._unset(TOOFAINT)
     
     @property
