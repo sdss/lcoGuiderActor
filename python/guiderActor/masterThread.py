@@ -291,9 +291,8 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
         return
 
     #Collect fwhms for good in focus stars
-    if gProbe.checkFocus():
+    if gProbe.atFocus and gProbe.good:
         frameInfo.inFocusFwhm.append(fiber.fwhm)
-    #if abs(gProbe.focusOffset) < 50 : frameInfo.inFocusFwhm.append(fiber.fwhm)
 
     #accumulate guiding errors for good stars used in fit
     frameInfo.guideRMS += fiber.dx**2 + fiber.dy**2
@@ -1290,24 +1289,15 @@ def main(actor, queues):
                 cmd.inform('text="The guider is %s"' % ("running" if gState.guideCmd else "off"))
                 cmd.inform('text="Decentering is %s"' % ("off" if not gState.decenter else "on"))
                 
-                fiberState = []
-                gprobeBitsDict = {}
-                for gProbe in gState.gprobes.values():
-                    if gProbe:
-                        strbits = "0x%02x"%gProbe.gprobebits
-                        fiberState.append('"(%d=%s)"'%(gProbe.id,strbits))
-                        gprobeBitsDict[gProbe.id] = strbits
-                
-                if len(fiberState) > 0:
-                    cmd.respond("gprobes=%s" % ", ".join(fiberState))
-
-                # Some fiber IDs may be absent from gprobeBits.keys(), so make a filled list
-                if gprobeBitsDict:
-                    gprobeBits = [GuiderState.UNKNOWN,]*(1 + sorted([int(k) for k in gprobeBitsDict.keys()])[-1])
-                    for k, f in gprobeBitsDict.items():
-                        gprobeBits[k] = f
+                # Some fiber IDs may be absent from gprobeBits.keys(), so start them all with UNKNOWN
+                liveProbes = gState.gprobes.keys()
+                if liveProbes:
+                    gprobeBits = [GuiderState.UNKNOWN,]*(1 + max(liveProbes))
+                    for gProbe in gState.gprobes.values():
+                        if gProbe:
+                            gprobeBits[gProbe.id] = "0x%02x"%gProbe.gprobebits
                     cmd.respond("gprobeBits=%s" % ", ".join(gprobeBits[1:]))
-                    
+                
                 cmd.respond("guideEnable=%s, %s, %s" % (gState.guideAxes, gState.guideFocus, gState.guideScale))
                 cmd.respond("expTime=%g" % (gState.expTime))
                 cmd.respond("stack=%g" % (gState.stack))
