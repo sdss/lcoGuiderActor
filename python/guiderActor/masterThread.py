@@ -146,7 +146,6 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
         return
     gProbe = fiber.gProbe
     enabled = gProbe.enabled
-    tooFaint = False
 
     # Center up on acquisition fibers only.
     if gState.centerUp and gProbe.fiberType != "ACQUIRE":
@@ -192,7 +191,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
         guideCmd.warn("text=%s" %
                       qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
                           fiber.fiberid, fiber.flux, frameInfo.minStarFlux)))
-        tooFaint = True      #PH should we add an extra bit for this.
+        gProbe.tooFaint = True
 
     if poserr == 0:
         guideCmd.warn("text=%s" %
@@ -287,7 +286,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     #    gProbe.xFocal, gProbe.yFocal, gProbe.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
     #    gProbe.focusOffset)
 
-    if not enabled or tooFaint:
+    if not enabled or gProbe.tooFaint:
         return
 
     #Collect fwhms for good in focus stars
