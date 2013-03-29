@@ -17,6 +17,7 @@ NOSTAR =  0x02     # probe with no star in plPlugMap (e.g. tritium)
 DISABLED = 0x04     # probe that has been disabled by the observers (e.g. no star present, double star, wrong position)
 ABOVEFOCUS = 0x08  # fiber is above the focal plane
 BELOWFOCUS = 0x10  # fiber is below the focal plane
+TOOFAINT = 0x20    # observed star is too faint to be reliably used for guiding
 UNKNOWN = 0xff     # shouldn't ever happen
 
 class GProbe(object):
@@ -27,7 +28,7 @@ class GProbe(object):
     When set, it computes self.ref_mag, which is the synthetic predicted magnitude for this fiber.
     
     GProbe flag bits are set via the corresponding property:
-        broken, disabled (enabled), noStar, notExist, atFocus (aboveFocus,belowFocus)
+        broken, disabled (enabled), noStar, notExist, atFocus (aboveFocus,belowFocus), toofaint
     and gProbe.good will tell you if all bits are in the OK state.
     """
     def __init__(self,id=-9999,gprobeKey=None,guideInfo=None):
@@ -154,7 +155,7 @@ class GProbe(object):
     
     @property
     def noStar(self):
-        """True if this probe has no star visible."""
+        """True if this probe has no star defined in the plugmap."""
         return (self._bits & NOSTAR)
     @noStar.setter
     def noStar(self,value):
@@ -185,6 +186,14 @@ class GProbe(object):
             self._unset(ABOVEFOCUS) # can't be both above and below focus!
         self._set(BELOWFOCUS) if value else self._unset(BELOWFOCUS)
 
+    @property
+    def tooFaint(self):
+        """True if this star in this fiber is too faint to use for guiding."""
+        return (self._bits & TOOFAINT)
+    @noStar.setter
+    def noStar(self,value):
+        self._set(TOOFAINT) if value else self._unset(TOOFAINT)
+    
     @property
     def gprobebits(self):
         """The bits for this probe's status (int)."""
