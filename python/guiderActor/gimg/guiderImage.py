@@ -826,8 +826,12 @@ class GuiderImageAnalysis(object):
         background = median(img[logical_not(T)].ravel())
         self.debug('Background in flat %s: %g' % (flatFileName, background))
     
+        #PH, should we make the mask only after the labeled regions that match fibers have been identified        
         # Make the mask a bit smaller than the thresholded fibers.
         mask = binary_erosion(T, iterations=3)
+
+        # Make an annular/ring mask around thresholded fibers
+        ringmask = binary_dilation(T, iterations=5)
 
         # Label connected components.
         (fiber_labels,nlabels) = label(T)
@@ -946,6 +950,10 @@ class GuiderImageAnalysis(object):
         # Filter out those with no match...
         fibers = [f for i,f in enumerate(fibers) if i in fmap and f.fiberid >= 0]
 
+        #PH should we create the masks here rather than above
+        #   nonreal fibers have been removed
+        #   set non real labels to 0? to modify the mask
+
         # Reorder fibers by fiberid.
         fibers.sort(key=attrgetter('fiberid'))
         for f in fibers:
@@ -955,15 +963,32 @@ class GuiderImageAnalysis(object):
         # NOTE: jkp: using float32 to keep the fits header happier.
         flat = zeros_like(img).astype(numpy.float32)
         all_mean = numpy.empty(nlabels,dtype=numpy.float32)
+        all_median= numpy.empty(nlabels,dtype=numpy.float32)
+
+        # PH 
+        # For consistent mags of the guide stars independent of cartridges or fibers
+        # we need to normalize the flats in a robust way.
+        # Assume that acquisition fibers all have a similar throughput
+        # The normalization needs to be insensitive to unplugged fibers, dirt on fibers etc. 
+        # Cannot include acquisition fibers have higher throughput than guide fibers.
+        # For now try a median over the 14 guide fibers of
+        # the median of the unmasked pixel values in each fiber 
+
+        #PH to be strictly correct we should use a local bkg around the fiber
+        #PH use 
+ 
+        #find the median of each fiber 
         for i in range(1, nlabels+1):
             # find pixels belonging to object i.
             obji = (fiber_labels == i)
-            # FIXME -- flat -- normalize by max? median? sum? of this fiber
-            # FIXME -- clipping, etc.
-            objflat = (img[obji]-background) / median(img[obji]-background)
+            objflat = (img[obji]-background)   #should calc a local bkg here using ring mask
             flat[obji] += objflat
-            all_mean[i-1] = objflat.mean()
-            print i, 'objflat (min,max,med):', objflat.min(), objflat.max(), all_mean[i-1]
+            all_median[i-1] = median(objflat)
+            all_mean[i-1] = objflat.mean()     #just to check 
+            print i, 'objflat (min,max,mean,med):', objflat.min(), objflat.max(), all_mean[i-1], all_median[i-1]      
+
+        normvalue = median(all_median)           
+        flat /= normvalue
 
         # Bin down the mask and flat.
         bmask = zeros((mask.shape[0]/BIN, mask.shape[1]/BIN), bool)
