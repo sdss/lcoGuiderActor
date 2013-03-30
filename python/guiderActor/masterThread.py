@@ -73,8 +73,6 @@ class FrameInfo(object):
         #should be in photons, based on RON, Dark residual, SKY
         self.minStarFlux = 500
 
-        self.minStarFlux = numpy.nan
-
         self.guideRMS = numpy.nan
         self.nguideRMS = numpy.nan
         self.guideXRMS = numpy.nan

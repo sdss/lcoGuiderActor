@@ -15,7 +15,7 @@ from opscore.utility.tback import tback
 
 # A guider fiber and the star image seen through it.
 class Fiber(object):
-    def __init__(self, fibid, xc=numpy.nan, yc=numpy.nan, r=numpy.nan, illr=numpy.nan):
+    def __init__(self, fibid, xc=numpy.nan, yc=numpy.nan, r=numpy.nan, illr=numpy.nan, label=-1):
         self.fiberid = fibid
         self.xcen = xc
         self.ycen = yc
@@ -38,6 +38,9 @@ class Fiber(object):
         self.dDec = numpy.nan
 
         self.gProbe = None
+        
+        # The label of this fiber in the labeled, masked image (from scipy.ndimage.label)
+        self.label = label
 
     def __str__(self):
         return ('Fiber id %i: center %g,%g; star %g,%g; radius %g' %
@@ -212,7 +215,10 @@ class GuiderImageAnalysis(object):
     #...
     
     def ensureLibraryLoaded(self):
-        # Load C library "ipGguide.c"
+        """
+        Load C library that does the fluxing, etc.: lib/libguide.so -> self.libguide
+        See src/ipGguide.c for the actual calculations.
+        """
         path = os.path.expandvars("$GUIDERACTOR_DIR/lib/libguide.so")
         libguide = ctypes.CDLL(path)
         if not libguide:
@@ -823,10 +829,10 @@ class GuiderImageAnalysis(object):
         T = binary_closing(T, iterations=10)
 
         # Find the background in regions below the threshold.
-        background = median(img[logical_not(T)].ravel())
+        background = median(img[logical_not(T)])
         self.debug('Background in flat %s: %g' % (flatFileName, background))
     
-        #PH, should we make the mask only after the labeled regions that match fibers have been identified        
+        #PH, should we make the mask only after the labeled regions that match fibers have been identified
         # Make the mask a bit smaller than the thresholded fibers.
         mask = binary_erosion(T, iterations=3)
 
@@ -857,7 +863,7 @@ class GuiderImageAnalysis(object):
             # The 0.25 pixel offset makes these centroids agree with gfindstar's
             # pixel coordinate convention.
             self.debug('fiber %d (%d,%g,%g,%g)' % (i,npix,xc,yc,sqrt(npix/pi)))
-            fibers.append(Fiber(-1, xc/BIN - 0.25, yc/BIN - 0.25, sqrt(npix/pi)/BIN, -1))
+            fibers.append(Fiber(-1, xc/BIN - 0.25, yc/BIN - 0.25, sqrt(npix/pi)/BIN, -1, label=i))
 
         # Match up the fibers with the known probes.
 
@@ -962,33 +968,36 @@ class GuiderImageAnalysis(object):
         # Create the processed flat image.
         # NOTE: jkp: using float32 to keep the fits header happier.
         flat = zeros_like(img).astype(numpy.float32)
-        all_mean = numpy.empty(nlabels,dtype=numpy.float32)
-        all_median= numpy.empty(nlabels,dtype=numpy.float32)
+        all_mean = numpy.empty(len(fibers),dtype=numpy.float32)
+        all_median = numpy.empty(len(fibers),dtype=numpy.float32)
 
         # PH 
         # For consistent mags of the guide stars independent of cartridges or fibers
         # we need to normalize the flats in a robust way.
         # Assume that acquisition fibers all have a similar throughput
         # The normalization needs to be insensitive to unplugged fibers, dirt on fibers etc. 
-        # Cannot include acquisition fibers have higher throughput than guide fibers.
+        
         # For now try a median over the 14 guide fibers of
         # the median of the unmasked pixel values in each fiber 
 
         #PH to be strictly correct we should use a local bkg around the fiber
-        #PH use 
  
-        #find the median of each fiber 
-        for i in range(1, nlabels+1):
-            # find pixels belonging to object i.
-            obji = (fiber_labels == i)
-            objflat = (img[obji]-background)   #should calc a local bkg here using ring mask
+        #find the median of each fiber
+        # have to enumerate, because we could be missing fibers,
+        for i,fiber in enumerate(fibers):
+            # Do not use acquisition fibers, which have higher throughput than guide fibers.
+            if fiber.gProbe.fiberType != 'GUIDE':
+                continue
+            # so can't use fiberid as an index.
+            obji = (fiber_labels == fiber.label) # find pixels belonging to object i.
+            objflat = (img[obji] - background)   #should calc a local bkg here using ring mask
             flat[obji] += objflat
-            all_median[i-1] = median(objflat)
-            all_mean[i-1] = objflat.mean()     #just to check 
-            print i, 'objflat (min,max,mean,med):', objflat.min(), objflat.max(), all_mean[i-1], all_median[i-1]      
+            all_median[i] = median(objflat)
+            all_mean[i] = objflat.mean()     #just to check 
+            print i, 'objflat (min,max,mean,med):', objflat.min(), objflat.max(), all_mean[i], all_median[i]
 
-        normvalue = median(all_median)           
-        flat /= normvalue
+        flatscale = median(all_median)
+        flat /= flatscale
 
         # Bin down the mask and flat.
         bmask = zeros((mask.shape[0]/BIN, mask.shape[1]/BIN), bool)
