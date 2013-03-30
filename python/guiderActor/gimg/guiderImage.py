@@ -985,13 +985,13 @@ class GuiderImageAnalysis(object):
         #find the median of each fiber
         # have to enumerate, because we could be missing fibers,
         for i,fiber in enumerate(fibers):
+            obji = (fiber_labels == fiber.label) # find pixels belonging to object i.
+            objflat = (img[obji] - background)   #should calc a local bkg here using ring mask
+            flat[obji] += objflat
             # Do not use acquisition fibers, which have higher throughput than guide fibers.
             if fiber.gProbe.fiberType != 'GUIDE':
                 continue
             # so can't use fiberid as an index.
-            obji = (fiber_labels == fiber.label) # find pixels belonging to object i.
-            objflat = (img[obji] - background)   #should calc a local bkg here using ring mask
-            flat[obji] += objflat
             all_median[i] = median(objflat)
             all_mean[i] = objflat.mean()     #just to check 
             print i, 'objflat (min,max,mean,med):', objflat.min(), objflat.max(), all_mean[i], all_median[i]
