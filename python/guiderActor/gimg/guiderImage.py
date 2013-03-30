@@ -968,7 +968,6 @@ class GuiderImageAnalysis(object):
         # Create the processed flat image.
         # NOTE: jkp: using float32 to keep the fits header happier.
         flat = zeros_like(img).astype(numpy.float32)
-        all_mean = numpy.empty(len(fibers),dtype=numpy.float32)
         all_median = numpy.empty(len(fibers),dtype=numpy.float32)
 
         # PH 
@@ -993,8 +992,6 @@ class GuiderImageAnalysis(object):
                 continue
             # so can't use fiberid as an index.
             all_median[i] = median(objflat)
-            all_mean[i] = objflat.mean()     #just to check 
-            print i, 'objflat (min,max,mean,med):', objflat.min(), objflat.max(), all_mean[i], all_median[i]
 
         flatscale = median(all_median)
         flat /= flatscale
