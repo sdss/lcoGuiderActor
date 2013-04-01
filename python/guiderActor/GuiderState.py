@@ -63,8 +63,10 @@ class GProbe(object):
         Fill in data from the platedb.gprobe key.
         Expects a list, as output by CmdVar.getKeyVarData()
         """
-        self._check_id(gprobeKey[1],'platedb.gprobe')        
+        self._check_id(gprobeKey[1],'platedb.gprobe')
         self.broken = False if gprobeKey[2] else True
+        if self.broken:
+            self.disabled = True
         self.xCenter = gprobeKey[3]
         self.yCenter = gprobeKey[4]
         self.radius = gprobeKey[5]
@@ -127,12 +129,12 @@ class GProbe(object):
     @property
     def exists(self):
         """True if this probe is not broken and has a star defined."""
-        return False if ((self.broken) or (self.nostar)) else True
+        return False if ((self.broken) or (self.noStar)) else True
 
     @property
     def disabled(self):
         """True if this probe is disabled (negation of enabled)."""
-        return (self._bits & DISABLED)
+        return True if (self._bits & DISABLED) else False
     @disabled.setter
     def disabled(self,value):
         self._set(DISABLED) if value else self._unset(DISABLED)
@@ -140,7 +142,7 @@ class GProbe(object):
     @property
     def enabled(self):
         """True if this probe is enabled (negation of disabled)."""
-        return not (self._bits & DISABLED)
+        return False if (self._bits & DISABLED) else True
     @enabled.setter
     def enabled(self,value):
         self._unset(DISABLED) if value else self._set(DISABLED)
@@ -148,7 +150,7 @@ class GProbe(object):
     @property
     def broken(self):
         """True if this probe is broken."""
-        return (self._bits & BROKEN)
+        return True if (self._bits & BROKEN) else False
     @broken.setter
     def broken(self,value):
         self._set(BROKEN) if value else self._unset(BROKEN)
@@ -156,7 +158,7 @@ class GProbe(object):
     @property
     def noStar(self):
         """True if this probe has no star defined in the plugmap."""
-        return (self._bits & NOSTAR)
+        return True if (self._bits & NOSTAR) else False
     @noStar.setter
     def noStar(self,value):
         self._set(NOSTAR) if value else self._unset(NOSTAR)
@@ -164,12 +166,12 @@ class GProbe(object):
     @property
     def atFocus(self):
         """True if this fiber is at the focal plane."""
-        return not ((self._bits & ABOVEFOCUS) & (self._bits & BELOWFOCUS))
+        return not ((self._bits & ABOVEFOCUS) | (self._bits & BELOWFOCUS))
 
     @property
     def aboveFocus(self):
         """True if this fiber is above the focal plane."""
-        return (self._bits & ABOVEFOCUS)
+        return True if (self._bits & ABOVEFOCUS) else False
     @aboveFocus.setter
     def aboveFocus(self,value):
         if value:
@@ -179,7 +181,7 @@ class GProbe(object):
     @property
     def belowFocus(self):
         """True if this fiber is below the focal plane."""
-        return (self._bits & BELOWFOCUS)
+        return True if (self._bits & BELOWFOCUS) else False
     @belowFocus.setter
     def belowFocus(self,value):
         if value:
@@ -189,7 +191,7 @@ class GProbe(object):
     @property
     def tooFaint(self):
         """True if this star in this fiber is too faint to use for guiding."""
-        return (self._bits & TOOFAINT)
+        return True if (self._bits & TOOFAINT) else False
     @tooFaint.setter
     def tooFaint(self,value):
         self._set(TOOFAINT) if value else self._unset(TOOFAINT)
