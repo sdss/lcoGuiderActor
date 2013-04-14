@@ -1284,6 +1284,9 @@ def main(actor, queues):
                 gState.setDecenter("decenterRot",msg.decenterRot)
                 gState.decenterChanged = True
                 
+                if msg.finish:
+                    msg.cmd.finish()
+                
             elif msg.type == Msg.STATUS:
                 # Try to generate status even after we have failed.
                 cmd = msg.cmd if msg.cmd.alive else actor.bcast

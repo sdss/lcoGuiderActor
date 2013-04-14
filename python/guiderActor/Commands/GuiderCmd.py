@@ -543,4 +543,4 @@ class GuiderCmd(object):
         decenterScale = cmd.cmd.keywords["decenterScale"].values[0] if "decenterScale" in cmd.cmd.keywords else 0
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.DECENTER, cmd=cmd, decenterRA=decenterRA,
                                                                 decenterDec=decenterDec, decenterRot=decenterRot,
-                                                                decenterFocus=decenterFocus, decenterScale=decenterScale))
+                                                                decenterFocus=decenterFocus, decenterScale=decenterScale, finish=True))
