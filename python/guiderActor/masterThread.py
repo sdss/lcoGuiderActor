@@ -258,8 +258,8 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     # The guiderRMS will be calculated around the new effective fiber centers
     if gState.decenter:
         # apply decenter offset so that telescope moves (not the star)
-        dRA  += gState.decenterRA/gState.arcsecPerMM
-        dDec += gState.decenterDec/gState.arcsecPerMM
+        dRA  += gState.decenterRA/frameInfo.arcsecPerMM
+        dDec += gState.decenterDec/frameInfo.arcsecPerMM
         #decenterRot applied after guide solution
 
     #output the keywords only when the decenter changes
