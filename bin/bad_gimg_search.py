@@ -23,12 +23,15 @@ def do_one_dir(directory,outfile):
 
 def main(argv=None):
     if argv is None: argv = sys.argv[1:]
+    
     usage = '%prog [OPTIONS] DIR1 [DIR2 [DIR3 ...]]'
     usage += '\n\nDIR example: /data/gcam/5623*'
     parser = OptionParser(usage)
-    parser.add_option('--outfile',dest='outfile',default='bad_gimg.txt',help='write bad file list to this (%default)')
+    parser.add_option('-o','--outfile',dest='outfile',default='bad_gimg.txt',
+                      help='write bad file list to this (%default)')
     # need options?
     (opts,args) = parser.parse_args(args=argv)
+
     if len(args) == 0:
         parser.error('need to pass some directories')
     else:
