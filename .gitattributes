@@ -2,6 +2,7 @@
 bin/bad_gimg_search.py -text
 bin/convertPlPlugMap.py -text
 bin/guiderToDs9 -text
+bin/guider_movie.py -text
 bin/xferBlock.py -text
 doc/ProcessedGuiderImages.html -text
 etc/gcamFiberInfo.par -text
