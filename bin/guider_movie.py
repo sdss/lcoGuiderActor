@@ -13,49 +13,90 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import cm
+import matplotlib.gridspec as gridspec
 import numpy as np
+
+import AssembleImage
 
 gimgbase = 'proc-gimg-%04d.fits'
 tempbase = 'temp-gimg-%04d.png'
-width = 512*2+10 # 10px buffer
-height = 512
-dpi = 72
+width = 512*2. # 10px buffer
+height = 512.
+dpi = 100.
+assembler = AssembleImage.AssembleImage(1,0)
 
 def asinh(inputArray, scale_min=None, scale_max=None, non_linear=2.0):
-	"""
+    """
     Performs asinh scaling of the input numpy array.
-    taken from:
+    Taken from:
         http://dept.astro.lsa.umich.edu/~msshin/science/code/Python_fits_image/img_scale.py
     """
     
-	imageData=np.array(inputArray, copy=True)
-	if scale_min == None:
-		scale_min = imageData.min()
-	if scale_max == None:
-		scale_max = imageData.max()
-	factor = np.arcsinh((scale_max - scale_min)/non_linear)
-	indices0 = np.where(imageData < scale_min)
-	indices1 = np.where((imageData >= scale_min) & (imageData <= scale_max))
-	indices2 = np.where(imageData > scale_max)
-	imageData[indices0] = 0.0
-	imageData[indices2] = 1.0
-	imageData[indices1] = np.arcsinh((imageData[indices1] - scale_min)/non_linear)/factor
-
-	return imageData
+    imageData=np.array(inputArray, copy=True)
+    if scale_min == None:
+        scale_min = imageData.min()
+    if scale_max == None:
+        scale_max = imageData.max()
+    factor = np.arcsinh((scale_max - scale_min)/non_linear)
+    indices0 = np.where(imageData < scale_min)
+    indices1 = np.where((imageData >= scale_min) & (imageData <= scale_max))
+    indices2 = np.where(imageData > scale_max)
+    imageData[indices0] = 0.0
+    imageData[indices2] = 1.0
+    imageData[indices1] = np.arcsinh((imageData[indices1] - scale_min)/non_linear)/factor
+    
+    return imageData
 #...
 
 def one_image(infile,outfile,count,cmap=None):
     """Generate a single jpeg from a processed guider fits file."""
+    aspect = 'normal' # normal vs. equal?
+    index = os.path.splitext(infile)[0].split('-')[-1]
+    
     data = pyfits.open(infile)
+    plate = data[0].header['PLATEID']
+    cart =  data[0].header['CARTID']
+    guiderView = asinh(data[0].data,non_linear=5.)
+    plateInfo = assembler(data)
+    plateView = plateInfo.plateImageArr
+    zeros = plateView == 0
+    plateView = asinh(plateView,non_linear=5.0)
+    plateView[zeros] = 0
+    # TBD: should do something to mark the saturated (1) and bad (2) pixels?
+    # STUI labels them with colors, but that only works with a grayscale cmap.
+    #plateView[plateInfo.plateMaskArr == 1] = ??
+    #plateView[plateInfo.plateMaskArr == 2] = ??
+    
+    #import pdb
+    #pdb.set_trace()
     if not cmap:
-        cmap = 'hsv'
+        cmap = 'hsv_r'
     cmap = cm.cmap_d[cmap]
-    fig = plt.figure(figsize=(width/dpi,height/dpi))
-    axg = fig.add_subplot(121)
-    axg.set_axis_off()    
-    axg.imshow(asinh(data[0].data),aspect='equal',origin='lower',cmap=cmap)
-    axp = fig.add_subplot(212)
-    plt.savefig(outfile,bbox_inches='tight',dpi=dpi)
+    cmap2 = cm.gist_ncar
+    cmap2._init()
+    cmap2._lut[0,:] = (0,0,0,1)
+    
+    fig = plt.figure(figsize=(width/dpi,height/dpi),dpi=dpi,frameon=False)
+
+    ax1 = plt.Axes(fig,(0,0,.5,1),frame_on=False)
+    ax1.set_axis_off()
+    fig.add_axes(ax1)
+    ax1.imshow(guiderView,aspect=aspect,origin='lower',cmap=cmap)
+    ax1.text(20,470,'frameNo=%s'%index)
+    ax1.text(20,450,'plate=%d'%plate)
+    ax1.text(20,430,'cart=%2d'%cart)
+    
+    # Careful: Axes takes: [left,bottom,width,height]!
+    # Note those last two are *not* "right","top"!
+    ax2 = plt.Axes(fig,(.5,0,.5,1),frame_on=False)
+    ax2.set_axis_off()
+    fig.add_axes(ax2)
+    ax2.imshow(plateView,aspect=aspect,origin='lower',cmap=cmap2)
+    # TBD: some useful text on this frame?
+    #ax2.text(40,400,index)
+    
+    fig.set_size_inches(width/dpi,height/dpi)
+    plt.savefig(outfile,pad_inches=0,dpi=dpi)
     print 'Wrote:',outfile
 #...
 
@@ -77,10 +118,12 @@ def make_images(gimgdir,start,end,tempdir,cmap=None):
 def make_movie(opts,indir,outfile):
     """Create the movie with ffmpeg, from files in tempdir."""
     inpath = os.path.join(indir,tempbase)
-    #'-v','panic',
     # profile main and yuv420p are for quicktime compatibility.
+    # remove the '-v panic' to get it to print out all of its encoding steps.
     cmd = ['ffmpeg',
+           '-v','fatal',
            '-f','image2',
+           '-y',
            '-r',opts.framerate,
            '-i',inpath,
            '-vcodec','libx264',
@@ -97,7 +140,7 @@ def do_work(opts,gimgdir,start,end):
     """Create temp directory, create images, make movie, and cleanup."""
     tempdir = tempfile.mkdtemp()
     print 'Writing image files to:',tempdir
-    mjd = os.path.split(gimgdir)
+    mjd = gimgdir.split('/')
     # /foo/bar/ splits to have [-1] == '', so check for that
     mjd = mjd[-1] if mjd[-1] != '' else mjd[-2]
     outfile = '%s-%04d-%04d.mp4'%(mjd,start,end)
@@ -122,7 +165,7 @@ def do_work(opts,gimgdir,start,end):
         traceback.print_exc()
     finally:
         print "Cleaning up",tempdir
-        #shutil.rmtree(tempdir)
+        shutil.rmtree(tempdir)
         pass
 #...
 
