@@ -55,7 +55,7 @@ class GProbe(object):
         
     def checkTritium(self):
         """If this probe is labeled a tritium star, disable it."""
-        if self.fiberType == 'TRITIUM':
+        if self.fiber_type == 'TRITIUM':
             self.disabled =True
 
     def from_platedb_gprobe(self,gprobeKey):
@@ -74,7 +74,7 @@ class GProbe(object):
         self.xFerruleOffset = gprobeKey[7]
         self.yFerruleOffset = gprobeKey[8]
         self.focusOffset = gprobeKey[9]
-        self.fiberType = gprobeKey[10]
+        self.fiber_type = gprobeKey[10]
         self.checkTritium()
         self.rotStar2Sky = numpy.nan
         self.haOffsetTimes = {}
