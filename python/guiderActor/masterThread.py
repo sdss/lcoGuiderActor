@@ -146,7 +146,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     enabled = gProbe.enabled
 
     # Center up on acquisition fibers only.
-    if gState.centerUp and gProbe.fiberType != "ACQUIRE":
+    if gState.centerUp and gProbe.fiber_type != "ACQUIRE":
         enabled = False
 
     if not enabled:

@@ -482,7 +482,7 @@ class GuiderImageAnalysis(object):
                            ('rotation',       None,    'E',   numpy.nan,     None),
                            ('rotStar2Sky',    None,    'E',   numpy.nan,     None),
                            ('focusOffset',    None,    'E',   numpy.nan,     'micrometers'),
-                           ('fiberType',      None,    'A20', numpy.nan,     None),
+                           ('fiber_type',      None,    'A20', numpy.nan,     None),
                            ('ugriz',          None,    '5E',  [numpy.nan,]*5, 'mag'),
                            ('ref_mag',        None,    'E',   numpy.nan,     'synthetic predicted fiber mag'),
                            ]
@@ -988,7 +988,7 @@ class GuiderImageAnalysis(object):
             objflat = (img[obji] - background)   #should calc a local bkg here using ring mask
             flat[obji] += objflat
             # Do not use acquisition fibers, which have higher throughput than guide fibers.
-            if fiber.gProbe.fiberType != 'GUIDE':
+            if fiber.gProbe.fiber_type != 'GUIDE':
                 continue
             # so can't use fiberid as an index.
             all_median[i] = median(objflat)
