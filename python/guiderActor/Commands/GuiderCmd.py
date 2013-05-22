@@ -448,8 +448,8 @@ class GuiderCmd(object):
                 continue
 
             for gpID, gProbe in gprobes.items():
-                if gProbe.fiberType == 'TRITIUM':
-                    next
+                if gProbe.fiber_type == 'TRITIUM':
+                    continue
 
                 offset = [o for o in guideOffsets if o.holetype == "GUIDE" and o.iguide == gpID]
                 if len(offset) != 1:
