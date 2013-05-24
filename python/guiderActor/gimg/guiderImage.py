@@ -203,9 +203,9 @@ class GuiderImageAnalysis(object):
         # The overscan region is an extra 24 columns (12 after binning)
         if image.shape[1] == 1048/binning:
             # subtracting the overall median value should be good enough
-            # NOTE: can only use the last few columns, as the first few
-            # include some  counts that have bled through.
-            bias = numpy.median(image[:,(1040/binning):])
+            # NOTE: The the "inner" portion of the bias region is most
+            # representative of the rest of the chip.
+            bias = numpy.median(image[:,(1024/binning):(1038/binning)])
         else:
             # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
             ir = image.ravel()
@@ -882,7 +882,7 @@ class GuiderImageAnalysis(object):
         fibers = keepfibers
 
         if len(fibers) == 0:
-            self.fail('Failed to find any fibers in guider flat!')
+            self.warn('Failed to find any fibers in guider flat!')
             raise NoFibersFoundError
 
         # Find a single x,y offset by testing possibly corresponding

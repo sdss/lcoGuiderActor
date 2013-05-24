@@ -1075,7 +1075,7 @@ def main(actor, queues):
                     if fibers is None:
                           raise ValueError('Error reading/processing guider image.')
                 except GuiderError, e:
-                    guideCmd.fail('guideState="failed"; text=%s' %qstr("findFibers failed. Error reading/processing guider flat."))
+                    cmd.fail('guideState="failed"; text=%s' %qstr("findFibers failed. Error reading/processing guider flat."))
                     gState.setCmd(None)
                     return
                 except Exception, e:
