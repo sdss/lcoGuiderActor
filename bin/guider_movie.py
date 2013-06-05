@@ -16,14 +16,14 @@ from matplotlib import cm
 import matplotlib.gridspec as gridspec
 import numpy as np
 
-import AssembleImage
+from opscore.utility import assembleImage
 
 gimgbase = 'proc-gimg-%04d.fits'
 tempbase = 'temp-gimg-%04d.png'
 width = 512*2. # 10px buffer
 height = 512.
 dpi = 100.
-assembler = AssembleImage.AssembleImage(1,0)
+assembler = assembleImage.AssembleImage(1,0)
 
 def asinh(inputArray, scale_min=None, scale_max=None, non_linear=2.0):
     """
@@ -48,7 +48,7 @@ def asinh(inputArray, scale_min=None, scale_max=None, non_linear=2.0):
     return imageData
 #...
 
-def one_image(infile,outfile,count,cmap=None):
+def one_image(infile,outfile,count,cmap=None,verbose=False):
     """Generate a single jpeg from a processed guider fits file."""
     aspect = 'normal' # normal vs. equal?
     index = os.path.splitext(infile)[0].split('-')[-1]
@@ -97,7 +97,8 @@ def one_image(infile,outfile,count,cmap=None):
     
     fig.set_size_inches(width/dpi,height/dpi)
     plt.savefig(outfile,pad_inches=0,dpi=dpi)
-    print 'Wrote:',outfile
+    if verbose:
+        print 'Wrote:',outfile
 #...
 
 def make_images(gimgdir,start,end,tempdir,cmap=None):
@@ -115,16 +116,26 @@ def make_images(gimgdir,start,end,tempdir,cmap=None):
     return count,files
 #...
 
-def make_movie(opts,indir,outfile):
+def make_movie(indir,outfile,framerate,verbose=False):
     """Create the movie with ffmpeg, from files in tempdir."""
     inpath = os.path.join(indir,tempbase)
-    # profile main and yuv420p are for quicktime compatibility.
-    # remove the '-v panic' to get it to print out all of its encoding steps.
+    # NOTE: the order of ffmpeg arguments *REALLY MATTERS*.
+    # Reorder them at your own peril!
+    # more notes:
+    # profile main and pix_fmt yuv420p are for quicktime compatibility.
+    # threads 1 so we don't eat up all the processors on hub25m.
+    # b:v 10000k is 10MB/second video rate.
+    # ffmpeg verbose levels are listed here:
+    # http://superuser.com/questions/326629/how-can-i-make-ffmpeg-be-quieter-less-verbose
+    if verbose:
+        ffmpeg_verbose = 'verbose'
+    else:
+        ffmpeg_verbose = 'error'
     cmd = ['ffmpeg',
-           '-v','fatal',
+           '-v',ffmpeg_verbose,
            '-f','image2',
            '-y',
-           '-r',opts.framerate,
+           '-r',framerate,
            '-i',inpath,
            '-vcodec','libx264',
            '-b:v','10000k',
@@ -139,7 +150,8 @@ def make_movie(opts,indir,outfile):
 def do_work(opts,gimgdir,start,end):
     """Create temp directory, create images, make movie, and cleanup."""
     tempdir = tempfile.mkdtemp()
-    print 'Writing image files to:',tempdir
+    if opts.verbose:
+        print 'Writing image files to:',tempdir
     mjd = gimgdir.split('/')
     # /foo/bar/ splits to have [-1] == '', so check for that
     mjd = mjd[-1] if mjd[-1] != '' else mjd[-2]
@@ -154,17 +166,20 @@ def do_work(opts,gimgdir,start,end):
         #prof.dump_stats('images.profile')
         count,files = make_images(gimgdir,start,end,tempdir,cmap=opts.cmap)
         time1 = time.time()
-        print 'Seconds to make %d pngs: %5.1f'%(count,time1-time0)
-        print 'Writing movie to:',outfile
-        make_movie(opts,tempdir,outfile)
+        if opts.verbose:
+            print 'Seconds to make %d pngs: %5.1f'%(count,time1-time0)
+            print 'Writing movie to:',outfile
+        make_movie(tempdir,outfile,opts.framerate,opts.verbose,)
         time2 = time.time()
-        print 'Seconds to make movie: %5.1f'%(time2-time1)
+        if opts.verbose:
+            print 'Seconds to make movie: %5.1f'%(time2-time1)
     except Exception as e:
         print 'Error producing movie:',e
         import traceback
         traceback.print_exc()
     finally:
-        print "Cleaning up",tempdir
+        if opts.verbose:
+            print "Cleaning up",tempdir
         shutil.rmtree(tempdir)
         pass
 #...
@@ -181,10 +196,12 @@ def main(argv=None):
     parser = OptionParser(usage)
     parser.add_option('-r','--framerate',dest='framerate',default='10',
                       help='Frame rate of output video (%default).')
-    parser.add_option('--raw',dest='raw',default='""',
-                      help='Raw commands to pass on to ffmpeg directly (%default)')
+    #parser.add_option('--raw',dest='raw',default='""',
+    #                  help='Raw commands to pass on to ffmpeg directly (%default)')
     parser.add_option('--cmap',dest='cmap',default='hsv',
                       help='Colormap used to make the images (log10 scaled) from the fits data (%default).')
+    parser.add_option('-v','--verbose',dest='verbose',action='store_true',
+                      help='Be verbose with progress (%default).')
 
     # need options?
     (opts,args) = parser.parse_args(args=argv)
