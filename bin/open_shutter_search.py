@@ -18,7 +18,9 @@ def prnLine(m, mjd, ndirs='-',  nfiles='-',  nflats='-',  nbad='-', proc='  -'):
       ss="%4s  %5s  %1s  %4s  %4s   %4s   %3s" % (m, mjd, ndirs, nfiles, nflats, nbad, proc)
       print ss
 
-def ds9topy(p): return [p[1],p[0]]      
+# convert from guider to ds9 coordinate system
+def ds9topy(p): return [p[1],p[0]] 
+     
 def getStat(npData, p,dp): 
     mean=npData[(p[0]-dp):(p[0]+dp),(p[1]-dp):(p[1]+dp)].mean()
     std =npData[(p[0]-dp):(p[0]+dp),(p[1]-dp):(p[1]+dp)].std()
@@ -54,8 +56,7 @@ def do_one_dir(m, mjd, outfile, listfiles=False, cutoff=10000):
               continue
          nflats=nflats+1
          npData=numpy.array(data)
-#       numrows, numcols = npData.shape
-#    flat  npData.shape  == (1024, 1048), other imtypes resize to flat size. 
+ # reshape for object        
          if npData.shape != (1024, 1048):
               npData= numpy.resize(npData, (1024, 1048))
          
@@ -76,30 +77,16 @@ def do_one_dir(m, mjd, outfile, listfiles=False, cutoff=10000):
          Cmean, Cstd, Cmax =  getStat(npData, ds9topy(Cp), dp)   
          Dmean, Dstd, Dmax =  getStat(npData, ds9topy(Dp), dp)   
 
-     # if bad data 
+# if bad data 
          def norm(Xmax):  return (Xmax-Qmean)/Qstd 
          Qt=max(norm(Amax), norm(Bmax), norm(Cmax), norm(Dmax))
-         if Qt > args.cutoff: 
+         if Qt > args.cutoff* Qstd:
              qq="-bad-"
              nbad= nbad+1
-             nbadList.append([f, Qmean, Qstd, Qt, qq])   
-         else: qq=""
-          
-     # write to file                
-         ss1="%s %8.1f %8.1f " % (f, Qmean, Qstd)
-         ss2=ss1+"%6.2f  %6.2f  %6.2f  %6.2f " % (norm(Amax), norm(Bmax), norm(Cmax), norm(Dmax))
-         ss3=ss2+"%6.2f %s " % (Qt, qq)
-         outfile.write("%s \n" % (ss3))
-         outfile.flush()    
-         
-         if f=="/data/gcam/56378/gimg-0665.fits" :
-            print f
-            print Qmean, Qstd, Qmax
-            print Amean, Astd, Amax
-            print Bmean, Bstd, Bmax
-            print Cmean, Cstd, Cmax
-            print Dmean, Dstd, Dmax
-            
+             nbadList.append([f, Qmean, Qstd, Qt, qq]) 
+             ss="  %s  %8.2f %5.2f %7.2f %s " %(f, Qmean,Qstd, Qt,qq)
+             outfile.write("%s  %8.2f %5.2f %8.2f  %s \n" %(f, Qmean,Qstd, Qt,qq))
+             outfile.flush()    
 #   ------- end for 
 
 # print summary for this mjd  
@@ -112,9 +99,8 @@ def do_one_dir(m, mjd, outfile, listfiles=False, cutoff=10000):
 # and print bad files if option -l selected  
     if listfiles: 
        for fbad in nbadList:
-            ss="%s   %8.2f   %8.2f  %8.2f  %s " %(fbad[0], fbad[1],fbad[2], fbad[3],fbad[4])
+            ss="  %s  %8.2f %5.2f %7.2f %s " %(fbad[0], fbad[1],fbad[2], fbad[3],fbad[4])
             print "      ",ss
-
     return nflats, nbad  
    
 if __name__ == "__main__":
@@ -124,8 +110,8 @@ if __name__ == "__main__":
     parser.add_argument("mjd1", help="mjd to start", type=int)
     parser.add_argument("mjd2", help="mjd to end", type=int)
     parser.add_argument('-l', '--list', help='print the list of bad files', action='store_true')
-    parser.add_argument('-c', '--cutoff', help='''if median of selected portion of frame 
-        more then this level, we classify frame as bad''', default=1, type=float)
+    parser.add_argument('-c', '--cutoff', help="dark sigmas up to classify frame as bad, default 3", 
+        default=3, type=float)
     parser.add_argument('-o', '--outfile', default="bad_gimg.txt", help='file to save bad frame names')
     parser.add_argument('-i', '--imtype', default="flat", help='flat or object, default flat ')
 
@@ -137,11 +123,12 @@ if __name__ == "__main__":
     line = 50*"-"  
     listfiles=args.list
     outfile = open(args.outfile,'w')
-    outfile.write("File %s  Dark   Fiber   A    B      Lev    Qty\n" %('-'*27))
+    outfile.write("File %s   Dark    Std    cutoff \n" % (27*" "))
     outfile.flush() 
 
     print line
-    print "   i   mjd  dir total  imtype  bad     % "
+    ss="   i   mjd  dir files  %s  bad " % args.imtype
+    print ss, "% " 
     print line    
     for m, mjd in enumerate(mjds):
         nflats, nbad= do_one_dir(m, mjd, outfile, listfiles=listfiles, cutoff=args.cutoff)  
@@ -151,9 +138,9 @@ if __name__ == "__main__":
  
     if  nflatsTot == 0:  pers="n/a"
     else:  pers="%s" % int(nbadTot*100.0/nflatsTot)+'%'
-    print "Summary for guider data:  %s" % args.imtype
-    print "MJDs %s - %s,  cutoff=%s" % (args.mjd1, args.mjd2, args.cutoff)
-    print "Sum imtype = %s, Sum bad = %s,  percent = %s"  % (nflatsTot, nbadTot, pers)
+    print "Image type:  %s" % args.imtype
+    print "MJDs : %s - %s,  cutoff=%s" % (args.mjd1, args.mjd2, args.cutoff)
+    print "Sum:  %s = %s,   bad = %s,  percent = %s"  % (args.imtype, nflatsTot, nbadTot, pers)
     print line
     print ""
 #...
