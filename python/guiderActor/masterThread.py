@@ -1014,7 +1014,7 @@ def main(actor, queues):
                     continue
                 
                 try:
-                    flatoutname = guiderImageAnalysis.getProcessedOutputName(msg.filename) 
+                    flatoutname = guiderImageAnalysis.getProcessedOutputName(msg.filename)
                     dirname, filename = os.path.split(flatoutname)
                     cmd.inform('file=%s/,%s' % (dirname, filename))
                     cmd.finish('text="flat image processing done"')
