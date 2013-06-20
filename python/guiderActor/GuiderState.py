@@ -362,3 +362,68 @@ class GuiderState(object):
         if gcameraMagnification != None:
             self.gcameraMagnification = gcameraMagnification
 
+class FrameInfo(object):
+    """
+    Holds data about the most recently read image frame.
+    """
+    def __init__(self,frameNo):
+        """Sets all parameters to NaN, so that they at least exist."""
+        self.frameNo = frameNo
+
+        self.dRA = numpy.nan
+        self.dDec = numpy.nan
+        self.dRot = numpy.nan
+        self.dFocus = numpy.nan
+        self.dScale = numpy.nan
+
+        self.filtRA = numpy.nan
+        self.filtDec = numpy.nan
+        self.filtRot = numpy.nan
+        self.filtFocus = numpy.nan
+        self.filtScale = numpy.nan
+
+        self.offsetRA = numpy.nan
+        self.offsetDec = numpy.nan
+        self.offsetRot = numpy.nan
+        self.offsetFocus = numpy.nan
+        self.offsetScale = numpy.nan
+
+        self.guideCameraScale = numpy.nan
+        self.arcsecPerMM = numpy.nan
+        self.plugPlateScale = numpy.nan
+        self.seeing = numpy.nan
+
+        # conversion for a Gaussian, use this eveywhere but in ipGguide.c
+        # conversion from sigma to FWHM for a JEG double Gaussian is done in ipGguide.c (sigmaToFWHMJEG = 2.468)
+        self.sigmaToFWHM = 2.354
+        #ADU, avoid guiding on noise spikes during acquisitions
+        #should be in photons, based on RON, Dark residual, SKY
+        self.minStarFlux = 500
+
+        self.guideRMS = numpy.nan
+        self.nguideRMS = numpy.nan
+        self.guideXRMS = numpy.nan
+        self.guideYRMS = numpy.nan
+        self.guideRaRMS = numpy.nan
+        self.guideDecRMS = numpy.nan
+
+        self.guideAzRMS = numpy.nan      #not implemented yet
+        self.guideAltRMS = numpy.nan
+
+        self.guideFitRMS = numpy.nan     #not implemented yet
+        self.nguideFitRMS = numpy.nan
+        self.nrejectFitRMS = numpy.nan
+
+        self.decenterRA = numpy.nan
+        self.decenterDec = numpy.nan
+        self.decenterRot = numpy.nan
+        self.decenterFocus = numpy.nan
+        self.decenterScale = numpy.nan
+        
+        self.refractionBalance = numpy.nan
+        self.wavelength = numpy.nan
+        self.dHA = numpy.nan
+        
+        self.A = numpy.nan
+        self.b = numpy.nan
+#...

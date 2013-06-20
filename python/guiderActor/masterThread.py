@@ -35,72 +35,6 @@ try:
 except:
     gState = GuiderState.GuiderState()
 
-class FrameInfo(object):
-    """
-    Holds data about the most recently read image frame.
-    """
-    def __init__(self,frameNo):
-        """Sets all parameters to NaN, so that they at least exist."""
-        self.frameNo = frameNo
-
-        self.dRA = numpy.nan
-        self.dDec = numpy.nan
-        self.dRot = numpy.nan
-        self.dFocus = numpy.nan
-        self.dScale = numpy.nan
-
-        self.filtRA = numpy.nan
-        self.filtDec = numpy.nan
-        self.filtRot = numpy.nan
-        self.filtFocus = numpy.nan
-        self.filtScale = numpy.nan
-
-        self.offsetRA = numpy.nan
-        self.offsetDec = numpy.nan
-        self.offsetRot = numpy.nan
-        self.offsetFocus = numpy.nan
-        self.offsetScale = numpy.nan
-
-        self.guideCameraScale = numpy.nan
-        self.arcsecPerMM = numpy.nan
-        self.plugPlateScale = numpy.nan
-        self.seeing = numpy.nan
-
-        # conversion for a Gaussian, use this eveywhere but in ipGguide.c
-        # conversion from sigma to FWHM for a JEG double Gaussian is done in ipGguide.c (sigmaToFWHMJEG = 2.468)
-        self.sigmaToFWHM = 2.354
-        #ADU, avoid guiding on noise spikes during acquisitions
-        #should be in photons, based on RON, Dark residual, SKY
-        self.minStarFlux = 500
-
-        self.guideRMS = numpy.nan
-        self.nguideRMS = numpy.nan
-        self.guideXRMS = numpy.nan
-        self.guideYRMS = numpy.nan
-        self.guideRaRMS = numpy.nan
-        self.guideDecRMS = numpy.nan
-
-        self.guideAzRMS = numpy.nan      #not implemented yet
-        self.guideAltRMS = numpy.nan
-
-        self.guideFitRMS = numpy.nan     #not implemented yet
-        self.nguideFitRMS = numpy.nan
-        self.nrejectFitRMS = numpy.nan
-
-        self.decenterRA = numpy.nan
-        self.decenterDec = numpy.nan
-        self.decenterRot = numpy.nan
-        self.decenterFocus = numpy.nan
-        self.decenterScale = numpy.nan
-        
-        self.refractionBalance = numpy.nan
-        self.wavelength = numpy.nan
-        self.dHA = numpy.nan
-        
-        self.A = numpy.nan
-        self.b = numpy.nan
-#...
-
 class FakeCommand(object):
     def _respond(self, tag, text):
         print "%s %s" % (tag, text)
@@ -359,8 +293,7 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     A[1, 1] += d*d*ivar
 #...
 
-def guideStep(actor, queues, cmd, inFile, oneExposure,
-              plot=False, psPlot=False):
+def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     """ One step of the guide loop, based on the given guider file. 
 
     Args: (TOOOO MANY!!)
@@ -396,10 +329,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
                 flatcart, gState.cartridge)))
 
     try:
-        guideCmd.inform('text="guideStep GuiderImageAnalysis()..."')
-        GI = GuiderImageAnalysis(inFile, cmd=guideCmd)
         guideCmd.inform('text="guideStep GuiderImageAnalysis.findFibers()..."')
-        fibers = GI.findFibers(gState.gprobes)
+        fibers = guiderImageAnalysis(inFile, gState.gprobes, cmd=guideCmd)
         guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
     except BadReadError as e:
         guideCmd.warn('text=%s' %qstr("Skipping badly formatted image."))
@@ -415,7 +346,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         return
 
     # Object to gather all per-frame guiding info into.
-    frameInfo = FrameInfo(frameNo)
+    frameInfo = GuiderState.FrameInfo(frameNo)
     
     # Setup to solve for the axis and maybe scale offsets.  We work consistently
     # in mm on the focal plane, only converting to angles to command the TCC
@@ -496,7 +427,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         else:
             guideCmd.warn('text="Telescope moved during exposure -- skipping this image."')
 
-        GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
 
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
@@ -626,7 +557,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         guideCmd.warn("text=%s" % qstr("Unable to solve for axis offsets"))
 
     if nStar <= 1 or gState.centerUp:      # don't bother with focus/scale!
-        GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.setCmd(None)
@@ -744,7 +675,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure,
         x = None
 
     # Write output fits file for TUI
-    GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+    guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
 #...
 
 def loadAllProbes(cmd, gState):
@@ -839,9 +770,8 @@ def main(actor, queues):
     timeout = actorState.timeout
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
-    plot = False                        # use SM to plot things
-    psPlot = False
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
+    guiderImageAnalysis = GuiderImageAnalysis()
     
     while True:
         try:
@@ -869,6 +799,7 @@ def main(actor, queues):
 
             elif msg.type == Msg.START_GUIDING:
                 if not msg.start:
+                    # Stop guiding
                     try:
                         success = msg.success
                     except AttributeError:
@@ -914,8 +845,6 @@ def main(actor, queues):
 
                 force = msg.force
                 oneExposure = msg.oneExposure
-                plot = msg.plot
-                psPlot = msg.psPlot
                 fakeSpiderInstAng = msg.spiderInstAng
                 
                 if gState.guideCmd:
@@ -937,6 +866,9 @@ def main(actor, queues):
 
                 guideCmd = msg.cmd
                 gState.setCmd(guideCmd)
+                
+                # Keep track of the first exposure number for generating movies
+                actorState.
                 
                 #
                 # Reset any PID I terms
@@ -978,11 +910,11 @@ def main(actor, queues):
                     tccState.doreadFilename = msg.filename
                     ccdTemp = 0.0   # self.camera.cam.read_TempCCD()
                     msg.cmd.respond('txtForTcc=%s' % (qstr('%d %d %0.1f %0.1f %0.1f %0.1f %0.2f %d %0.2f %s' % \
-                                                               (tccState.binX, tccState.binY,
-                                                                tccState.ctrX, tccState.ctrY,
-                                                                tccState.sizeX, tccState.sizeY,
-                                                                tccState.itime, tccState.gImCamID, ccdTemp,
-                                                                "image: binXY begXY sizeXY expTime camID temp"))))
+                                                           (tccState.binX, tccState.binY,
+                                                            tccState.ctrX, tccState.ctrY,
+                                                            tccState.sizeX, tccState.sizeY,
+                                                            tccState.itime, tccState.gImCamID, ccdTemp,
+                                                            "image: binXY begXY sizeXY expTime camID temp"))))
                     msg.cmd.finish('txtForTcc=" OK"')
                     continue
 
@@ -995,8 +927,7 @@ def main(actor, queues):
                     queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False, success=False))
                     continue
 
-                guideStep(actor, queues, msg.cmd, msg.filename, oneExposure,
-                          plot=plot, psPlot=psPlot)
+                guideStep(actor, queues, msg.cmd, msg.filename, oneExposure, guiderImageAnalysis)
                 gState.inMotion = False
                 if gState.centerUp:
                     gState.centerUp.finish('')
@@ -1067,11 +998,9 @@ def main(actor, queues):
                     cmd.fail("text=%s" % qstr("No dark image available!!"))
                     continue
 
-                cmd.inform('text="flat_finished GuiderImageAnalysis()..."')
-                GI = GuiderImageAnalysis(msg.filename, cmd=cmd)
                 cmd.inform('text="flat_finished GuiderImageAnalysis.findFibers()..."')
                 try:
-                    fibers = GI.findFibers(gState.gprobes)
+                    fibers = guiderImageAnalysis(msg.filename, gState.gprobes, cmd=guideCmd)
                     if fibers is None:
                           raise ValueError('Error reading/processing guider image.')
                 except GuiderError, e:
@@ -1085,7 +1014,7 @@ def main(actor, queues):
                     continue
                 
                 try:
-                    flatoutname = GI.getProcessedOutputName(msg.filename) 
+                    flatoutname = guiderImageAnalysis.getProcessedOutputName(msg.filename) 
                     dirname, filename = os.path.split(flatoutname)
                     cmd.inform('file=%s/,%s' % (dirname, filename))
                     cmd.finish('text="flat image processing done"')

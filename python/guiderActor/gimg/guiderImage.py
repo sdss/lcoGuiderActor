@@ -110,15 +110,14 @@ def binImage(img, BIN):
 class GuiderImageAnalysis(object):
     '''
     A class for analyzing the images taken by the guiding camera.
-
-    gimg_filename = 'gimg-0400.fits'
-    GI = GuiderImageAnalysis(gimg_filename, cmd)
-    # cmd must have methods "inform(string)", "warn(string)".
-    fibers = GI.findFibers(gState.gprobes)
-
-    # run guider control loop...
-
-    GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+    
+    guiderImageAnalysis = GuiderImageAnalysis()
+    # for each new exposure:
+        gimg_filename = 'gimg-0400.fits'
+        # cmd must have methods "inform(string)", "warn(string)".
+        fibers = guiderImageAnalysis(gimg_filename, gState.gprobes, cmd)
+        # run guider control loop...
+        GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
     '''
 
     # According to
@@ -128,23 +127,22 @@ class GuiderImageAnalysis(object):
     mask_badpixels = 2
     mask_masked    = 4 # ie, outside the guide fiber
 
-    def __init__(self, gimgfn, cmd=None):
-        self.gimgfn = gimgfn
-        self.outputDir = None
+    def __init__(self):
+        """
+        New GuiderImageAnalysis instances are ready to accept files for processing.
+        """
+        self.outputDir = ''
         # set during findFibers():
         self.fibers = None
         self.guiderImage = None
         self.guiderHeader = None
         self.maskImage = None
-
-        if cmd:
-            self.informFunc = cmd.inform
-            self.warnFunc = cmd.warn
-            self.debugFunc = cmd.diag
-        else:
-            self.informFunc = None
-            self.warnFunc = None
-            self.debugFunc = None
+        
+        # So that we don't have to re-open dark and flat files every time.
+        self.currentDarkName = ''
+        self.currentFlatName = ''
+        self.processedDark = None
+        self.processedFlat = None
 
         # Print debugging?
         self.printDebug = False
@@ -183,11 +181,36 @@ class GuiderImageAnalysis(object):
         # This was calibrated vs MJD 55246, with AZ~=73 deg, airmass~=1.046
         # Masayuki zero average point 25.70 for use for his color transform
         self.zeropoint = 25.70
+    #...
+
+    def __call__(self, gimgfn, gprobes, cmd=None):
+        """
+        Calls findFibers to process gimgfn/gprobes and return found fibers.
         
+        gimgfn is the unprocessed gcamera file to process.
+        gprobes is from GuiderSTate: it's a dict of probeId to GProbe object.
+        cmd is a Commander object, to allow messaging (inform/warn/debug).
+        """
+        self.gimgfn = gimgfn
+        
+        if cmd:
+            self.informFunc = cmd.inform
+            self.warnFunc = cmd.warn
+            self.debugFunc = cmd.diag
+        else:
+            self.informFunc = None
+            self.warnFunc = None
+            self.debugFunc = None
+        
+        return self.findFibers(gprobes)
+    #...
+
     def pixels2arcsec(self, pix):
+        """Convert pix to arcseconds, using the pixelscale."""
         return pix * self.pixelscale
 
-    def flux2mag(self, flux, exptime, fiber):
+    def flux2mag(self, flux, exptime):
+        """Convert flux to magnitude, using exptime."""
         if exptime == 0:
             return -99
         return -2.5 * log10(flux / exptime) + self.zeropoint
@@ -260,7 +283,7 @@ class GuiderImageAnalysis(object):
             self.debugFunc(s)
 
     def findDarkAndFlat(self, gimgfn, fitsheader):
-        ''' findDarkAndFlat(...)
+        """ findDarkAndFlat(...)
 
         Returns the filenames containing the dark and flat images for
         the given guider-camera image.
@@ -270,13 +293,11 @@ class GuiderImageAnalysis(object):
 
         DARKFILE= '/data/gcam/55205/gimg-0003.fits'
         FLATFILE= '/data/gcam/55205/gimg-0224.fits'
-        '''
+        """
         return (fitsheader['DARKFILE'], fitsheader.get('FLATFILE', None))
 
-    def setOutputDir(self, dirnm):
-        self.outputDir = dirnm
-
     def getProcessedOutputName(self, imgfn):
+        """Return the name of the file that we will save the processed results to."""
         (dirname, filename) = os.path.split(imgfn)
         outname = 'proc-%s' % (filename)
         if self.outputDir:
@@ -554,12 +575,9 @@ class GuiderImageAnalysis(object):
 
     def findFibers(self, gprobes):
         ''' findFibers(gprobes)
-
-        * gprobes is from masterThread.py -- it must be a dict from
-          fiber id (int) to Gprobe objects.  The "enabled" and "info"
-          fields are used; "info" must have "radius", "xCenter", "yCenter",
-          and "rotStar2Sky" fields.
-
+        
+        gprobes is from GuiderSTate -- it's a dict of probeId to GProbe object.
+        
         Analyze a single image from the guider camera, finding fiber
         centers and star centers.
 
@@ -595,28 +613,40 @@ class GuiderImageAnalysis(object):
         image[sat] = self.saturationReplacement
 
         # Get dark and flat
-        (darkfn, flatfn) = self.findDarkAndFlat(self.gimgfn, hdr)
+        (darkFileName, flatFileName) = self.findDarkAndFlat(self.gimgfn, hdr)
+        # !!!!!!!!!!!!!
+        # TBD: Paul, look here.
+        if darkFileName != self.currentDarkName:
+            self.analyzeDark(darkFileName)
+        
+        # jkp TBD: A useful test would be to check if the flat cartId == current cartId
+        # Otherwise, we don't need this information...
         cartridgeId = int(hdr['FLATCART'])
 
         # FIXME -- we currently don't do anything with the dark frame.
         #   we'll need hdr['EXPTIME'] if we do.
         # FIXME -- filter probes here for !exists, !tritium ?
         exptime = hdr.get('EXPTIME', 0)
-
+        
+        # TBD: Paul, look here.
+        # subtract the dark frame, as self.processedDark
+                
+        if flatFileName != self.currentFlatName:
+            # reprocess the flat (see code below?).
         if hdr['IMAGETYP'] == 'flat':
-            flatfn = self.gimgfn
-            self.debug('Analysing flat image %s' % (flatfn))
+            flatFileName = self.gimgfn
+            self.debug('Analysing flat image %s' % (flatFileName))
             try:
-                (flat, mask, fibers) = self.analyzeFlat(flatfn, cartridgeId, gprobes)
+                (flat, mask, fibers) = self.analyzeFlat(flatFileName, gprobes)
             except FlatError as e:
                 self.warn('Error processing this flat!')
                 raise e
-            flatoutname = self.getProcessedOutputName(flatfn)
+            flatoutname = self.getProcessedOutputName(flatFileName)
             return fibers
 
-        self.debug('Using flat image %s' % flatfn)
+        self.debug('Using flat image %s' % flatFileName)
         try:
-            (flat, mask, fibers) = self.analyzeFlat(flatfn, cartridgeId, gprobes)
+            (flat, mask, fibers) = self.analyzeFlat(flatFileName, gprobes)
         except FlatError as e:
             # e.g.: no fibers could be found in the flat
             self.warn('Error processsing flat!')
@@ -694,10 +724,10 @@ class GuiderImageAnalysis(object):
                 f.fwhm = self.pixels2arcsec(fwhm)
             # else leave fwhm = nan.
             # FIXME -- figure out good units -- mag/(pix^2)?
-            f.sky    = (c_fibers[0].sky[i])*2.0    #correct for image div by 2 for Ggcode 
+            f.sky = (c_fibers[0].sky[i])*2.0    #correct for image div by 2 for Ggcode
             f.flux = (c_fibers[0].flux[i])*2.0     
             if f.flux > 0:
-                f.mag    = self.flux2mag(f.flux, exptime, f)
+                f.mag = self.flux2mag(f.flux, exptime)
             # else leave f.mag = nan.
         self.libguide.fiberdata_free(c_fibers)
 
@@ -762,26 +792,37 @@ class GuiderImageAnalysis(object):
                     f.stampmask = bigmasks [si*BW:(si+1)*BW, :]
 
         return (flat, mask, fibers)
-
-    def analyzeDark(self, darkfn, cartridgeId):
-        """Open a dark file, process it, and return the dark data. """
-        darkout = self.getProcessedOutputName(darkfn)
-
+    
+    def analyzeDark(self, darkFileName):
+        """
+        Open a dark file, process it, and save the processed 1-second dark as
+        self.processedDark
+        """
+        darkout = self.getProcessedOutputName(darkFileName)
+        # TBD: Paul, look here!
         if os.path.exists(darkout):
             self.inform('Reading processed flat-field from %s' % flatout)
             try:
                 return self.readProcessedDark(darkout, gprobes, stamps)
             except:
                 self.warn('Failed to read processed dark-field from %s; regenerating it.' % darkout)
-
+        # THIS CODE WON'T WORK IN ITS PRESENT STATE!
+        # NEED TO ACTUALLY READ THE IMAGE!
         # darks are binned.
         bias = self.find_bias_level(img,binning=self.binning)
         self.inform('subtracting bias level: %g' % bias)
         img -= bias
         self.imageBias = bias
+        # ...
+        # Apply bias correction.
+        # Convert the dark into a 1-second equivalent exposure.
+        # Any other necessary scaling so that we can apply it to new images.
+        # ...
+        self.processedDark = dark
+        self.currentDarkName = darkFileName
     #...
     
-    def analyzeFlat(self, flatFileName, cartridgeId, gprobes, stamps=False):
+    def analyzeFlat(self, flatFileName, gprobes, stamps=False):
         """
         Return (flat,mask,fibers): with the processed flat, mask to apply
         to the image and flat to mask everything but the fibers, and a list
@@ -1037,4 +1078,7 @@ class GuiderImageAnalysis(object):
         hdulist.writeto(flatout, clobber=True)
         # Now read that file we just wrote...
 
-        return self.readProcessedFlat(flatout, gprobes, stamps)
+        self.processedFlat = self.readProcessedFlat(flatout, gprobes, stamps)
+        self.currentFlatName = flatFileName
+        return self.processedFlat
+    
