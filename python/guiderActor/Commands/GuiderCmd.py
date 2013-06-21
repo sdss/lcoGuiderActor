@@ -87,6 +87,7 @@ class GuiderCmd(object):
             ("loadPlateFiles", "<cartfile> <plugfile>", self.loadPlateFiles),
             ("reprocessFile", "<file>", self.reprocessFile),
             ("flat", "[<time>]", self.flat),
+            ("dark", "[<time>] [<stack>]", self.dark),
             ('ping', '', self.ping),
             ('restart', '', self.restart),
             ('axes', '(on|off)', self.axes),
@@ -140,6 +141,13 @@ class GuiderCmd(object):
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 0.5
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_FLAT, cmd=cmd,
                                                                 start=True, expTime=expTime))
+
+    def dark(self, cmd):      #need keyword to make it a dark exposure eg shutter=closed or whaterver
+        """Take, and process, a guider dark."""
+        expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 15
+        stack = cmd.cmd.keywords["stack"].values[1] if "stack" in cmd.cmd.keywords else 3
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_DARK, cmd=cmd,
+                                                                start=True, expTime=expTime, stack=stack))
 
     def setPID(self, cmd):
         """Set something's PID coefficients"""
