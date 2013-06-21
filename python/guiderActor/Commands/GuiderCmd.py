@@ -142,8 +142,12 @@ class GuiderCmd(object):
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_FLAT, cmd=cmd,
                                                                 start=True, expTime=expTime))
 
-    def dark(self, cmd):      #need keyword to make it a dark exposure eg shutter=closed or whaterver
-        """Take, and process, a guider dark."""
+    def dark(self, cmd):
+        """
+        Take, and process, a guider dark.
+        Recommended: guider dark time=15 stack=9
+        Minimum for a processed dark: guider dark time=10 stack=5
+        """
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 15
         stack = cmd.cmd.keywords["stack"].values[1] if "stack" in cmd.cmd.keywords else 3
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_DARK, cmd=cmd,
