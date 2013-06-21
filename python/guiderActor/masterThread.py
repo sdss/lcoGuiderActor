@@ -329,9 +329,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
                 flatcart, gState.cartridge)))
 
     try:
-        guideCmd.inform('text="guideStep GuiderImageAnalysis.findFibers()..."')
-        fibers = guiderImageAnalysis(inFile, gState.gprobes, cmd=guideCmd)
-        guideCmd.inform("text='GuiderImageAnalysis.findFibers() got %i fibers'" % len(fibers))
+        setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
+        guideCmd.inform('text="guideStep GuiderImageAnalysis.findStars()..."')
+        fibers = guiderImageAnalysis(inFile, gState.gprobes, setPoint=setPoint, cmd=guideCmd)
+        guideCmd.inform("text='GuiderImageAnalysis.findStars() got %i fibers'" % len(fibers))
     except BadReadError as e:
         guideCmd.warn('text=%s' %qstr("Skipping badly formatted image."))
         return
@@ -760,7 +761,61 @@ def loadTccBlock(cmd, actorState, gState):
             cmd.fail('text="Failed to set inst!"')
     except Exception, e:
         cmd.warn('text=%s' % (qstr("could not load a per-cartridge instrument block: %s" % (e))))
+
+def cal_finished(cmd,name):
+    """Generic handling of finished dark/flat frame."""
+    cmd.respond("processing=%s" % msg.filename)
+    frameNo = int(re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
+    
+    h = pyfits.getheader(msg.filename)
+    exptype = h.get('IMAGETYP')
+    if exptype != name:
+        cmd.fail('text="%s image processing ignoring a %s image!!"' % (name,exptype))
+        return
         
+    cmd.inform('text="cal_finished guiderImageAnalysis.analyze%s()..."'%name)
+    try:
+        #setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
+        if name == 'flat':
+            func = "analyzeFlat"
+            guiderImageAnalysis.analyzeFlat(msg.filename,gState.gprobes)
+        elif name == 'dark':
+            func = "analyzeDark"
+            guiderImageAnalysis.analyzeDark(msg.filename)
+        else:
+            raise ValueError("Don't know how to finish a %s guider cal."%name)
+    except GuiderError as e:
+        cmd.fail('guideState="failed"; text=%s' %qstr("%s failed. Error reading/processing guider %s."%(func,name)))
+        gState.setCmd(None)
+        return
+    except Exception as e:
+        cmd.fail('text="%sfailed for an unknown reason: %s' % (func,e))
+        #cmd.fail('text="analyzeFlat failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
+        return
+    
+    try:
+        outname = guiderImageAnalysis.getProcessedOutputName(msg.filename)
+        dirname, filename = os.path.split(outname)
+        cmd.inform('file=%s/,%s' % (dirname, filename))
+        cmd.finish('text="flat image processing done"')
+    except Exception as e:
+        tback.tback("cal_finished", e)
+        cmd.fail('text="failed to save flat: %s"' % (e))
+#...
+
+def dark_finished(cmd,guiderImageAnalysis):
+    """Process a finished dark frame."""
+    cal_finished(cmd,'dark')
+
+def flat_finished(cmd,guiderImageAnalysis):
+    """Process a finished flat frame."""
+    darkfile = h.get('DARKFILE', None)
+    if not darkfile:
+        cmd.fail("text=%s" % qstr("No dark image available!!"))
+        return
+    cal_finished(cmd,'flat')
+#...
+
 def main(actor, queues):
     """Main loop for master thread"""
 
@@ -771,7 +826,7 @@ def main(actor, queues):
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
-    guiderImageAnalysis = GuiderImageAnalysis()
+    guiderImageAnalysis = GuiderImageAnalysis(setpoint)
     
     while True:
         try:
@@ -908,7 +963,7 @@ def main(actor, queues):
                         continue
                         
                     tccState.doreadFilename = msg.filename
-                    ccdTemp = 0.0   # self.camera.cam.read_TempCCD()
+                    ccdtemp = actorState.models["gcamera"].keyVarDict["cooler"][1]
                     msg.cmd.respond('txtForTcc=%s' % (qstr('%d %d %0.1f %0.1f %0.1f %0.1f %0.2f %d %0.2f %s' % \
                                                            (tccState.binX, tccState.binY,
                                                             tccState.ctrX, tccState.ctrY,
@@ -974,56 +1029,25 @@ def main(actor, queues):
                 if gState.cartridge <= 0:
                     msg.cmd.fail('text="no valid cartridge is loaded"')
                     continue
-
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER], 
                                         expType="flat", expTime=msg.expTime, cartridge=gState.cartridge))
-
+            
+            elif msg.type == Msg.TAKE_DARK:
+                queues[GCAMERA].put(Msg(Msg.DARK, msg.cmd, replyQueue=queues[MASTER],
+                                        expType="flat", expTime=msg.expTime, stack=msg.stack))
+            
+            elif msg.type == Msg.DARK_FINISHED:
+                if not msg.success:
+                    cmd.fail('text="something went wrong when taking the dark"')
+                    continue
+                dark_finished(msg.cmd)
+            
             elif msg.type == Msg.FLAT_FINISHED:
-                cmd = msg.cmd
                 if not msg.success:
                     cmd.fail('text="something went wrong when taking the flat"')
                     continue
-
-                cmd.respond("processing=%s" % msg.filename)
-                frameNo = int(re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
-                
-                h = pyfits.getheader(msg.filename)
-                exptype = h.get('IMAGETYP')
-                if exptype != "flat":
-                    cmd.fail('text="flat image processing ignoring a %s image!!"' % (exptype))
-                    continue
-
-                darkfile = h.get('DARKFILE', None)
-                if not darkfile:
-                    cmd.fail("text=%s" % qstr("No dark image available!!"))
-                    continue
-
-                cmd.inform('text="flat_finished GuiderImageAnalysis.findFibers()..."')
-                try:
-                    fibers = guiderImageAnalysis(msg.filename, gState.gprobes, cmd=guideCmd)
-                    if fibers is None:
-                          raise ValueError('Error reading/processing guider image.')
-                except GuiderError, e:
-                    cmd.fail('guideState="failed"; text=%s' %qstr("findFibers failed. Error reading/processing guider flat."))
-                    gState.setCmd(None)
-                    return
-                except Exception, e:
-                    tback.tback("findFibers", e)
-                    cmd.fail('text="findFibers failed for an unknown reason: %s' % (e))
-                    #cmd.fail('text="findFibers failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
-                    continue
-                
-                try:
-                    flatoutname = guiderImageAnalysis.getProcessedOutputName(msg.filename)
-                    dirname, filename = os.path.split(flatoutname)
-                    cmd.inform('file=%s/,%s' % (dirname, filename))
-                    cmd.finish('text="flat image processing done"')
-                except Exception, e:
-                    tback.tback("findFibers2", e)
-                    cmd.fail('text="failed to save flat: %s"' % (e))
-
-                continue
-                    
+                flat_finished(msg.cmd)
+            
             elif msg.type == Msg.FAIL:
                 msg.cmd.fail('guideState="failed"; text="%s"' % msg.text);
 
