@@ -53,12 +53,12 @@ def main(actor, queues):
                 if expType == "dark":
                     responseMsg = Msg.DARK_FINISHED
                 else:
-                    try:
-                        stack = msg.stack
-                        cmdStr += " stack=%d" % (stack)
-                    except:
-                        stack = 1
                     responseMsg = Msg.EXPOSURE_FINISHED
+                try:
+                    stack = msg.stack
+                    cmdStr += " stack=%d" % (stack)
+                except:
+                    stack = 1
 
                 actor.bcast.diag('text="%s %s with timeLim=%s"' % (camera, cmdStr, timeLim))
                 try:
