@@ -1,4 +1,4 @@
-import os.path
+mport os.path
 from operator import attrgetter
 import ctypes
 
@@ -117,7 +117,7 @@ class GuiderImageAnalysis(object):
         # cmd must have methods "inform(string)", "warn(string)".
         fibers = guiderImageAnalysis(gimg_filename, gState.gprobes, cmd)
         # run guider control loop...
-        GI.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+        guiderImageAnalyze.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
     '''
 
     # According to
@@ -152,8 +152,7 @@ class GuiderImageAnalysis(object):
         # gcamFiberInfo.par file) the larger fibers to be ACQUIRE,
         # though they are declared to have radii of 14.1 pixels (vs
         # 8.5 for the GUIDE fibers).  We therefore cut on this radius.
-        #
-        self.bigFiberRadius = 12.
+        #,        self.bigFiberRadius = 12.
 
         # Saturation level.  
         #need to make use of full 64k image for bright marvels guide stars.
@@ -534,7 +533,7 @@ class GuiderImageAnalysis(object):
                     fitsname = name
                 cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
                                           array=numpy.array([getattr(f.gProbe, name, nilval) for f in fibers])))
-            for name,atname,fitstype,units in ffields:
+            for name,atname,fitproc-gimg-*.fits stype,units in ffields:
                 cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
                                           array=numpy.array([getattr(f, atname or name) for f in fibers])))
 
@@ -615,7 +614,7 @@ class GuiderImageAnalysis(object):
         # Get dark and flat
         (darkFileName, flatFileName) = self.findDarkAndFlat(self.gimgfn, hdr)
         # !!!!!!!!!!!!!
-        # TBD: Paul, look here.
+        # Create a process the dark image if this is the first time through, or a new dark exposure
         if darkFileName != self.currentDarkName:
             self.analyzeDark(darkFileName)
         
@@ -623,9 +622,7 @@ class GuiderImageAnalysis(object):
         # Otherwise, we don't need this information...
         cartridgeId = int(hdr['FLATCART'])
 
-        # FIXME -- we currently don't do anything with the dark frame.
-        #   we'll need hdr['EXPTIME'] if we do.
-        # FIXME -- filter probes here for !exists, !tritium ?
+  
         exptime = hdr.get('EXPTIME', 0)
         
         # TBD: Paul, look here.
@@ -659,6 +656,9 @@ class GuiderImageAnalysis(object):
         self.inform('subtracting bias level: %g' % bias)
         image -= bias
         self.imageBias = bias
+
+        # scale and subtract the dark
+        image -= self.processedDark * exptime
 
         # Divide by the flat (avoiding NaN where the flat is zero)
         image /= (flat + (flat == 0)*1)
@@ -798,7 +798,9 @@ class GuiderImageAnalysis(object):
         Open a dark file, process it, and save the processed 1-second dark as
         self.processedDark
         """
+        
         darkout = self.getProcessedOutputName(darkFileName)
+        
         # TBD: Paul, look here!
         if os.path.exists(darkout):
             self.inform('Reading processed flat-field from %s' % flatout)
@@ -806,19 +808,43 @@ class GuiderImageAnalysis(object):
                 return self.readProcessedDark(darkout, gprobes, stamps)
             except:
                 self.warn('Failed to read processed dark-field from %s; regenerating it.' % darkout)
-        # THIS CODE WON'T WORK IN ITS PRESENT STATE!
-        # NEED TO ACTUALLY READ THE IMAGE!
+
+        # THIS CODE may WORK IN ITS PRESENT STATE!
+        # NEED TO ACTUALLY save THE processed dark IMAGE!
         # darks are binned.
-        bias = self.find_bias_level(img,binning=self.binning)
-        self.inform('subtracting bias level: %g' % bias)
-        img -= bias
-        self.imageBias = bias
-        # ...
+        # PH: Have not got overscan working correctly (its too low) as of June 20 2013 so for now
+        # best/simplest estimate of a dark image bias level is median
+        # alternatively could use percentile as in analyzeFlat
+        # there are very few hot pixels and bulk dark is < 0.02 e/sec at -40C
+
+        darkimg,darkhdr = pyfits.getdata(darkFileName,0,header=True)
         # Apply bias correction.
+        #bias = self.find_bias_level(img,binning=self.binning)
+        bias =  numpy.median(darkimg)
+        self.inform('subtracting bias level: %g' % bias)
+        darkimg -= bias
+        #self.imageBias = bias      #dont need this
+        # Check if its a good dark
+        
+        exptime = darkhdr['EXPTIME'] stack = darkhdr['STACK'] exptimen = darkhdr['EXPTIMEN']
+        if(exptime < 10) or (stack < 5) or (exptimen < 60) :
+            self.warn('you skimped on the dark exposures')
+        ccdtemp = darkhdr['CCDTEMP']
+        #Check CCD temp for Dark, it matter for the dark,(PH add this in later)
+        #if(ccdtemp > theNormalCCDTemp + deltaT): 
+        #    self.warn('CCD temp higher than expected')             
+
         # Convert the dark into a 1-second equivalent exposure.
-        # Any other necessary scaling so that we can apply it to new images.
-        # ...
-        self.processedDark = dark
+        if(exptime < 0.5 sec):    #proxy for zero second exposure
+           guideCmd.fail('guideState="failed"; text=%s' % qstr("Dark image less than 0.5 sec"))
+        darkimg /= exptime
+        darkhdr['ORGEXPT'] = exptime
+        darkhdr['EXPTIME'] = 1.
+
+        #Write the dark image
+        pyfits.writeto(darkout, darkimg, darkhdr)
+
+        self.processedDark = darkimg
         self.currentDarkName = darkFileName
     #...
     
@@ -845,7 +871,7 @@ class GuiderImageAnalysis(object):
         bias = self.find_bias_level(img,binning=1)
         self.inform('subtracting bias level: %g' % bias)
         img -= bias
-        self.imageBias = bias
+        #self.imageBias = bias
 
         # FIXME -- we KNOW the area (ie, the number of pixels) of the
         # fibers -- we could choose the threshold appropriately.
