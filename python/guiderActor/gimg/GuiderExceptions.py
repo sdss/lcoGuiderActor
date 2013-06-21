@@ -5,6 +5,9 @@ class GuiderError(Exception):
     """A general exception related to problems processing guider data."""
     pass
 
+class BadDarkError(GuiderError):
+    """An exception due to a problem processing a dark."""
+    pass
 
 class FlatError(GuiderError):
     """An exception due to a problem processing a flat."""

@@ -24,6 +24,8 @@ class Msg(object):
     class EXPOSURE_FINISHED(): pass
     class TAKE_FLAT(): pass
     class FLAT_FINISHED(): pass
+    class TAKE_DARK(): pass
+    class DARK_FINISHED(): pass
     class ENABLE_FIBER(): pass
     class FAIL(): pass
     class LOAD_CARTRIDGE(): pass

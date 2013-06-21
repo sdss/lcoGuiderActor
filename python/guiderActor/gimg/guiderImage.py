@@ -1,4 +1,4 @@
-mport os.path
+import os.path
 from operator import attrgetter
 import ctypes
 
@@ -131,8 +131,9 @@ class GuiderImageAnalysis(object):
         """
         New GuiderImageAnalysis instances are ready to accept files for processing.
         """
+        self.setpoint = setpoint
         self.outputDir = ''
-        # set during findFibers():
+        # set during findStars():
         self.fibers = None
         self.guiderImage = None
         self.guiderHeader = None
@@ -146,7 +147,10 @@ class GuiderImageAnalysis(object):
 
         # Print debugging?
         self.printDebug = False
-
+        
+        # amount we let the gcamera temperature vary from the setPoint
+        self.deltaTemp = 3.0
+        
         # "Big" (acquisition) fibers are bigger than this pixel
         # radius.  The older SDSS cartridges don't declare (in the
         # gcamFiberInfo.par file) the larger fibers to be ACQUIRE,
@@ -182,15 +186,17 @@ class GuiderImageAnalysis(object):
         self.zeropoint = 25.70
     #...
 
-    def __call__(self, gimgfn, gprobes, cmd=None):
+    def __call__(self, gimgfn, gprobes, setPoint, cmd=None):
         """
-        Calls findFibers to process gimgfn/gprobes and return found fibers.
+        Calls findStars to process gimgfn/gprobes and return found fibers.
         
         gimgfn is the unprocessed gcamera file to process.
         gprobes is from GuiderSTate: it's a dict of probeId to GProbe object.
         cmd is a Commander object, to allow messaging (inform/warn/debug).
+        setPoint is the current gcamera temperature set point
         """
         self.gimgfn = gimgfn
+        self.setPoint = setPoint
         
         if cmd:
             self.informFunc = cmd.inform
@@ -201,7 +207,7 @@ class GuiderImageAnalysis(object):
             self.warnFunc = None
             self.debugFunc = None
         
-        return self.findFibers(gprobes)
+        return self.findStars(gprobes)
     #...
 
     def pixels2arcsec(self, pix):
@@ -553,7 +559,7 @@ class GuiderImageAnalysis(object):
         Write a fits file containing the processed results for this exposure.
         """
         if not self.fibers:
-            raise Exception('must call findFibers() before writeFITS()')
+            raise Exception('must call findStars() before writeFITS()')
         gimg = self.guiderImage
         hdr = self.guiderHeader
 
@@ -571,23 +577,12 @@ class GuiderImageAnalysis(object):
             self.inform('file=%s/,%s' % (dirname, filename), hasKey=True)
         except Exception as e:
             cmd.warn('text="failed to write FITS file %s: %r"' % (procpath, e))
-
-    def findFibers(self, gprobes):
-        ''' findFibers(gprobes)
-        
-        gprobes is from GuiderSTate -- it's a dict of probeId to GProbe object.
-        
-        Analyze a single image from the guider camera, finding fiber
-        centers and star centers.
-
-        The fiber centers are found by referring to the associated guider
-        flat.  Since this flat is shared by many guider-cam images, the
-        results of analyzing it are cached in a "proc-gimg-" file for the flat.
-
-        Returns a list of fibers; also sets several fields in this object.
-
-        The list of fibers contains an entry for each fiber found.
-        '''
+    
+    def _pre_process(self):
+        """
+        Initial checks and processing on any kind of exposure.
+        Returns image,hdr,sat if everything goes well, raises exceptions if not.
+        """
         assert(self.gimgfn)
         self.ensureLibraryLoaded()
 
@@ -602,52 +597,57 @@ class GuiderImageAnalysis(object):
             self.warn('Bad guider read! This exposure is mangled and will not be used.')
             raise BadReadError
 
-        #print 'image', image.min(), image.max()
-        #print 'sat', self.saturationLevel
-        #print image >= self.saturationLevel
-
         sat = (image.astype(int) >= self.saturationLevel)
         if any(sat):
             self.warn('the exposure has %i saturated pixels' % sum(sat))
         image[sat] = self.saturationReplacement
+        
+        return image,hdr,sat
+    #...
 
+    def findStars(self, gprobes):
+        """
+        Identify the centers of the stars in the fibers.
+        Assums self.gimgfn is set to the correct file name.
+        
+        gprobes is from GuiderSTate -- it's a dict of probeId to GProbe object.
+        
+        Analyze a single image from the guider camera, finding fiber
+        centers and star centers.
+
+        The fiber centers are found by referring to the associated guider
+        flat.  Since this flat is shared by many guider-cam images, the
+        results of analyzing it are cached in a "proc-gimg-" file for the flat.
+
+        Returns a list of fibers; also sets several fields in this object.
+
+        The list of fibers contains an entry for each fiber found.
+        """
+        self._pre_process()
         # Get dark and flat
         (darkFileName, flatFileName) = self.findDarkAndFlat(self.gimgfn, hdr)
         # !!!!!!!!!!!!!
-        # Create a process the dark image if this is the first time through, or a new dark exposure
+        # Create and process the dark image if this is the first time through, or a new dark exposure
         if darkFileName != self.currentDarkName:
             self.analyzeDark(darkFileName)
         
         # jkp TBD: A useful test would be to check if the flat cartId == current cartId
         # Otherwise, we don't need this information...
         cartridgeId = int(hdr['FLATCART'])
-
-  
+        
         exptime = hdr.get('EXPTIME', 0)
         
         # TBD: Paul, look here.
         # subtract the dark frame, as self.processedDark
                 
-        if flatFileName != self.currentFlatName:
-            # reprocess the flat (see code below?).
-        if hdr['IMAGETYP'] == 'flat':
-            flatFileName = self.gimgfn
-            self.debug('Analysing flat image %s' % (flatFileName))
-            try:
-                (flat, mask, fibers) = self.analyzeFlat(flatFileName, gprobes)
-            except FlatError as e:
-                self.warn('Error processing this flat!')
-                raise e
-            flatoutname = self.getProcessedOutputName(flatFileName)
-            return fibers
-
         self.debug('Using flat image %s' % flatFileName)
-        try:
-            (flat, mask, fibers) = self.analyzeFlat(flatFileName, gprobes)
-        except FlatError as e:
-            # e.g.: no fibers could be found in the flat
-            self.warn('Error processsing flat!')
-            raise e
+        if flatFileName != self.currentFlatName:
+            try:
+                self.analyzeFlat(flatFileName, gprobes)
+            except FlatError as e:
+                # e.g.: no fibers could be found in the flat
+                self.warn('Error processsing flat!')
+                raise e
         fibers = [f for f in fibers if not f.is_fake()]
         # mask the saturated pixels with the appropriate value.
         mask[sat] |= GuiderImageAnalysis.mask_saturated
@@ -798,7 +798,7 @@ class GuiderImageAnalysis(object):
         Open a dark file, process it, and save the processed 1-second dark as
         self.processedDark
         """
-        
+        self._pre_process()
         darkout = self.getProcessedOutputName(darkFileName)
         
         # TBD: Paul, look here!
@@ -823,25 +823,29 @@ class GuiderImageAnalysis(object):
         bias =  numpy.median(darkimg)
         self.inform('subtracting bias level: %g' % bias)
         darkimg -= bias
-        #self.imageBias = bias      #dont need this
         # Check if its a good dark
         
-        exptime = darkhdr['EXPTIME'] stack = darkhdr['STACK'] exptimen = darkhdr['EXPTIMEN']
-        if(exptime < 10) or (stack < 5) or (exptimen < 60) :
-            self.warn('you skimped on the dark exposures')
+        exptime = darkhdr['EXPTIME']
+        stack = darkhdr['STACK']
+        exptimen = darkhdr['EXPTIMEN']
+        if ((exptime < 10) and (stack < 5)) or (exptimen < 60):
+            self.warn('Total dark exposure time too short: minimum 5x10s, or total time > 60s .')
+            raise BadDarkError
+        if (exptime < 0.5):    #proxy for zero second exposure
+           guideCmd.warn('text=%s' % qstr("Dark image less than 0.5 sec"))
+           raise BadDarkError
         ccdtemp = darkhdr['CCDTEMP']
-        #Check CCD temp for Dark, it matter for the dark,(PH add this in later)
-        #if(ccdtemp > theNormalCCDTemp + deltaT): 
-        #    self.warn('CCD temp higher than expected')             
-
+        # Check CCD temp for Dark, it matters for the dark
+        if (setPoint - self.deltaTemp) < ccdtemp < (setPoint + self.deltaTemp):
+            self.warn('CCD temp signifcantly different from setPoint: %6.3f, expected %6.3f'%(ccdtemp,setPoint))
+        
         # Convert the dark into a 1-second equivalent exposure.
-        if(exptime < 0.5 sec):    #proxy for zero second exposure
-           guideCmd.fail('guideState="failed"; text=%s' % qstr("Dark image less than 0.5 sec"))
         darkimg /= exptime
         darkhdr['ORGEXPT'] = exptime
         darkhdr['EXPTIME'] = 1.
 
         #Write the dark image
+        actorFits.writeFits(cmd,hdu,directory,filename,doCompress=True,chmod=0644)
         pyfits.writeto(darkout, darkimg, darkhdr)
 
         self.processedDark = darkimg
@@ -857,12 +861,14 @@ class GuiderImageAnalysis(object):
         NOTE: returns a list of fibers the same length as 'gprobes';
         some will have xcen=ycen=NaN; test with fiber.is_fake()
         """
+        self._pre_process()
         flatout = self.getProcessedOutputName(flatFileName)
+        directory,filename = os.path.split(flatout)
 
         if os.path.exists(flatout):
             self.inform('Reading processed flat-field from %s' % flatout)
             try:
-                return self.readProcessedFlat(flatout, gprobes, stamps)
+                self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes, stamps)
             except:
                 self.warn('Failed to read processed flat-field from %s; regenerating it.' % flatout)
 
@@ -1099,12 +1105,8 @@ class GuiderImageAnalysis(object):
         hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binimg)
         if hdulist is None:
             self.warn('Failed to create processed flat file')
-            return (flat, mask, fibers)
-
-        hdulist.writeto(flatout, clobber=True)
+        
+        actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
         # Now read that file we just wrote...
-
-        self.processedFlat = self.readProcessedFlat(flatout, gprobes, stamps)
+        self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes, stamps)
         self.currentFlatName = flatFileName
-        return self.processedFlat
-    
