@@ -149,7 +149,7 @@ class GuiderCmd(object):
         Minimum for a processed dark: guider dark time=10 stack=5
         """
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 15
-        stack = cmd.cmd.keywords["stack"].values[1] if "stack" in cmd.cmd.keywords else 3
+        stack = cmd.cmd.keywords["stack"].values[0] if "stack" in cmd.cmd.keywords else 3
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_DARK, cmd=cmd,
                                                                 start=True, expTime=expTime, stack=stack))
 

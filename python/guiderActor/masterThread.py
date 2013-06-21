@@ -331,7 +331,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     try:
         setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
         guideCmd.inform('text="guideStep GuiderImageAnalysis.findStars()..."')
-        fibers = guiderImageAnalysis(inFile, gState.gprobes, setPoint=setPoint, cmd=guideCmd)
+        fibers = guiderImageAnalysis(cmd,inFile,gState.gprobes,setPoint=setPoint)
         guideCmd.inform("text='GuiderImageAnalysis.findStars() got %i fibers'" % len(fibers))
     except BadReadError as e:
         guideCmd.warn('text=%s' %qstr("Skipping badly formatted image."))
@@ -762,10 +762,12 @@ def loadTccBlock(cmd, actorState, gState):
     except Exception, e:
         cmd.warn('text=%s' % (qstr("could not load a per-cartridge instrument block: %s" % (e))))
 
-def cal_finished(cmd,name):
+def cal_finished(msg,name,guiderImageAnalysis):
     """Generic handling of finished dark/flat frame."""
+    cmd = msg.cmd
     cmd.respond("processing=%s" % msg.filename)
-    frameNo = int(re.search(r"([0-9]+)\.fits$", msg.filename).group(1))
+    # need ".*" in the regex, because we may or may not have gzipped files.
+    frameNo = int(re.search(r"([0-9]+)\.fits.*", msg.filename).group(1))
     
     h = pyfits.getheader(msg.filename)
     exptype = h.get('IMAGETYP')
@@ -778,10 +780,10 @@ def cal_finished(cmd,name):
         #setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
         if name == 'flat':
             func = "analyzeFlat"
-            guiderImageAnalysis.analyzeFlat(msg.filename,gState.gprobes)
+            guiderImageAnalysis.analyzeFlat(msg.filename,gState.gprobes,cmd)
         elif name == 'dark':
             func = "analyzeDark"
-            guiderImageAnalysis.analyzeDark(msg.filename)
+            guiderImageAnalysis.analyzeDark(msg.filename,cmd)
         else:
             raise ValueError("Don't know how to finish a %s guider cal."%name)
     except GuiderError as e:
@@ -789,7 +791,8 @@ def cal_finished(cmd,name):
         gState.setCmd(None)
         return
     except Exception as e:
-        cmd.fail('text="%sfailed for an unknown reason: %s' % (func,e))
+        tback.tback("cal_finished", e)
+        cmd.fail('text="%s failed for an unknown reason: %s' % (func,e))
         #cmd.fail('text="analyzeFlat failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
         return
     
@@ -803,17 +806,17 @@ def cal_finished(cmd,name):
         cmd.fail('text="failed to save flat: %s"' % (e))
 #...
 
-def dark_finished(cmd,guiderImageAnalysis):
+def dark_finished(msg,guiderImageAnalysis):
     """Process a finished dark frame."""
-    cal_finished(cmd,'dark')
+    cal_finished(msg,'dark',guiderImageAnalysis)
 
-def flat_finished(cmd,guiderImageAnalysis):
+def flat_finished(msg,guiderImageAnalysis):
     """Process a finished flat frame."""
     darkfile = h.get('DARKFILE', None)
     if not darkfile:
-        cmd.fail("text=%s" % qstr("No dark image available!!"))
+        msg.cmd.fail("text=%s" % qstr("No dark image available!!"))
         return
-    cal_finished(cmd,'flat')
+    cal_finished(msg,'flat',guiderImageAnalysis)
 #...
 
 def main(actor, queues):
@@ -826,7 +829,7 @@ def main(actor, queues):
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
-    guiderImageAnalysis = GuiderImageAnalysis(setpoint)
+    guiderImageAnalysis = GuiderImageAnalysis()
     
     while True:
         try:
@@ -921,9 +924,6 @@ def main(actor, queues):
 
                 guideCmd = msg.cmd
                 gState.setCmd(guideCmd)
-                
-                # Keep track of the first exposure number for generating movies
-                actorState.
                 
                 #
                 # Reset any PID I terms
@@ -1033,20 +1033,20 @@ def main(actor, queues):
                                         expType="flat", expTime=msg.expTime, cartridge=gState.cartridge))
             
             elif msg.type == Msg.TAKE_DARK:
-                queues[GCAMERA].put(Msg(Msg.DARK, msg.cmd, replyQueue=queues[MASTER],
-                                        expType="flat", expTime=msg.expTime, stack=msg.stack))
+                queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER],
+                                        expType="dark", expTime=msg.expTime, stack=msg.stack))
             
             elif msg.type == Msg.DARK_FINISHED:
                 if not msg.success:
                     cmd.fail('text="something went wrong when taking the dark"')
                     continue
-                dark_finished(msg.cmd)
+                dark_finished(msg,guiderImageAnalysis)
             
             elif msg.type == Msg.FLAT_FINISHED:
                 if not msg.success:
                     cmd.fail('text="something went wrong when taking the flat"')
                     continue
-                flat_finished(msg.cmd)
+                flat_finished(msg,guiderImageAnalysis)
             
             elif msg.type == Msg.FAIL:
                 msg.cmd.fail('guideState="failed"; text="%s"' % msg.text);
