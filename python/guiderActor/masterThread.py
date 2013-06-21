@@ -800,7 +800,7 @@ def cal_finished(msg,name,guiderImageAnalysis):
         outname = guiderImageAnalysis.getProcessedOutputName(msg.filename)
         dirname, filename = os.path.split(outname)
         cmd.inform('file=%s/,%s' % (dirname, filename))
-        cmd.finish('text="flat image processing done"')
+        cmd.finish('text="%s image processing done"'%name)
     except Exception as e:
         tback.tback("cal_finished", e)
         cmd.fail('text="failed to save flat: %s"' % (e))

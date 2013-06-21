@@ -789,10 +789,8 @@ class GuiderImageAnalysis(object):
                 self.processedDark = self.readProcessedDark(darkout)
             except:
                 self.cmd.warn('Failed to read processed dark-field from %s; regenerating it.' % darkout)
-
-        # THIS CODE may WORK IN ITS PRESENT STATE!
-        # NEED TO ACTUALLY save THE processed dark IMAGE!
-        # darks are binned.
+        
+        # NOTE: darks are binned.
         # PH: Have not got overscan working correctly (its too low) as of June 20 2013 so for now
         # best/simplest estimate of a dark image bias level is median
         # alternatively could use percentile as in analyzeFlat
