@@ -36,15 +36,12 @@ def main(actor, queues):
                 except:
                     expType = "expose" 
 
-                timeLim = msg.expTime + 45     # allow for readout time
-                
                 filenameKey = guiderActor.myGlobals.actorState.models[camera].keyVarDict["filename"]
 
                 try:
                     forTCC = msg.forTCC
                 except:
                     forTCC = False
-
                     
                 cmdStr="%s time=%f" % (expType, msg.expTime)
                 if expType == "flat":
@@ -59,7 +56,11 @@ def main(actor, queues):
                     cmdStr += " stack=%d" % (stack)
                 except:
                     stack = 1
-
+                
+                # Allow for readout time, plus a bit more
+                # readout is short, but adds up for each exposure in a stack.
+                timeLim = stack*msg.expTime + stack*5 + 15
+                
                 actor.bcast.diag('text="%s %s with timeLim=%s"' % (camera, cmdStr, timeLim))
                 try:
                     cmdVar = actor.cmdr.call(actor=camera, cmdStr=cmdStr, 

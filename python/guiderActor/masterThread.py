@@ -775,7 +775,7 @@ def cal_finished(msg,name,guiderImageAnalysis):
         cmd.fail('text="%s image processing ignoring a %s image!!"' % (name,exptype))
         return
         
-    cmd.inform('text="cal_finished guiderImageAnalysis.analyze%s()..."'%name)
+    cmd.diag('text="cal_finished guiderImageAnalysis.analyze%s()..."'%name)
     try:
         #setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
         if name == 'flat':
@@ -829,7 +829,11 @@ def main(actor, queues):
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
-    guiderImageAnalysis = GuiderImageAnalysis()
+    # need to wait a couple seconds to let the models sync up.
+    time.sleep(3)
+    setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
+    print 'Initial gcamera setPoint:',setPoint
+    guiderImageAnalysis = GuiderImageAnalysis(setPoint)
     
     while True:
         try:
