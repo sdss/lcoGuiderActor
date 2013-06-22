@@ -103,8 +103,7 @@ def numpy_array_to_MASK(A):
     rows = (ptrtype*H)(*[row.ctypes.data_as(ptrtype) for row in A])
     return MASK(H, W, rows)
 
-
-def binImage(img, BIN):
+def bin_image(img, BIN):
     """Return an image rebinned by BINxBIN pixels."""
     binned = zeros((img.shape[0]/BIN, img.shape[1]/BIN), numpy.float32)
     for i in range(BIN):
@@ -112,7 +111,6 @@ def binImage(img, BIN):
             binned += img[i::BIN,j::BIN]
     binned /= (BIN*BIN)
     return binned
-
 
 
 class GuiderImageAnalysis(object):
@@ -147,6 +145,7 @@ class GuiderImageAnalysis(object):
         self.guiderImage = None
         self.guiderHeader = None
         self.maskImage = None
+        self.bypassDark = False
         
         # So that we don't have to re-open dark and flat files every time.
         self.currentDarkName = ''
@@ -165,7 +164,7 @@ class GuiderImageAnalysis(object):
         # gcamFiberInfo.par file) the larger fibers to be ACQUIRE,
         # though they are declared to have radii of 14.1 pixels (vs
         # 8.5 for the GUIDE fibers).  We therefore cut on this radius.
-        #,        self.bigFiberRadius = 12.
+        self.bigFiberRadius = 12.
 
         # Saturation level.  
         #need to make use of full 64k image for bright marvels guide stars.
@@ -195,18 +194,19 @@ class GuiderImageAnalysis(object):
         self.zeropoint = 25.70
     #...
     
-    def __call__(self, cmd, gimgfn, gprobes, setPoint):
+    def __call__(self, cmd, gimgfn, gprobes, setPoint, bypassDark=False):
         """
         Calls findStars to process gimgfn/gprobes and return found fibers.
         
         gimgfn is the unprocessed gcamera file to process.
         gprobes is from GuiderSTate: it's a dict of probeId to GProbe object.
         cmd is a Commander object, to allow messaging (diag/inform/warn).
-        setPoint is the current gcamera temperature set point
+        setPoint is the current gcamera temperature set point.
+        set bypassDark to ignore guider dark frames, and not do dark subtraction.
         """
         self.gimgfn = gimgfn
         self.setPoint = setPoint
-        
+        self.bypassDark = bypassDark
         self.cmd = cmd
         
         return self.findStars(gprobes)
@@ -414,18 +414,19 @@ class GuiderImageAnalysis(object):
         #print 'bg=', bg
         return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
 
-    def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask, stampImage=None):
+    def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask, stampImage=None, bias=None):
         """Generate an HDU list to be inserted into the proc-file header."""
         if stampImage is None:
             stampImage = image
-
+        if bias == None:
+            bias = self.imageBias
         #bg = median(image[numpy.isfinite(image)])
         bg = median(image[mask == 0])
-
+        
         imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
         imageHDU.header.update('SDSSFMT', 'GPROC 1 4', 'type major minor version for this file')
         imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
-        imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
+        imageHDU.header.update('OVERSCAN', bias, 'Bias level of this image.')
 
         try:
             # List the fibers by fiber id.
@@ -602,22 +603,18 @@ class GuiderImageAnalysis(object):
 
         The list of fibers contains an entry for each fiber found.
         """
-        self._pre_process(self.gimgfn)
-        # Get dark and flat
-        (darkFileName, flatFileName) = self.findDarkAndFlat(self.gimgfn, hdr)
-        # Create and process the dark image if this is the first time through, or a new dark exposure
-        self.cmd.diag('text=%s'%qstr('Using dark image: %s' % darkFileName))
-        if darkFileName != self.currentDarkName:
-            self.analyzeDark(darkFileName)
+        image,hdr,sat = self._pre_process(self.gimgfn)
         
-        # jkp TBD: A useful test would be to check if the flat cartId == current cartId
-        # Otherwise, we don't need this information...
-        cartridgeId = int(hdr['FLATCART'])
+        image,bias = self.applyBias(image,self.binning)
+        self.imageBias = bias
         
         exptime = hdr.get('EXPTIME', 0)
         
-        # TBD: Paul, look here.
-        # subtract the dark frame, as self.processedDark
+        (darkFileName, flatFileName) = self.findDarkAndFlat(self.gimgfn, hdr)
+        image = self.applyDark(image,darkFileName,exptime)
+        # jkp TBD: A useful test would be to check if the flat cartId == current cartId
+        # Otherwise, we don't need this information...
+        cartridgeId = int(hdr['FLATCART'])
         
         self.cmd.diag('text=%s'%qstr('Using flat image: %s' % flatFileName))
         if flatFileName != self.currentFlatName:
@@ -630,14 +627,6 @@ class GuiderImageAnalysis(object):
         fibers = [f for f in fibers if not f.is_fake()]
         # mask the saturated pixels with the appropriate value.
         mask[sat] |= GuiderImageAnalysis.mask_saturated
-
-        bias = self.find_bias_level(image,binning=self.binning)
-        self.cmd.inform('text=%s'%qstr('subtracting bias level: %g' % bias))
-        image -= bias
-        self.imageBias = bias
-
-        # scale and subtract the dark
-        image -= self.processedDark * exptime
 
         # Divide by the flat (avoiding NaN where the flat is zero)
         image /= (flat + (flat == 0)*1)
@@ -712,7 +701,28 @@ class GuiderImageAnalysis(object):
 
         self.fibers = fibers
         return fibers
-
+    
+    def applyBias(self,image,binning):
+        """Apply a bias correction to the image, and return the image and bias level."""
+        bias = self.find_bias_level(image,binning=binning)
+        self.cmd.diag('text=%s'%qstr('subtracting bias level: %g' % bias))
+        image -= bias
+        return image,bias
+        
+    def applyDark(self,image,darkFileName,exptime):
+        """Dark subtract the current image, and return the result"""
+        # Create and process the dark image if this is the first time through, or a new dark exposure
+        self.cmd.diag('text=%s'%qstr('Using dark image: %s' % darkFileName))
+        if darkFileName != self.currentDarkName and not self.bypassDark:
+            self.analyzeDark(darkFileName)
+        
+        # scale and subtract the dark
+        if not self.bypassDark:
+            image -= self.processedDark * exptime
+        else:
+            self.cmd.inform('text=%s'%qstr('Bypassing dark subtraction.'))
+        return image
+    
     def readProcessedFlat(self,flatFileName, gprobes, stamps=False):
         """
         Read processed flatFileName and return (flat, mask, fibers).
@@ -735,6 +745,10 @@ class GuiderImageAnalysis(object):
             f.gProbe = gprobes.get(fi)
             fibers.append(f)
 
+        # !!!!!!!!!!!!!!1
+        # TBD: This doesn't seem to be used for anything at all...
+        # We can probably remove it, and the "stamps" stuff in analyzeFlat.
+        # !!!!!!!!!!!!!!!!
         if stamps:
             # add stamp,mask fields to fibers.
             smallstamps = flatfits[2].data
@@ -783,10 +797,9 @@ class GuiderImageAnalysis(object):
         """
         if cmd is not None:
             self.cmd = cmd
-        self._pre_process(darkFileName)
+        
         darkout = self.getProcessedOutputName(darkFileName)
         
-        # TBD: Paul, look here!
         if os.path.exists(darkout):
             self.cmd.inform('text=%s'%qstr('Reading processed dark-field from %s' % darkout))
             try:
@@ -794,51 +807,50 @@ class GuiderImageAnalysis(object):
             except:
                 self.cmd.warn('text=%s'%qstr('Failed to read processed dark-field from %s; regenerating it.' % darkout))
         
+        image,hdr,sat = self._pre_process(darkFileName)
         # NOTE: darks are binned.
-        # PH: Have not got overscan working correctly (its too low) as of June 20 2013 so for now
-        # best/simplest estimate of a dark image bias level is median
-        # alternatively could use percentile as in analyzeFlat
         # there are very few hot pixels and bulk dark is < 0.02 e/sec at -40C
-        darkimg,darkhdr = pyfits.getdata(darkFileName,0,header=True)
         # Apply bias correction.
-        #bias = self.find_bias_level(img,binning=self.binning)
-        bias =  numpy.median(darkimg)
-        self.cmd.inform('text=%s'%qstr('subtracting bias level: %g' % bias))
-        darkimg -= bias
+        image,bias = self.applyBias(image,self.binning)
         
-        # Check if its a good dark
-        # NOTE: TBD: we should check whether the mean level is particularly high
-        # which would signify that something is bad in the dark.
-        exptime = darkhdr['EXPTIME']
-        stack = darkhdr.get('STACK',1)
-        exptimen = darkhdr.get('EXPTIMEN',exptime)
-        if ((exptime < 10) and (stack < 5)) or (exptimen < 45):
-            self.cmd.warn('text=%s'%qstr('Total dark exposure time too short: minimum 5x10s, or total time > 45s .'))
+        # Check if it's a good dark
+        darkMean = image.mean()
+        if darkMean > 20:
+            self.cmd.warn('text=%s'%qstr('Much more signal in the dark than expected: %6.2f')%darkMean)
+            raise BadDarkError
+        exptime = hdr['EXPTIME']
+        stack = hdr.get('STACK',1)
+        exptimen = hdr.get('EXPTIMEN',exptime)
+        if stack < 3 or exptimen < 30:
+            self.cmd.warn('text=%s'%qstr('Total dark exposure time too short: minimum stack of 3 with total time > 30s .'))
             raise BadDarkError
         if (exptime < 0.5):    #proxy for zero second exposure
            self.cmd.warn('text=%s' % qstr("Dark image less than 0.5 sec"))
            raise BadDarkError
-        ccdtemp = darkhdr['CCDTEMP']
+        ccdtemp = hdr['CCDTEMP']
         # Check CCD temp, since we really need the dark to be at the setPoint.
         if not ((self.setPoint - self.deltaTemp) < ccdtemp < (self.setPoint + self.deltaTemp)):
             self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different from setPoint: %.2f, expected %.2f'%(ccdtemp,self.setPoint)))
             raise BadDarkError
         
         # Convert the dark into a 1-second equivalent exposure.
-        darkimg /= exptime
-        darkhdr.update('ORGEXPT',exptime,'Original, unscaled exposuretime.')
-        darkhdr.update('EXPTIME',1.,'dark scaled to 1 second equivalent exposure.')
+        # NOTE: we really do want to divide by exptime, not exptimen,
+        # because the median-stack behaves like it was exptime long, just with
+        # better noise properties.
+        image /= exptime
+        hdr.update('ORIGEXPT',exptime,'Original, unscaled exposure time.')
+        hdr.update('EXPTIME',1.,'dark scaled to 1 second equivalent exposure.')
         
         #Write the dark image
         directory,filename = os.path.split(darkout)
-        hdu = pyfits.PrimaryHDU(darkimg,darkhdr)
+        hdu = pyfits.PrimaryHDU(image,hdr)
         actorFits.writeFits(cmd,hdu,directory,filename,doCompress=True,chmod=0644)
         
-        self.processedDark = darkimg
+        self.processedDark = image
         self.currentDarkName = darkFileName
     #...
     
-    def analyzeFlat(self, flatFileName, gprobes, cmd=None):
+    def analyzeFlat(self, flatFileName, gprobes, cmd=None, stamps=False):
         """
         Return (flat,mask,fibers): with the processed flat, mask to apply
         to the image and flat to mask everything but the fibers, and a list
@@ -849,10 +861,10 @@ class GuiderImageAnalysis(object):
         """
         if cmd is not None:
             self.cmd = cmd
-        self._pre_process(flatFileName)
+        
         flatout = self.getProcessedOutputName(flatFileName)
         directory,filename = os.path.split(flatout)
-
+        
         if os.path.exists(flatout):
             self.cmd.inform('text=%s'%qstr('Reading processed flat-field from %s' % flatout))
             try:
@@ -860,21 +872,23 @@ class GuiderImageAnalysis(object):
             except:
                 self.cmd.warn('text=%s'%qstr('Failed to read processed flat-field from %s; regenerating it.' % flatout))
 
-        img = pyfits.getdata(flatFileName)
-
-        bias = self.find_bias_level(img,binning=1)
-        self.cmd.inform('text=%s'%qstr('subtracting bias level: %g' % bias))
-        img -= bias
-        #self.imageBias = bias
-
+        image,hdr,sat = self._pre_process(flatFileName)
+        
+        exptime = hdr.get('EXPTIME', 0)
+        
+        image,bias = self.applyBias(image,1)
+        
+        # NOTE: we are not dark-subtracting the flats,
+        # because they are so short and have ~20k counts and are unbinned.
+        
         # FIXME -- we KNOW the area (ie, the number of pixels) of the
         # fibers -- we could choose the threshold appropriately.
         # NOTE, that's not always true, we sometimes lose fibers, even
         # acquisition fibers which are pretty big.
-
+        
         # HACK -- find threshold level inefficiently.
         # This is the threshold level that was used in "gfindfibers".
-        i2 = img.copy().ravel()
+        i2 = image.copy().ravel()
         I = argsort(i2)
         # median
         med = i2[I[len(I)/2]]
@@ -885,12 +899,12 @@ class GuiderImageAnalysis(object):
         thresh = (med + pk)/2.
 
         # Threshold image
-        T = (img > thresh)
+        T = (image > thresh)
         # Fix nicks in fibers, and fill holes (necessary for the acquisition fibers)
         T = binary_closing(T, iterations=10)
 
         # Find the background in regions below the threshold.
-        background = median(img[logical_not(T)])
+        background = median(image[logical_not(T)])
         self.cmd.diag('text=%s'%qstr('Background in flat %s: %g' % (flatFileName, background)))
     
         #PH, should we make the mask only after the labeled regions that match fibers have been identified
@@ -955,7 +969,7 @@ class GuiderImageAnalysis(object):
         FY = array([f.ycen for f in fibers])
         PX = array([p.xCenter for p in gprobes.values()])
         PY = array([p.yCenter for p in gprobes.values()])
-        (H,W) = img.shape
+        (H,W) = image.shape
         for i,f in enumerate(fibers):
             for j,(px,py) in enumerate(zip(PX,PY)):
                 dx,dy = f.xcen - px, f.ycen - py
@@ -1028,7 +1042,7 @@ class GuiderImageAnalysis(object):
 
         # Create the processed flat image.
         # NOTE: jkp: using float32 to keep the fits header happier.
-        flat = zeros_like(img).astype(numpy.float32)
+        flat = zeros_like(image).astype(numpy.float32)
         all_median = numpy.empty(len(fibers),dtype=numpy.float32)
 
         # PH 
@@ -1046,7 +1060,7 @@ class GuiderImageAnalysis(object):
         # have to enumerate, because we could be missing fibers,
         for i,fiber in enumerate(fibers):
             obji = (fiber_labels == fiber.label) # find pixels belonging to object i.
-            objflat = (img[obji] - background)   #should calc a local bkg here using ring mask
+            objflat = (image[obji] - background)   #should calc a local bkg here using ring mask
             flat[obji] += objflat
             # Do not use acquisition fibers, which have higher throughput than guide fibers.
             if fiber.gProbe.fiber_type != 'GUIDE':
@@ -1067,19 +1081,18 @@ class GuiderImageAnalysis(object):
         mask = where(bmask, 0, GuiderImageAnalysis.mask_masked)
         mask = mask.astype(uint8)
 
-        flat = binImage(flat, BIN)
+        flat = bin_image(flat, BIN)
         # Now clip the flat to be within a reasonable range.
         # Have to do it post-binning, otherwise the fiber edges get wonky.
         # This prevents dividing by really big/small numbers when using the flat.
         numpy.clip(flat, 0.5, 1.5, out=flat)
-
+        
         #int16 for the rotation code in C
-        binimg = flat.astype(int16)
-        #binimg = binImage(img, BIN).astype(int16)
+        binnedImage = flat.astype(int16)
+        #binnedImage = bin_image(img, BIN).astype(int16)
 
         # Write output file... copy header cards from input image.
         # DX?  DY?  Any other stats in here?
-        hdr = pyfits.getheader(flatFileName)
         # we don't want the bzero header keyword set.
         # it somehow is ending up in the raw flat files, but not the object files.
         del hdr['BZERO']
@@ -1090,10 +1103,14 @@ class GuiderImageAnalysis(object):
             if not hasattr(p, 'rotStar2Sky'):
                 p.rotStar2Sky = 90 + p.rotation - p.phi
 
-        hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binimg)
+        hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binnedImage, bias=bias)
         if hdulist is None:
             self.cmd.warn('text=%s'%qstr('Failed to create processed flat file'))
         
+        # NOTE: this doesn't seem to work:
+        # 06:00:12 APO.parejkoj 162 guider w text="FAILED to write file /data/gcam/56465/proc-gimg-0060.fits.gz: shape mismatch: objects cannot be broadcast to a single shape"
+        # 06:00:12 APO.parejkoj 162 guider f text="analyzeFlat failed for an unknown reason: [Errno 2] No such file or directory: '/data/gcam/56465/proc-gimg-0060.fits.gz'"
+        # I think I need to have an actual hdu, not an hdulist here...
         actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
         # Now read that file we just wrote...
         self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes, stamps)

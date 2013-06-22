@@ -331,7 +331,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     try:
         setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
         guideCmd.inform('text="guideStep GuiderImageAnalysis.findStars()..."')
-        fibers = guiderImageAnalysis(cmd,inFile,gState.gprobes,setPoint=setPoint)
+        fibers = guiderImageAnalysis(cmd,inFile,gState.gprobes,setPoint=setPoint,bypassDark=actorState.bypassDark)
         guideCmd.inform("text='GuiderImageAnalysis.findStars() got %i fibers'" % len(fibers))
     except BadReadError as e:
         guideCmd.warn('text=%s' %qstr("Skipping badly formatted image."))
@@ -769,8 +769,8 @@ def cal_finished(msg,name,guiderImageAnalysis):
     # need ".*" in the regex, because we may or may not have gzipped files.
     frameNo = int(re.search(r"([0-9]+)\.fits.*", msg.filename).group(1))
     
-    h = pyfits.getheader(msg.filename)
-    exptype = h.get('IMAGETYP')
+    header = pyfits.getheader(msg.filename)
+    exptype = header.get('IMAGETYP')
     if exptype != name:
         cmd.fail('text="%s image processing ignoring a %s image!!"' % (name,exptype))
         return
@@ -812,7 +812,8 @@ def dark_finished(msg,guiderImageAnalysis):
 
 def flat_finished(msg,guiderImageAnalysis):
     """Process a finished flat frame."""
-    darkfile = h.get('DARKFILE', None)
+    header = pyfits.getheader(msg.filename)
+    darkfile = header.get('DARKFILE', None)
     if not darkfile:
         msg.cmd.fail("text=%s" % qstr("No dark image available!!"))
         return
@@ -1342,7 +1343,10 @@ def guidingIsOK(cmd, actorState, force=False):
         else:
             cmd.warn('text="%s; aborting guiding"' % msg)
             return False
-
+    
+    # This lets guiderImageAnalysis know to ignore dark frames.
+    actorState.bypassDark = bypassSubsystem.get('guider_dark',False)
+    
 #   should we allow guiding with lamps on if axes are disabled
 #   check if lamps are actually ON
     ffLamp = actorState.models["mcp"].keyVarDict["ffLamp"]

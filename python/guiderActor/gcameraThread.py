@@ -47,10 +47,11 @@ def main(actor, queues):
                 if expType == "flat":
                     cmdStr += " cartridge=%s" % (msg.cartridge)
                     responseMsg = Msg.FLAT_FINISHED
-                if expType == "dark":
+                elif expType == "dark":
                     responseMsg = Msg.DARK_FINISHED
                 else:
                     responseMsg = Msg.EXPOSURE_FINISHED
+                
                 try:
                     stack = msg.stack
                     cmdStr += " stack=%d" % (stack)
