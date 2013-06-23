@@ -3,8 +3,10 @@ setupRequired(scipy)
 setupRequired(sopActor)
 setupRequired(actorcore)
 setupRequired(platelist)
-setupRequired(pyfits)
 setupRequired(RO)
+
+# commenting out, as this brings in a too-new version for actorcore.
+#setupRequired(pyfits)
 
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
