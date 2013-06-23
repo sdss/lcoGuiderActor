@@ -553,10 +553,13 @@ class GuiderImageAnalysis(object):
                            'Estimate of current seeing, arcsec fwhm')
             self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, objectname)
             directory,filename = os.path.split(procpath)
-            actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
-            self.cmd.inform('file=%s/,%s' % (directory, filename), hasKey=True)
+            # TBD: NOTE: pyfits 2.4.0trunk at APO currently borks when computing
+            # the internal checksum here. Just remove checksum=False once that is fixed.
+            actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644,checksum=False)
+            self.cmd.inform('file=%s/,%s' % (directory, filename))
         except Exception as e:
             cmd.warn('text="failed to write FITS file %s: %r"' % (procpath, e))
+            raise e
     
     def _pre_process(self,filename):
         """
@@ -624,12 +627,13 @@ class GuiderImageAnalysis(object):
                 # e.g.: no fibers could be found in the flat
                 self.cmd.warn('text=%s'%qstr('Error processsing flat!'))
                 raise e
-        fibers = [f for f in fibers if not f.is_fake()]
+        fibers = [f for f in self.flatFibers if not f.is_fake()]
         # mask the saturated pixels with the appropriate value.
+        mask = self.flatMask.copy()
         mask[sat] |= GuiderImageAnalysis.mask_saturated
 
         # Divide by the flat (avoiding NaN where the flat is zero)
-        image /= (flat + (flat == 0)*1)
+        image /= (self.flatImage + (self.flatImage == 0)*1)
         self.cmd.diag('text=%s'%qstr('After flattening: image range: %g to %g' % (image.min(), image.max())))
 
         # NOTE: jkp: post-flat fielding, we need to re-check for saturated pixels and remask them
@@ -810,7 +814,6 @@ class GuiderImageAnalysis(object):
         image,hdr,sat = self._pre_process(darkFileName)
         # NOTE: darks are binned.
         # there are very few hot pixels and bulk dark is < 0.02 e/sec at -40C
-        # Apply bias correction.
         image,bias = self.applyBias(image,self.binning)
         
         # Check if it's a good dark
@@ -1089,7 +1092,6 @@ class GuiderImageAnalysis(object):
         
         #int16 for the rotation code in C
         binnedImage = flat.astype(int16)
-        #binnedImage = bin_image(img, BIN).astype(int16)
 
         # Write output file... copy header cards from input image.
         # DX?  DY?  Any other stats in here?
@@ -1107,11 +1109,9 @@ class GuiderImageAnalysis(object):
         if hdulist is None:
             self.cmd.warn('text=%s'%qstr('Failed to create processed flat file'))
         
-        # NOTE: this doesn't seem to work:
-        # 06:00:12 APO.parejkoj 162 guider w text="FAILED to write file /data/gcam/56465/proc-gimg-0060.fits.gz: shape mismatch: objects cannot be broadcast to a single shape"
-        # 06:00:12 APO.parejkoj 162 guider f text="analyzeFlat failed for an unknown reason: [Errno 2] No such file or directory: '/data/gcam/56465/proc-gimg-0060.fits.gz'"
-        # I think I need to have an actual hdu, not an hdulist here...
-        actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
+        # TBD: NOTE: pyfits 2.4.0trunk at APO currently borks when computing
+        # the internal checksum here. Just remove checksum=False once that is fixed.
+        actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644,checksum=False)
         # Now read that file we just wrote...
         self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes, stamps)
         self.currentFlatName = flatFileName
