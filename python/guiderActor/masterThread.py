@@ -302,7 +302,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     actorState = guiderActor.myGlobals.actorState
     guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
-    frameNo = int(re.search(r"([0-9]+)\.fits$", inFile).group(1))
+    frameNo = int(re.search(r"([0-9]+)\.fits.*$", inFile).group(1))
 
     h = pyfits.getheader(inFile)
     flatfile = h.get('FLATFILE', None)
@@ -1283,7 +1283,6 @@ def main(actor, queues):
                     cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w, 
                                                            gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
                                                            gState.pid[w].Imax, gState.pid[w].nfilt))
-                cmd.diag('text="guideCmd=%s"' % (gState.guideCmd))
                 if gState.refractionBalance != 0.0:
                     cmd.warn('refractionBalance=%0.1f' % (gState.refractionBalance))
                 else:
