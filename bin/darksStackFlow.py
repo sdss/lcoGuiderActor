@@ -65,6 +65,10 @@ def do_one_stack(mjds):
         if hdr.get('IMAGETYP') != "dark":
             print "File is not dark, something wrong:  %s" % dd
             sys.exit()
+        if dat.shape != (512, 524):
+            print "File has wrong sise, skipped  %s" % dd 
+            #sys.exit()
+            continue
         if i == 0:  stack=dat
         else: stack=numpy.dstack([stack,dat])
         hdu1.header.add_comment("added %s" % dd)  # add dark name to header comment 
