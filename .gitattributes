@@ -1,6 +1,7 @@
 * text=auto !eol
 bin/bad_gimg_search.py -text
 bin/convertPlPlugMap.py -text
+bin/darksStackFlow.py -text
 bin/guiderToDs9 -text
 bin/guider_movie.py -text
 bin/open_shutter_search.py -text
