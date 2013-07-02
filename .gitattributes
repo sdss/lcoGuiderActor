@@ -31,6 +31,10 @@ python/guiderActor/obsolete/protoGcamFITS.py -text
 python/guiderActor/obsolete/pyGuide_test.py -text
 python/guiderActor/obsolete/test_flat.py -text
 python/guiderActor/obsolete/tests.py -text
+python/test_guiderActor/TestFlat.py -text
+python/test_guiderActor/TestGuiderState.py -text
+python/test_guiderActor/TestGuiderStep.py -text
+python/test_guiderActor/__init__.py -text
 /setup.py -text
 src/Makefile -text
 src/gimg/Makefile -text
