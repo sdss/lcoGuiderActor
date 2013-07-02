@@ -68,28 +68,35 @@ def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None,
     gState.setCmd(guideCmd)
     guideStep(None, queues, cmd, cmd, guiderFile, True)
 
-def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
+def _check_fiber(fiber,gState,guideCmd):
     """
-    Process one single fiber, computing various scales and corrections.
+    Check whether the current fiber should currently be enabled.
     """
     # necessary?
     if fiber.gProbe is None:
         guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % fiber.fiberid)
-        return
-    gProbe = fiber.gProbe
-    enabled = gProbe.enabled
+        return False
 
     # Center up on acquisition fibers only.
-    if gState.centerUp and gProbe.fiber_type != "ACQUIRE":
-        enabled = False
-
-    if not enabled:
+    if gState.centerUp and fiber.gProbe.fiber_type != "ACQUIRE":
+        return False
+    else:
         guideCmd.diag('text="Gprobe %d is not enabled"' % fiber.fiberid)
-        return
-        
-    #
+        return gProbe.enabled
+    # jkp TBD: the above doesn't seem to actually trigger.
+    # During centerUp, we get to "Star in gprobe too faint", but we should be
+    # short-circuiting right here! We end up calculating a bunch of stuff for
+    # the other fibers that we shoudn't be calculating!
+    # This needs to be tested in the simulator.    
+#...        
+
+def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
+    """
+    Process one single fiber, computing various scales and corrections.
+    """
+    gProbe = fiber.gProbe
+    
     # dx, dy are the offsets on the ALTA guider image
-    #
     fiber.dx = frameInfo.guideCameraScale*(fiber.xs - fiber.xcen) + (gProbe.xFerruleOffset / 1000.)
     fiber.dy = frameInfo.guideCameraScale*(fiber.ys - fiber.ycen) + (gProbe.yFerruleOffset / 1000.)
     poserr = fiber.xyserr
@@ -419,7 +426,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     frameInfo.refractionBalance = gState.refractionBalance
 
     for fiber in fibers:
-        _do_one_fiber(fiber,gState,guideCmd,frameInfo)
+        if _check_fiber(fiber,gState,guideCmd):
+            _do_one_fiber(fiber,gState,guideCmd,frameInfo)
 
     nStar = frameInfo.A[0, 0]
     if nStar == 0 or gState.inMotion:
