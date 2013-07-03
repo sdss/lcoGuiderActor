@@ -2,44 +2,53 @@
 """
 Test the phases of guiderStep in masterThread.py
 """
-from guiderActor import masterThread
+import unittest
+import os
 
-class Cmd(object):
-    def inform(self,txt):
-        print 'i',txt
-    def diag(self,txt):
-        print 'd',txt
-    def warn(self,txt):
-        print 'w',txt
+import guiderTester
 
-gProbeKey = {}
-guideInfoKey = {}
-gprobeKey['guide'] = [11,1,True,216.00,428.00,8.50,237.00,-14.10,-3.30,400.00,'GUIDE']
-guideInfoKey['guide'] = [1,214.6303,52.5876,-247.4540,-70.2827,210.383,0.00]
-gprobeKey['guide_disabled'] = [11,2,True,216.00,428.00,8.50,237.00,-14.10,-3.30,400.00,'GUIDE']
-guideInfoKey['guide_disabled'] = [2,214.6303,52.5876,-247.4540,-70.2827,210.383,0.00]
-gprobeKey['acquire'] = [11,11,True,391.00,119.50,28.50,329.00,5.80,0.80,0.00,'ACQUIRE']
-guideInfoKey['acquire'] = [11,216.3289,53.1114,-22.3338,40.5621,43.757,0.00]
-gprobeKey['acquire_disabled'] = [11,7,True,391.00,119.50,28.50,329.00,5.80,0.80,0.00,'ACQUIRE']
-guideInfoKey['acquire_disabled'] = [7,216.3289,53.1114,-22.3338,40.5621,43.757,0.00]
+from guiderActor.gimg import guiderImage
+from guiderActor import masterThread, GuiderState
 
-class TestGuiderStep(unittest.TestCase):
+class TestGuiderStep(guiderTester.GuiderTester,unittest.TestCase):
     def setUp(self):
-        self.cmd = Cmd()
-        self.gi = guiderImage.GuiderImageAnalysis(-40)
-        gState = GuiderState.GuiderState()
-        for k in gprobeKey:
-            gk = gprobeKey[k]
-            gik = guideInfoKey[k])
-            gState.gprobes[gk[1]] = GuiderState.GProbe(gk[1],gprobeKey=gk,guideInfoKey=gik]
-        self.gState = gState
-        
-    def test_check_fiber_normal(self):
+        self.centerUpIn = 'gimg-0024.fits.gz'
+        self.centerUpOut = 'proc-'+self.centerUpIn
+        self.guidingIn = 'gimg-0040.fits.gz'
+        self.guidingOut = 'proc-'+self.guidingIn
+        super(TestGuiderStep,self).setUp()
+    
+    def tearDown(self):
+        self._remove_file(self.centerUpOut)
+        self._remove_file(self.guidingOut)
+        super(TestGuiderStep,self).tearDown()
+    
+    def test_check_fiber_guiding(self):
         self.gState.centerUp = False
-        for name in gProbeKey:
-            probe = self.gState.gprobes[gprobeKey[name][1]]
-            masterThread._check_fiber(fiber,)
+        self.fibers = self.gi(self.cmd,self.guidingIn,self.gState.gprobes,setPoint=-40)
+        for name,i in self.probeNames.items():
+            probe = self.gState.gprobes[i]
+            fiber = self.fibers[i-1]
+            result = masterThread._check_fiber(fiber,self.gState,self.cmd)
+            #print name,i,result
+            if 'disabled' in name or 'broken' in name:
+                self.assertFalse(result,name)
+            else:
+                self.assertTrue(result,name)
     
     def test_check_fiber_centerUp(self):
         self.gState.centerUp = True
+        self.fibers = self.gi(self.cmd,self.centerUpIn,self.gState.gprobes,setPoint=-40)
+        for name,i in self.probeNames.items():
+            probe = self.gState.gprobes[i]
+            fiber = self.fibers[i-1]
+            result = masterThread._check_fiber(fiber,self.gState,self.cmd)
+            #print name,i,result
+            if 'disabled' in name or 'broken' in name or 'acquire' not in name:
+                self.assertFalse(result,name)
+            else:
+                self.assertTrue(result,name)
 #...
+
+if __name__ == '__main__':
+    unittest.main()

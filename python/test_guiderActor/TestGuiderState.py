@@ -2,10 +2,10 @@
 """
 Test the GuiderState module using unittest.
 """
-import unittest2 as unittest
-from guiderActor import GuiderState
-#from guiderActor import guiderActor_main
+import unittest
 import numpy as np
+
+from guiderActor import GuiderState
 
 gprobeKey = {}
 gprobeKey['good'] = [10,1,True,100,100,10,0,-.1,-.1,0,'GUIDE']
@@ -46,7 +46,7 @@ class TestGuiderState(unittest.TestCase):
         for name in gprobeKey:
             probe = self.gState.gprobes[gprobeKey[name][1]]
             value = probe.aboveFocus
-            if name == 'aboveFocus':
+            if 'aboveFocus' in name:
                 self.assertTrue(value,name)
             else:
                 self.assertFalse(value,name)
@@ -54,7 +54,7 @@ class TestGuiderState(unittest.TestCase):
         for name in gprobeKey:
             probe = self.gState.gprobes[gprobeKey[name][1]]
             value = probe.belowFocus
-            if name == 'belowFocus':
+            if 'belowFocus' in name:
                 self.assertTrue(value,name)
             else:
                 self.assertFalse(value,name)
@@ -62,7 +62,7 @@ class TestGuiderState(unittest.TestCase):
         for name in gprobeKey:
             probe = self.gState.gprobes[gprobeKey[name][1]]
             value = probe.atFocus
-            if name == 'aboveFocus' or name == 'belowFocus':
+            if 'aboveFocus' in name or 'belowFocus' in name:
                 self.assertFalse(value,name)
             else:
                 self.assertTrue(value,name)
@@ -70,7 +70,7 @@ class TestGuiderState(unittest.TestCase):
         for name in gprobeKey:
             probe = self.gState.gprobes[gprobeKey[name][1]]
             value = probe.exists
-            if name != 'broken':
+            if 'broken' not in name:
                 self.assertTrue(value,name)
             else:
                 self.assertFalse(value,name)
@@ -78,7 +78,7 @@ class TestGuiderState(unittest.TestCase):
         for name in gprobeKey:
             probe = self.gState.gprobes[gprobeKey[name][1]]
             value = probe.enabled
-            if name == 'tritium' or name == 'broken':
+            if 'tritium' in name or 'broken' in name:
                 self.assertFalse(value,name)
             else:
                 self.assertTrue(value,name)
@@ -86,10 +86,19 @@ class TestGuiderState(unittest.TestCase):
         for name in gprobeKey:
             probe = self.gState.gprobes[gprobeKey[name][1]]
             value = probe.disabled
-            if name == 'tritium' or name == 'broken':
+            if 'tritium' in name or 'broken' in name:
                 self.assertTrue(value,name)
             else:
                 self.assertFalse(value,name)
+    
+    def test_FrameInfo(self):
+        plugPlateScale = 10.
+        arcsecPerMM = 3600./plugPlateScale
+        gcameraPixelSize = 15e-6
+        gcameraMagnification = 10.
+        guideCameraScale = gcameraMagnification * gcameraPixelSize * 1e-3
+        frameInfo = GuiderState.FrameInfo(1,arcsecPerMM,guideCameraScale,plugPlateScale)
+        self.assertAlmostEqual(frameInfo.micronsPerArcsec,plugPlateScale/3.6)
 #...
 
 if __name__ == '__main__':
