@@ -23,8 +23,8 @@ from opscore.utility.qstr import qstr
 
 class Fiber(object):
     """A guider fiber and the star image seen through it."""
-    def __init__(self, fibid, xc=numpy.nan, yc=numpy.nan, r=numpy.nan, illr=numpy.nan, label=-1):
-        self.fiberid = fibid
+    def __init__(self, fiberid, xc=numpy.nan, yc=numpy.nan, r=numpy.nan, illr=numpy.nan, label=-1):
+        self.fiberid = fiberid
         self.xcen = xc
         self.ycen = yc
         self.radius = r
@@ -593,7 +593,7 @@ class GuiderImageAnalysis(object):
         Identify the centers of the stars in the fibers.
         Assums self.gimgfn is set to the correct file name.
         
-        gprobes is from GuiderSTate -- it's a dict of probeId to GProbe object.
+        gState is a GuiderState instance, containing a gprobes dict.
         
         Analyze a single image from the guider camera, finding fiber
         centers and star centers.
@@ -803,11 +803,12 @@ class GuiderImageAnalysis(object):
             self.cmd = cmd
         
         darkout = self.getProcessedOutputName(darkFileName)
-        
+        print darkout
         if os.path.exists(darkout):
             self.cmd.inform('text=%s'%qstr('Reading processed dark-field from %s' % darkout))
             try:
                 self.processedDark = self.readProcessedDark(darkout)
+                return
             except:
                 self.cmd.warn('text=%s'%qstr('Failed to read processed dark-field from %s; regenerating it.' % darkout))
         
@@ -872,6 +873,7 @@ class GuiderImageAnalysis(object):
             self.cmd.inform('text=%s'%qstr('Reading processed flat-field from %s' % flatout))
             try:
                 self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes, stamps)
+                return
             except:
                 self.cmd.warn('text=%s'%qstr('Failed to read processed flat-field from %s; regenerating it.' % flatout))
 

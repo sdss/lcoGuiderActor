@@ -79,15 +79,12 @@ def _check_fiber(fiber,gState,guideCmd):
 
     # Center up on acquisition fibers only.
     if gState.centerUp and fiber.gProbe.fiber_type != "ACQUIRE":
+        guideCmd.diag('text="Gprobe %d is disabled during Center Up."' % fiber.fiberid)
         return False
     else:
-        guideCmd.diag('text="Gprobe %d is not enabled"' % fiber.fiberid)
-        return gProbe.enabled
-    # jkp TBD: the above doesn't seem to actually trigger.
-    # During centerUp, we get to "Star in gprobe too faint", but we should be
-    # short-circuiting right here! We end up calculating a bunch of stuff for
-    # the other fibers that we shoudn't be calculating!
-    # This needs to be tested in the simulator.    
+        if fiber.gProbe.disabled:
+            guideCmd.diag('text="Gprobe %d is not enabled."' % fiber.fiberid)
+        return fiber.gProbe.enabled
 #...        
 
 def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
@@ -101,12 +98,9 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     fiber.dy = frameInfo.guideCameraScale*(fiber.ys - fiber.ycen) + (gProbe.yFerruleOffset / 1000.)
     poserr = fiber.xyserr
 
-    #
     # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
-    #
     # phi is the orientation of the alignment hole measured clockwise from N
     # rotation is the anticlockwise rotation from x on the ALTA to the pin
-    #
     theta = 90                   # allow for 90 deg rot of camera view, should be -90 
     theta += gProbe.rotation # allow for intrinsic fibre rotation
     try:
@@ -353,11 +347,13 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
         tback.tback("GuideTest", e)
         return
 
-    # Object to gather all per-frame guiding info into.
-    frameInfo = GuiderState.FrameInfo(frameNo)
-    
     # Setup to solve for the axis and maybe scale offsets.  We work consistently
-    # in mm on the focal plane, only converting to angles to command the TCC
+    # in mm on the focal plane, only converting to angles to command the TCC.
+    guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
+    arcsecPerMM = 3600./gState.plugPlateScale   #arcsec per mm
+    # Object to gather all per-frame guiding info into.
+    frameInfo = GuiderState.FrameInfo(frameNo,arcsecPerMM,guideCameraScale,gState.plugPlateScale)
+    
     #
     # N.B. fiber.xFocal and fiber.yFocal are the offsets of the stars
     # wrt the center of the plate in mm; fiber.xcen/star.xs are in pixels,
@@ -365,24 +361,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     # has the same scale as the plug plate itself, but maybe it doesn't,
     # so we'll include a possible magnification
     #
-    guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
-    frameInfo.guideCameraScale = guideCameraScale
-    frameInfo.plugPlateScale = gState.plugPlateScale
-    arcsecPerMM = 3600./gState.plugPlateScale   #arcsec per mm
-    frameInfo.arcsecPerMM = arcsecPerMM
-    frameInfo.micronsPerArcsec = 1/3600.0*gState.plugPlateScale*1e3 # convert arcsec to microns
-
-    frameInfo.A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
-    frameInfo.b = numpy.matrix(numpy.zeros(3).reshape([3,1]))
-    frameInfo.b3 = 0.0
-
-    frameInfo.guideRMS    = 0.0
-    frameInfo.guideXRMS   = 0.0
-    frameInfo.guideYRMS   = 0.0
-    frameInfo.nguideRMS   = 0
-    frameInfo.guideRaRMS  = 0.0
-    frameInfo.guideDecRMS = 0.0
-    frameInfo.inFocusFwhm = []
 
     # Grab some times for refraction correction
     longitude = -105.82045
@@ -398,27 +376,14 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     guideCmd.diag('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
                   (LST, RA, HA, gState.design_ha,frameInfo.dHA))
 
-    # !!!!!!!!!!!!!!!!!!
-    # !!!!!!!!!!!!!!!!!!
-    # jkp TBD: we can probably remove all of this copying of decenter keywords, 
-    # if we just pass the full guider state in to GuiderImageAnalysis()
-    # !!!!!!!!!!!!!!!!!!
-    # !!!!!!!!!!!!!!!!!!
-    # Setup the decentered guiding parameteres
-    if gState.decenter:  #PH moved outside the fiber loop so write once per frame, not once per fiber
-        # Keep decenter values as entered (in arcsec) and only convert them when
-        # we use them, to help the FITS frameInfo cards match the data model.
-        frameInfo.decenterRA  = gState.decenterRA
-        frameInfo.decenterDec = gState.decenterDec
-        frameInfo.decenterRot = gState.decenterRot #degrees
-        frameInfo.decenterFocus = gState.decenterFocus
-        frameInfo.decenterScale = gState.decenterScale*1e-6
+    # Set the decenter parameters in frameInfo, so they don't get lost if decentering
+    # changes during processing.
+    # TBD: Alternately, we could just pass gState to GuiderImage and not worry about
+    # the loss of those values for that single image...
+    if gState.decenter:
+        frameInfo.setDecenter(gState)
     else:
-        frameInfo.decenterRA = 0.0
-        frameInfo.decenterDec = 0.0
-        frameInfo.decenterRot = 0.0
-        frameInfo.decenterFocus = 0.0
-        frameInfo.decenterScale = 0.0
+        frameInfo.setDecenter(None)
 
     # At present, only APOGEE uses refractionOffsets.
     # So, only this wavelength will have haOffsetTime specified for each gprobe.
