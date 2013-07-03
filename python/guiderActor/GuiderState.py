@@ -366,7 +366,7 @@ class FrameInfo(object):
     """
     Holds data about the most recently read image frame.
     """
-    def __init__(self,frameNo):
+    def __init__(self,frameNo,arcsecPerMM,guideCameraScale,plugPlateScale):
         """Sets all parameters to NaN, so that they at least exist."""
         self.frameNo = frameNo
 
@@ -387,10 +387,11 @@ class FrameInfo(object):
         self.offsetRot = numpy.nan
         self.offsetFocus = numpy.nan
         self.offsetScale = numpy.nan
-
-        self.guideCameraScale = numpy.nan
-        self.arcsecPerMM = numpy.nan
-        self.plugPlateScale = numpy.nan
+        
+        self.guideCameraScale = guideCameraScale
+        self.plugPlateScale = plugPlateScale
+        self.arcsecPerMM = arcsecPerMM
+        self.micronsPerArcsec = 1/3600.0*plugPlateScale*1e3 # convert arcsec to microns
         self.seeing = numpy.nan
 
         # conversion for a Gaussian, use this eveywhere but in ipGguide.c
@@ -400,12 +401,13 @@ class FrameInfo(object):
         #should be in photons, based on RON, Dark residual, SKY
         self.minStarFlux = 500
 
-        self.guideRMS = numpy.nan
-        self.nguideRMS = numpy.nan
-        self.guideXRMS = numpy.nan
-        self.guideYRMS = numpy.nan
-        self.guideRaRMS = numpy.nan
-        self.guideDecRMS = numpy.nan
+        self.guideRMS = 0.
+        self.nguideRMS = 0
+        self.guideXRMS = 0.
+        self.guideYRMS = 0.
+        self.guideRaRMS = 0.
+        self.guideDecRMS = 0.
+        self.inFocusFwhm = []
 
         self.guideAzRMS = numpy.nan      #not implemented yet
         self.guideAltRMS = numpy.nan
@@ -424,6 +426,22 @@ class FrameInfo(object):
         self.wavelength = numpy.nan
         self.dHA = numpy.nan
         
-        self.A = numpy.nan
-        self.b = numpy.nan
+        self.A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
+        self.b = numpy.matrix(numpy.zeros(3).reshape([3,1]))
+        self.b3 = 0
+    
+    def setDecenter(self,gState=None):
+        """Fill the decenter values from gState, or reset them to 0."""
+        if gState:
+            self.decenterRA  = gState.decenterRA
+            self.decenterDec = gState.decenterDec
+            self.decenterRot = gState.decenterRot
+            self.decenterFocus = gState.decenterFocus
+            self.decenterScale = gState.decenterScale
+        else:
+            self.decenterRA = 0.0
+            self.decenterDec = 0.0
+            self.decenterRot = 0.0
+            self.decenterFocus = 0.0
+            self.decenterScale = 0.0
 #...
