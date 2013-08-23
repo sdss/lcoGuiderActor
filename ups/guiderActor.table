@@ -1,7 +1,7 @@
-setupOptional(platedb)
-setupRequired(scipy)
+setupRequired(platedb)
+setupOptional(scipy)
 setupRequired(sopActor)
-setupRequired(actorcore v1_19 [>= v1_19])
+setupRequired(actorcore)
 setupRequired(platelist)
 setupRequired(RO)
 
