@@ -946,7 +946,7 @@ def main(actor, queues):
                                                            (tccState.binX, tccState.binY,
                                                             tccState.ctrX, tccState.ctrY,
                                                             tccState.sizeX, tccState.sizeY,
-                                                            tccState.itime, tccState.gImCamID, ccdTemp,
+                                                            tccState.itime, tccState.gImCamID, ccdtemp,
                                                             "image: binXY begXY sizeXY expTime camID temp"))))
                     msg.cmd.finish('txtForTcc=" OK"')
                     continue
