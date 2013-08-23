@@ -31,11 +31,6 @@ python/guiderActor/obsolete/protoGcamFITS.py -text
 python/guiderActor/obsolete/pyGuide_test.py -text
 python/guiderActor/obsolete/test_flat.py -text
 python/guiderActor/obsolete/tests.py -text
-python/test_guiderActor/TestGuiderImage.py -text
-python/test_guiderActor/TestGuiderState.py -text
-python/test_guiderActor/TestGuiderStep.py -text
-python/test_guiderActor/__init__.py -text
-python/test_guiderActor/guiderTester.py -text
 /setup.py -text
 src/Makefile -text
 src/gimg/Makefile -text
@@ -43,4 +38,9 @@ src/gimg/attic.c -text
 src/gimg/gutils.c -text
 src/gimg/ipGguide.c -text
 src/gimg/shUtils.c -text
+test_guiderActor/TestGuiderImage.py -text
+test_guiderActor/TestGuiderState.py -text
+test_guiderActor/TestGuiderStep.py -text
+test_guiderActor/__init__.py -text
+test_guiderActor/guiderTester.py -text
 ups/guiderActor.table -text
