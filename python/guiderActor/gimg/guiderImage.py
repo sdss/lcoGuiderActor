@@ -582,10 +582,11 @@ class GuiderImageAnalysis(object):
             raise BadReadError
 
         sat = (image.astype(int) >= self.saturationLevel)
-        if any(sat):
-            self.cmd.warn('text=%s'%qstr('Guider raw exposure has %i saturated pixels.' % sat.sum()))
-        if len(sat) > 4000:
-            self.cmd.error('text=%s'%qstr('Fully saturated! Please reduce exposure time or wait for the excess light to go away.')
+        nSat = sat.sum()
+        if nSat > 0:
+            self.cmd.warn('text=%s'%qstr('Guider raw exposure has %i saturated pixels.' % nSat))
+        if nSat > 4000:
+            self.cmd.error('text=%s'%qstr('Fully saturated! Please reduce exposure time or wait for the excess light to go away.'))
             raise GuiderError
         image[sat] = self.saturationReplacement
         
