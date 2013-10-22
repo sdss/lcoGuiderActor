@@ -199,7 +199,7 @@ class GuiderImageAnalysis(object):
         Calls findStars to process gimgfn/gprobes and return found fibers.
         
         gimgfn is the unprocessed gcamera file to process.
-        gprobes is from GuiderSTate: it's a dict of probeId to GProbe object.
+        gprobes is from GuiderState: it's a dict of probeId to GProbe object.
         cmd is a Commander object, to allow messaging (diag/inform/warn).
         setPoint is the current gcamera temperature set point.
         set bypassDark to ignore guider dark frames, and not do dark subtraction.
@@ -564,6 +564,7 @@ class GuiderImageAnalysis(object):
     def _pre_process(self,filename):
         """
         Initial checks and processing on any kind of exposure.
+        
         Returns image,hdr,sat if everything goes well, raises exceptions if not.
         """
         assert(filename)
@@ -582,7 +583,10 @@ class GuiderImageAnalysis(object):
 
         sat = (image.astype(int) >= self.saturationLevel)
         if any(sat):
-            self.cmd.warn('text=%s'%qstr('the exposure has %i saturated pixels' % sum(sat)))
+            self.cmd.warn('text=%s'%qstr('Guider raw exposure has %i saturated pixels.' % sat.sum()))
+        if len(sat) > 4000:
+            self.cmd.error('text=%s'%qstr('Fully saturated! Please reduce exposure time or wait for the excess light to go away.')
+            raise GuiderError
         image[sat] = self.saturationReplacement
         
         return image,hdr,sat
