@@ -82,11 +82,11 @@ class GuiderTester(object):
     def tearDown(self):
         pass
     
-    def _call_gi(self,filename,setpoint=None,kwargs=kwargs):
+    def _call_gi(self,filename,setpoint=None,args=[]):
         """Use this to simplify calls to guiderImageAnalysis."""
         if setpoint is None: setpoint = self.setPoint_good
-        self.gi(self.cmd,filename,self.gState.gprobes,setpoint,**kwargs)
-    
+        return self.gi(self.cmd,filename,self.gState.gprobes,setpoint,*args)
+
     def _remove_file(self,filename):
         if os.path.exists(filename):
             os.remove(filename)
