@@ -1,5 +1,17 @@
 """
 Helps with setting up and tearing down guideractor tests.
+
+Example:
+    class TestGuiderThing(guiderTester.GuiderTester,unittest.TestCase):
+        def setUp(self):
+            #do some stuff
+            super(TestGuiderImage,self).setUp())
+    
+        def test_guiderImageThingy(self):
+            self.call_gi(filename)
+    
+    if __name__ == '__main__':
+        unittest.main()
 """
 
 import unittest
@@ -9,12 +21,24 @@ from guiderActor.gimg import guiderImage
 from guiderActor import GuiderState
 
 class Cmd(object):
+    def __init__(self):
+        """Save the level of any messages that pass through."""
+        self.levels = ''
+        self.messages = []
+    def _msg(self,txt,level):
+        print level,txt
+        self.levels += level
+        self.messages.append(txt)
     def inform(self,txt):
-        print 'i',txt
+        self._msg(txt,'i')
     def diag(self,txt):
-        print 'd',txt
+        self._msg(txt,'d')
     def warn(self,txt):
-        print 'w',txt
+        self._msg(txt,'w')
+    def fail(self,txt):
+        self._msg(txt,'f')
+    def error(self,txt):
+        self._msg(txt,'e')
 
 gprobeKey = {}
 guideInfoKey = {}
@@ -58,6 +82,12 @@ class GuiderTester(object):
     def tearDown(self):
         pass
     
+    def _call_gi(self,filename,setpoint=None,kwargs=kwargs):
+        """Use this to simplify calls to guiderImageAnalysis."""
+        if setpoint is None: setpoint = self.setPoint_good
+        self.gi(self.cmd,filename,self.gState.gprobes,setpoint,**kwargs)
+    
     def _remove_file(self,filename):
         if os.path.exists(filename):
             os.remove(filename)
+    
