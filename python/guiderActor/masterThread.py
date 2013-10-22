@@ -341,6 +341,10 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
         guideCmd.fail('guideState="failed"; text=%s' %qstr("Error reading/processing guider flat."))
         gState.setCmd(None)
         return
+    except GuiderError as e:
+        guideCmd.fail('guideState="failed"; text=%s' %qstr("Error processing gcamera image."))
+        gState.setCmd(None)
+        return        
     except Exception as e:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("Unknown error in processing guide images: %s" % e))
         gState.setCmd(None)
