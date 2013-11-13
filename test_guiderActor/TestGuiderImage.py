@@ -65,6 +65,8 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.assertTrue('Fully saturated' in self.cmd.messages[-1])
         
     def test_badRead(self):
+        """Confirm that bad gcamera reads are rejected immediately."""
+        self.gi.cmd = self.cmd
         self.assertRaises(GuiderExceptions.BadReadError,self.gi._pre_process,self.badReadFile1,binning=2)
         self.assertRaises(GuiderExceptions.BadReadError,self.gi._pre_process,self.badReadFile2,binning=2)
 #...
