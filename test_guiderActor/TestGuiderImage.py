@@ -21,6 +21,8 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.inDataFile = 'gimg-0040.fits.gz'
         self.outDataFile = 'proc-'+self.inFlatFile
         self.saturatedFile = 'gimg-0004.fits.gz'
+        self.badReadFile1 = '/data/gcam/56608/gimg-0859.fits.gz'
+        self.badReadFile2 = '/data/gcam/56331/gimg-0519.fits.gz'
         super(TestGuiderImage,self).setUp()
     
     def _check_overwriting(self, inFile, outFile, analyze, args=[]):
@@ -61,6 +63,10 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.assertRaises(GuiderExceptions.GuiderError,self._call_gi,self.saturatedFile)
         self.assertTrue(self.cmd.levels[-2:] == 'we')
         self.assertTrue('Fully saturated' in self.cmd.messages[-1])
+        
+    def test_badRead(self):
+        self.assertRaises(GuiderExceptions.BadReadError,self.gi._pre_process,self.badReadFile1,binning=2)
+        self.assertRaises(GuiderExceptions.BadReadError,self.gi._pre_process,self.badReadFile2,binning=2)
 #...
 
 if __name__ == '__main__':
