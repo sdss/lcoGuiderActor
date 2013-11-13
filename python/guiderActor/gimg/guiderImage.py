@@ -238,10 +238,11 @@ class GuiderImageAnalysis(object):
             bias = numpy.median(image[:,(1024/binning):(1038/binning)])
         else:
             # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
+            self.cmd.warn('text=%s'qstr("Cheating with bais level! No overscan was found!"))
             ir = image.ravel()
             I = argsort(ir)
             bias = ir[I[int(0.3 * len(ir))]]
-        return bias
+        self.imageBias = bias
     #...
     
     def ensureLibraryLoaded(self):
@@ -413,20 +414,18 @@ class GuiderImageAnalysis(object):
         stamps[maskstamps > 0] = bg
         #print 'bg=', bg
         return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
-
-    def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask, stampImage=None, bias=None):
+    
+    def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask, stampImage=None):
         """Generate an HDU list to be inserted into the proc-file header."""
         if stampImage is None:
             stampImage = image
-        if bias == None:
-            bias = self.imageBias
         #bg = median(image[numpy.isfinite(image)])
         bg = median(image[mask == 0])
         
         imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
         imageHDU.header.update('SDSSFMT', 'GPROC 1 4', 'type major minor version for this file')
         imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
-        imageHDU.header.update('OVERSCAN', bias, 'Bias level of this image.')
+        imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
 
         try:
             # List the fibers by fiber id.
@@ -561,7 +560,7 @@ class GuiderImageAnalysis(object):
             cmd.warn('text="failed to write FITS file %s: %r"' % (procpath, e))
             raise e
     
-    def _pre_process(self,filename):
+    def _pre_process(self,filename,binning=1):
         """
         Initial checks and processing on any kind of exposure.
         
@@ -574,10 +573,12 @@ class GuiderImageAnalysis(object):
         self.cmd.diag('text=%s'%qstr('Reading guider-cam image %s' % filename))
         image,hdr = pyfits.getdata(filename,0,header=True)
         
+        image = self.applyBias(image,binning)
+        self.imageBias = bias
         # Occasionally there is a bad read from the camera.
         # In this case, the bias level is ~35,000, and the stddev is low.
         # We can just reject such frames, as they are useless.
-        if image.mean() > 20000 and image.std() < 2000:
+        if self.imageBias > 5000:
             self.cmd.warn('text=%s'%qstr('Bad guider read! This exposure is mangled and will not be used.'))
             raise BadReadError
 
@@ -611,10 +612,7 @@ class GuiderImageAnalysis(object):
 
         The list of fibers contains an entry for each fiber found.
         """
-        image,hdr,sat = self._pre_process(self.gimgfn)
-        
-        image,bias = self.applyBias(image,self.binning)
-        self.imageBias = bias
+        image,hdr,sat = self._pre_process(self.gimgfn,binning=self.binning)
         
         exptime = hdr.get('EXPTIME', 0)
         
@@ -713,10 +711,10 @@ class GuiderImageAnalysis(object):
     
     def applyBias(self,image,binning):
         """Apply a bias correction to the image, and return the image and bias level."""
-        bias = self.find_bias_level(image,binning=binning)
-        self.cmd.diag('text=%s'%qstr('subtracting bias level: %g' % bias))
-        image -= bias
-        return image,bias
+        self.find_bias_level(image,binning=binning)
+        self.cmd.diag('text=%s'%qstr('subtracting bias level: %g' % self.imageBias))
+        image -= self.imageBias
+        return image
         
     def applyDark(self,image,darkFileName,exptime):
         """Dark subtract the current image, and return the result"""
@@ -817,10 +815,9 @@ class GuiderImageAnalysis(object):
             except:
                 self.cmd.warn('text=%s'%qstr('Failed to read processed dark-field from %s; regenerating it.' % darkout))
         
-        image,hdr,sat = self._pre_process(darkFileName)
+        image,hdr,sat = self._pre_process(darkFileName,binning=self.binning)
         # NOTE: darks are binned.
         # there are very few hot pixels and bulk dark is < 0.02 e/sec at -40C
-        image,bias = self.applyBias(image,self.binning)
         
         # Check if it's a good dark
         darkMean = image.mean()
@@ -882,11 +879,9 @@ class GuiderImageAnalysis(object):
             except:
                 self.cmd.warn('text=%s'%qstr('Failed to read processed flat-field from %s; regenerating it.' % flatout))
 
-        image,hdr,sat = self._pre_process(flatFileName)
+        image,hdr,sat = self._pre_process(flatFileName,binning=1)
         
         exptime = hdr.get('EXPTIME', 0)
-        
-        image,bias = self.applyBias(image,1)
         
         # NOTE: we are not dark-subtracting the flats,
         # because they are so short and have ~20k counts and are unbinned.
@@ -1112,7 +1107,7 @@ class GuiderImageAnalysis(object):
             if not hasattr(p, 'rotStar2Sky'):
                 p.rotStar2Sky = 90 + p.rotation - p.phi
 
-        hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binnedImage, bias=bias)
+        hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binnedImage)
         if hdulist is None:
             self.cmd.warn('text=%s'%qstr('Failed to create processed flat file'))
         
