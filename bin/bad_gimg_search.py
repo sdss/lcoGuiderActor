@@ -6,19 +6,27 @@ standard deviation < 2000 counts is potentially bad.
 Dumps the list of potential bad frames to a specified file.
 """
 import glob
-import pyfits
 from optparse import OptionParser, OptionGroup
 import sys
+import os
+
+import pyfits
 
 def do_one_dir(directory,outfile):
     """Scan the files in one directory."""
-    files = glob.glob(directory+'/gimg-*.fits')
+    path = os.path.join(directory,'gimg-*.fits*')
+    files = glob.glob(path)
+    if not files:
+        print "No files found using path: %s"%path
+        return
     for f in sorted(files):
         data = pyfits.open(f)[0].data
-    if data.mean() > 20000 and data.std() < 2000:
-        print 'Potentially bad:',f
-        outfile.write(f+'\n')
-        outfile.flush()
+        binning = 1 if data.shape[0] == 1024 else 2
+        bias = image[:,(1024/binning):(1038/binning)]
+        if bias > 5000:
+            print 'Potentially bad:',f
+            outfile.write(f+'\n')
+            outfile.flush()
 #...
 
 def main(argv=None):
