@@ -238,7 +238,7 @@ class GuiderImageAnalysis(object):
             bias = numpy.median(image[:,(1024/binning):(1038/binning)])
         else:
             # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
-            self.cmd.warn('text=%s'qstr("Cheating with bais level! No overscan was found!"))
+            self.cmd.warn('text=%s'%qstr("Cheating with bais level! No overscan was found!"))
             ir = image.ravel()
             I = argsort(ir)
             bias = ir[I[int(0.3 * len(ir))]]
@@ -574,7 +574,6 @@ class GuiderImageAnalysis(object):
         image,hdr = pyfits.getdata(filename,0,header=True)
         
         image = self.applyBias(image,binning)
-        self.imageBias = bias
         # Occasionally there is a bad read from the camera.
         # In this case, the bias level is ~35,000, and the stddev is low.
         # We can just reject such frames, as they are useless.
