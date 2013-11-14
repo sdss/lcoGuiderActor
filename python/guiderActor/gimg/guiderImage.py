@@ -573,6 +573,10 @@ class GuiderImageAnalysis(object):
         self.cmd.diag('text=%s'%qstr('Reading guider-cam image %s' % filename))
         image,hdr = pyfits.getdata(filename,0,header=True)
         
+        # Find saturation level pre-bias.
+        sat = (image.astype(int) >= self.saturationLevel)
+        nSat = sat.sum()
+        
         image = self.applyBias(image,binning)
         # Occasionally there is a bad read from the camera.
         # In this case, the bias level is ~35,000, and the stddev is low.
@@ -581,8 +585,6 @@ class GuiderImageAnalysis(object):
             self.cmd.warn('text=%s'%qstr('Bad guider read! This exposure is mangled and will not be used.'))
             raise BadReadError
 
-        sat = (image.astype(int) >= self.saturationLevel)
-        nSat = sat.sum()
         if nSat > 0:
             self.cmd.warn('text=%s'%qstr('Guider raw exposure has %i saturated pixels.' % nSat))
         if nSat > 4000:
