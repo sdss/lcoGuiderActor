@@ -713,6 +713,7 @@ def loadTccBlock(cmd, actorState, gState):
         cmd1 = "catPlPlugMapM -c %s -m %s -p %s -f %s %s" % (gState.cartridge, gState.fscanMJD,
                                                              gState.pointing, gState.fscanID,
                                                              gState.plate)
+        #plate10k
         scratchFile = '/tmp/v_ca1_%04d.dat' % (gState.plate)
         cmd1 += " | %s /dev/stdin > %s" % (os.path.join(os.environ['GUIDERACTOR_DIR'],
                                                         'bin',
