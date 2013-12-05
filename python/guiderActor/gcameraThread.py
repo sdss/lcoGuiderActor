@@ -78,7 +78,6 @@ def main(actor, queues):
 
                 filename = cmdVar.getLastKeyVarData(filenameKey)[0]
 
-                print "Sending EXPOSURE_FINISHED to", msg.replyQueue
                 msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, success=True, forTCC=forTCC))
 
             elif msg.type == Msg.ABORT_EXPOSURE:

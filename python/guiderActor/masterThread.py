@@ -13,6 +13,7 @@ from opscore.utility.qstr import qstr
 import opscore.utility.tback as tback
 import opscore.utility.YPF as YPF
 import RO
+import RO.Astro.Tm.MJDFromPyTuple as astroMJD
 
 import PID
 
@@ -299,7 +300,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
 
     Args: (TOOOO MANY!!)
         actor      - 
-"""
+    """
     actorState = guiderActor.myGlobals.actorState
     guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
@@ -474,7 +475,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
         #loKept = frameInfo.inFocusFwhm[trimLo]
         #hiKept = frameInfo.inFocusFwhm[(trimHi-1)]
         infoString = "fwhm=%d, %7.2f, %d, %d, %7.2f" % (frameNo, tMeanFwhm, nKept, nReject, meanFwhm)
-        print infoString
         guideCmd.inform(infoString)
         
         frameInfo.meanFwhm = meanFwhm
@@ -587,9 +587,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     nguideRejectFitRMS = 0
 
     # RMS guiding error output has to be after scale estimation so the full fit residual can be reported
-
-    print "RMS guiding error= %4.3f, n stars= %d RMS_Az= %4.3f, RMS_Alt=%4.3f, RMS_X= %4.3f, RMS_Y=%4.3f, RMS_Ra= %4.3f, RMS_Dec=%4.3f" %(
-        frameInfo.guideRMS, frameInfo.nguideRMS, frameInfo.guideAzRMS, frameInfo.guideAltRMS, frameInfo.guideXRMS, frameInfo.guideYRMS, frameInfo.guideRaRMS, frameInfo.guideDecRMS)
     guideCmd.inform("guideRMS=%5d,%4.3f,%4d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d,%4d" % (
         frameInfo.frameNo, frameInfo.guideRMS, frameInfo.nguideRMS, frameInfo.guideAzRMS, frameInfo.guideAltRMS, 
         frameInfo.guideXRMS, frameInfo.guideYRMS, guideFitRMS, nguideFitRMS, nguideRejectFitRMS))
@@ -739,6 +736,37 @@ def loadTccBlock(cmd, actorState, gState):
             cmd.fail('text="Failed to set inst!"')
     except Exception, e:
         cmd.warn('text=%s' % (qstr("could not load a per-cartridge instrument block: %s" % (e))))
+#...
+
+def make_movie(actorState,msg,start):
+    """Make a movie from guider frames, from start to the most recent."""
+    if start is None or start <= 0:
+        msg.cmd.diag("text='No start frame defined for make_movie.'")
+        # noone bothered to define the start, so we don't have anything to work with.
+        return False
+    
+    # Ask gcamera for the next frame, which is the end frame+1
+    endFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]
+    # use the simulator frame number, if it's been configured.
+    simulating = actorState.models['gcamera'].keyVarDict['simulating']
+    if simulating[0]:
+        endFrame = simulating[2]
+    endFrame -= 1
+    filename = actorState.models['guider'].keyVarDict['file'][1]
+    end = int(re.search(r"([0-9]+)\.fits*", filename).group(1))
+    # Don't bother making the movie if we haven't been operating the guider for very long.
+    if end - start < 5:
+        msg.cmd.diag("text='Too few exposures to bother making a movie out of.'")
+        return False
+    
+    # This spawns off a movie command that is not connected to the current command.
+    # This will prevent "This command has already finished" complaints.
+    actorState.callCommand("guider makeMovie start=%d end=%d"%(start,end))
+    #movieQueue = actorState.queues[guiderActor.MOVIE]
+    #movieQueue.put(Msg(Msg.MAKE_MOVIE, cmd=msg.cmd,
+    #                   mjd=None, start=start, end=end, finish=False))
+    return True
+#...
 
 def cal_finished(msg,name,guiderImageAnalysis):
     """Generic handling of finished dark/flat frame."""
@@ -808,6 +836,7 @@ def main(actor, queues):
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
     fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
+    startFrame = None                   # guider frame number to start movie at.
     # need to wait a couple seconds to let the models sync up.
     time.sleep(3)
     setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
@@ -846,14 +875,18 @@ def main(actor, queues):
                     except AttributeError:
                         success = True
                         
+                    # Try to generate a movie out of the recent guider frames.
+                    if make_movie(actorState,msg,startFrame):
+                        startFrame = None
+                    
                     if msg.start is None:
                         queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
                         continue
-                        
+                    
                     if not gState.guideCmd:
                         msg.cmd.fail('text="The guider is already off"')
                         continue
-
+                    
                     if success:
                         msg.cmd.respond("guideState=stopping")
                         queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
@@ -907,6 +940,17 @@ def main(actor, queues):
 
                 guideCmd = msg.cmd
                 gState.setCmd(guideCmd)
+                
+                # if a start frame was already defined, don't re-define it
+                # e.g., make_movie hadn't been run.
+                # jkp: TBD: when could this cause a problem?
+                if not startFrame:
+                    # Keep track of the first exposure number for generating movies
+                    startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]
+                    # if we're in simulation mode, use that number instead.
+                    simulating = actorState.models['gcamera'].keyVarDict['simulating']
+                    if simulating[0]:
+                        startFrame = simulating[2]
                 
                 #
                 # Reset any PID I terms
@@ -1030,11 +1074,12 @@ def main(actor, queues):
                     cmd.fail('text="something went wrong when taking the flat"')
                     continue
                 flat_finished(msg,guiderImageAnalysis)
-            
+
             elif msg.type == Msg.FAIL:
                 msg.cmd.fail('guideState="failed"; text="%s"' % msg.text);
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
+                startFrame = None # clear the start frame: don't need it any more!
                 gState.deleteAllGprobes()
                 gState.setRefractionBalance(0.0)
 
@@ -1273,13 +1318,14 @@ def main(actor, queues):
                 raise ValueError, ("Unknown message type %s" % msg.type)
         except Queue.Empty:
             actor.bcast.diag('text="%s alive"' % threadName)
-        except Exception, e:
+        except Exception as e:
             errMsg = "Unexpected exception %s in guider %s thread" % (e, threadName)
             if gState.guideCmd:
                 gState.guideCmd.warn('text="%s"' % errMsg)
             actor.bcast.warn('text="%s"' % errMsg)
             gState.setCmd(False)
-            # NOTE: I (dstn) get infinite recursion from this...
+            # jkp NOTE: this gives a RunTimeError/max recurision depth if
+            # guiderActor isn't built correctly (missing lib/libguide.so)
             tback.tback(errMsg, e)
 
             #import pdb; pdb.set_trace()

@@ -13,6 +13,7 @@ import actorkeys
 
 import gcameraThread
 import masterThread
+import movieThread
 
 from guiderActor import *
 import guiderActor.myGlobals
@@ -131,6 +132,7 @@ class Guider(actorcore.Actor.Actor):
         threadsToStart = []
         for tname, tid, threadModule in [("master", guiderActor.MASTER, masterThread),
                                          ("gcamera", guiderActor.GCAMERA, gcameraThread),
+                                         ("movie", guiderActor.MOVIE, movieThread),
                                          ]:
 
             newQueues[tid] = Queue.Queue(0) if restartQueues else actorState.queues[tid]

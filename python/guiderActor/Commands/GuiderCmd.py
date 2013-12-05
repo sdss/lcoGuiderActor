@@ -71,6 +71,9 @@ class GuiderCmd(object):
                                         keys.Key("stack", types.Int(), help="number of itime gcamera integrations to request per exposure."),
                                         keys.Key("corrRatio", types.Float(),
                                                  help="How much refraction correction to apply (0..)"),
+                                        keys.Key("movieMJD", types.String(), help="The MJD that we want to generate the movie for."),
+                                        keys.Key("start",types.Int(),help="Guider frame number to start the movie at."),
+                                        keys.Key("end",types.Int(),help="Guider frame number to end the movie at."),
                                        )
         #
         # Declare commands
@@ -101,6 +104,7 @@ class GuiderCmd(object):
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
             ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter),
             ('setRefractionBalance', "<corrRatio>", self.setRefractionBalance),
+            ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
             ]
     #
     # Define commands' callbacks
@@ -545,7 +549,7 @@ class GuiderCmd(object):
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd=cmd, finish=True))
 
     def setDecenter(self, cmd):
-        """guide at an absolute offset location"""
+        """Guide at an absolute offset location"""
         #require elsewhere that guiding be run with force to allow decentered guiding
         #for now Decenter rot is around (RA+decenterRA, Dec+decenterDec)
         decenterRA  = cmd.cmd.keywords["decenterRA"].values[0] if "decenterRA" in cmd.cmd.keywords else 0
@@ -556,3 +560,12 @@ class GuiderCmd(object):
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.DECENTER, cmd=cmd, decenterRA=decenterRA,
                                                                 decenterDec=decenterDec, decenterRot=decenterRot,
                                                                 decenterFocus=decenterFocus, decenterScale=decenterScale, finish=True))
+    
+    def makeMovie(self,cmd):
+        """Create a movie of guider images in /data/gcam/movieMJD from a range of exposures from start to end."""
+        mjd = cmd.cmd.keywords['movieMJD'].values[0] if 'movieMJD' in cmd.cmd.keywords else None
+        start = cmd.cmd.keywords['start'].values[0]
+        end = cmd.cmd.keywords['end'].values[0]
+        movieQueue = myGlobals.actorState.queues[guiderActor.MOVIE]
+        movieQueue.put(Msg(Msg.MAKE_MOVIE, cmd=cmd,
+                           mjd=mjd, start=start, end=end, finish=True))

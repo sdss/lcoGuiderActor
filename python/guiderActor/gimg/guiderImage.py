@@ -568,10 +568,16 @@ class GuiderImageAnalysis(object):
         """
         assert(filename)
         self.ensureLibraryLoaded()
-
+        
+        # files prior to MJD 56465 have the dark/flat without .gz in the header.
+        if not os.path.exists(filename):
+            filename += '.gz'
         # Load guider-cam image.
         self.cmd.diag('text=%s'%qstr('Reading guider-cam image %s' % filename))
-        image,hdr = pyfits.getdata(filename,0,header=True)
+        try:
+            image,hdr = pyfits.getdata(filename,0,header=True)
+        except IOError:
+            raise GuiderError('File not found: %s'%filename)
         
         # Find saturation level pre-bias.
         sat = (image.astype(int) >= self.saturationLevel)
@@ -807,7 +813,6 @@ class GuiderImageAnalysis(object):
             self.cmd = cmd
         
         darkout = self.getProcessedOutputName(darkFileName)
-        print darkout
         if os.path.exists(darkout):
             self.cmd.inform('text=%s'%qstr('Reading processed dark-field from %s' % darkout))
             try:

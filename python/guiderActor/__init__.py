@@ -7,6 +7,7 @@ import Queue
 #
 MASTER = 0
 GCAMERA = 1
+MOVIE = 2
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -45,6 +46,7 @@ class Msg(object):
     class CENTERUP(): pass
     class SET_REFRACTION(): pass
     class STAR_IN_FIBER(): pass
+    class MAKE_MOVIE(): pass
     
     def __init__(self, type, cmd, **data):
         self.type = type
@@ -77,4 +79,4 @@ def flushQueue(queue):
         except Queue.Empty:
             return
 
-__all__ = ["MASTER", "GCAMERA", "Msg", "GuiderState"]
+__all__ = ["MASTER", "GCAMERA", "MOVIE", "Msg", "GuiderState"]
