@@ -24,6 +24,7 @@ python/guiderActor/gimg/findsinglestar.py -text
 python/guiderActor/gimg/guiderImage.py -text
 python/guiderActor/guiderActor_main.py -text
 python/guiderActor/masterThread.py -text
+python/guiderActor/movieThread.py -text
 python/guiderActor/myGlobals.py -text
 python/guiderActor/obsolete/guiderImagePlots.py -text
 python/guiderActor/obsolete/procimg.py -text
