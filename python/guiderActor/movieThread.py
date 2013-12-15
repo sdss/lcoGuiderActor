@@ -24,7 +24,7 @@ class MovieMaker(object):
         """
         mjd = msg.mjd
         if mjd is None:
-            filedir = self.actorState.models['gcamera'].keyVarDict['dataDir']
+            filedir = self.actorState.models['gcamera'].keyVarDict['dataDir'][0]
             simulating = self.actorState.models['gcamera'].keyVarDict['simulating']
             if simulating[0]:
                 filedir = simulating[1]

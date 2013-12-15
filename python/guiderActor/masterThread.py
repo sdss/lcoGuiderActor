@@ -759,12 +759,9 @@ def make_movie(actorState,msg,start):
         msg.cmd.diag("text='Too few exposures to bother making a movie out of.'")
         return False
     
-    # This spawns off a movie command that is not connected to the current command.
+    # callCommand produces a movie ommand that is not connected to the current command.
     # This will prevent "This command has already finished" complaints.
-    actorState.callCommand("guider makeMovie start=%d end=%d"%(start,end))
-    #movieQueue = actorState.queues[guiderActor.MOVIE]
-    #movieQueue.put(Msg(Msg.MAKE_MOVIE, cmd=msg.cmd,
-    #                   mjd=None, start=start, end=end, finish=False))
+    actorState.actor.callCommand("makeMovie start=%d end=%d"%(start,end))
     return True
 #...
 
