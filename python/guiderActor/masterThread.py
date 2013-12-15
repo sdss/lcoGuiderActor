@@ -942,8 +942,10 @@ def main(actor, queues):
                 # e.g., make_movie hadn't been run.
                 # jkp: TBD: when could this cause a problem?
                 if not startFrame:
-                    # Keep track of the first exposure number for generating movies
-                    startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]
+                    # Keep track of the first exposure number for generating movies.
+                    # Take nextSeqNo+1 because the current value may still be the one
+                    # issued from the gcamera flat command, which we don't want for this.
+                    startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
                     # if we're in simulation mode, use that number instead.
                     simulating = actorState.models['gcamera'].keyVarDict['simulating']
                     if simulating[0]:
