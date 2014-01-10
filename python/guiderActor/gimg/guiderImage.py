@@ -278,7 +278,14 @@ class GuiderImageAnalysis(object):
         DARKFILE= '/data/gcam/55205/gimg-0003.fits.gz'
         FLATFILE= '/data/gcam/55205/gimg-0224.fits.gz'
         """
-        return (fitsheader['DARKFILE'], fitsheader.get('FLATFILE', None))
+        # have to check for both .fits and .fits.gz versions,
+        # to support files from before automatic gzipping started.
+        darkfile = fitsheader['DARKFILE']
+        darkfile = glob.glob(darkfile+'*')[0]
+        flatfile = fitsheader.get('FLATFILE', None)
+        if flatfile is not None:
+            flatfile = glob.glob(flatfile+'*')[0]
+        return darkfile,flatfile
 
     def getProcessedOutputName(self, imgfn):
         """Return the name of the file that we will save the processed results to."""
