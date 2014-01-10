@@ -753,7 +753,11 @@ def make_movie(actorState,msg,start):
         endFrame = simulating[2]
     endFrame -= 1
     filename = actorState.models['guider'].keyVarDict['file'][1]
-    end = int(re.search(r"([0-9]+)\.fits*", filename).group(1))
+    endSearch = re.search(r"([0-9]+)\.fits*", filename)
+    if not endSearch:
+        return False
+    else:
+        end = int(endSearch.group(1))
     # Don't bother making the movie if we haven't been operating the guider for very long.
     if end - start < 5:
         msg.cmd.diag("text='Too few exposures to bother making a movie out of.'")

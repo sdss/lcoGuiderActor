@@ -8,6 +8,7 @@ from them in bulk.
 import os.path
 from operator import attrgetter
 import ctypes
+import datetime
 
 import pyfits
 import numpy
@@ -278,17 +279,19 @@ class GuiderImageAnalysis(object):
         DARKFILE= '/data/gcam/55205/gimg-0003.fits.gz'
         FLATFILE= '/data/gcam/55205/gimg-0224.fits.gz'
         """
-        # have to check for both .fits and .fits.gz versions,
-        # to support files from before automatic gzipping started.
+        # files prior to MJD 56465 have the dark/flat without .gz in the header.
         darkfile = fitsheader['DARKFILE']
-        darkfile = glob.glob(darkfile+'*')[0]
+        if not os.path.exists(darkfile):
+            darkfile = darkfile+'.gz'
         flatfile = fitsheader.get('FLATFILE', None)
         if flatfile is not None:
-            flatfile = glob.glob(flatfile+'*')[0]
+            if not os.path.exists(flatfile):
+                flatfile = flatfile+'.gz'
         return darkfile,flatfile
 
     def getProcessedOutputName(self, imgfn):
         """Return the name of the file that we will save the processed results to."""
+        
         (dirname, filename) = os.path.split(imgfn)
         outname = 'proc-%s' % (filename)
         if self.outputDir:
@@ -813,7 +816,7 @@ class GuiderImageAnalysis(object):
     
     def analyzeDark(self, darkFileName, cmd=None):
         """
-        Open a dark file, process it, and save the processed 1-second dark as
+        Open a dark file, process it, and save the processd dark as
         self.processedDark
         """
         if cmd is not None:
@@ -840,7 +843,12 @@ class GuiderImageAnalysis(object):
         exptime = hdr['EXPTIME']
         stack = hdr.get('STACK',1)
         exptimen = hdr.get('EXPTIMEN',exptime)
-        if stack < 3 or exptimen < 30:
+        # We didn't institute the long dark stacking until 2013.06.23,
+        # so don't check darks before that date.
+        expdate = hdr.get('DATE-OBS').split()[0] # only need date, not time.
+        expdate = datetime.datetime.strptime(expdate,'%Y-%m-%d')
+        pre_stacking_date = datetime.datetime(2013,6,23)
+        if expdate > pre_stacking_date and (stack < 3 or exptimen < 30):
             self.cmd.warn('text=%s'%qstr('Total dark exposure time too short: minimum stack of 3 with total time > 30s .'))
             raise BadDarkError
         if (exptime < 0.5):    #proxy for zero second exposure
