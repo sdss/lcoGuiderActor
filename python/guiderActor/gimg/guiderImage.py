@@ -577,7 +577,7 @@ class GuiderImageAnalysis(object):
             return ((temp1 - delta) < temp2 < (temp1 + delta))
 
         ccdtemp = header['CCDTEMP']
-        imageType = hdr['IMAGETYP'] 
+        imageType = header['IMAGETYP'] 
         result = True
         if not tempCheck(self.setPoint,ccdtemp,self.deltaTemp):
             self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different from setPoint: %.2f, expected %.2f'%(ccdtemp,self.setPoint)))
@@ -832,14 +832,16 @@ class GuiderImageAnalysis(object):
         """Read darkFileName and return the data."""
         return pyfits.open(darkFileName)[0].data
     
-    def analyzeDark(self, darkFileName, cmd=None):
+    def analyzeDark(self, darkFileName, cmd=None, setPoint=None):
         """
         Open a dark file, process it, and save the processd dark as
         self.processedDark, and its temperature as self.darkTemperature.
         """
         if cmd is not None:
             self.cmd = cmd
-        
+        if setPoint is not None:
+            self.setPoint = setPoint
+
         darkout = self.getProcessedOutputName(darkFileName)
         if os.path.exists(darkout):
             self.cmd.inform('text=%s'%qstr('Reading processed dark-field from %s' % darkout))
@@ -896,7 +898,7 @@ class GuiderImageAnalysis(object):
         self.currentDarkName = darkFileName
     #...
     
-    def analyzeFlat(self, flatFileName, gprobes, cmd=None, stamps=False):
+    def analyzeFlat(self, flatFileName, gprobes, cmd=None, stamps=False, setPoint=None):
         """
         Return (flat,mask,fibers): with the processed flat, mask to apply
         to the image and flat to mask everything but the fibers, and a list
@@ -907,7 +909,9 @@ class GuiderImageAnalysis(object):
         """
         if cmd is not None:
             self.cmd = cmd
-        
+        if setPoint is not None:
+            self.setPoint = setPoint
+
         flatout = self.getProcessedOutputName(flatFileName)
         directory,filename = os.path.split(flatout)
         
