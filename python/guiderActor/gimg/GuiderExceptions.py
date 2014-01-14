@@ -14,10 +14,9 @@ class FlatError(GuiderError):
     pass
 
 class NoFibersFoundError(FlatError):
-	"""An exception due to not finding any fibers in an image."""
-	pass
-
+    """An exception due to not finding any fibers in an image."""
+    pass
 
 class BadReadError(GuiderError):
-	"""An exception due to an incorrectly read guider image."""
-	pass
+    """An exception due to an incorrectly read guider image."""
+    pass
