@@ -573,12 +573,19 @@ class GuiderImageAnalysis(object):
     
     def _check_ccd_temp(self,header):
         """Return True if the gcamera CCDTEMP is within deltaTemp of setPoint."""
+        def tempCheck(temp1,temp2,delta):
+            return ((temp1 - delta) < temp2 < (temp1 + delta))
+
         ccdtemp = header['CCDTEMP']
-        if ((self.setPoint - self.deltaTemp) < ccdtemp < (self.setPoint + self.deltaTemp)):
-            return True
-        else:
+        imageType = hdr['IMAGETYP'] 
+        result = True
+        if not tempCheck(self.setPoint,ccdtemp,self.deltaTemp):
             self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different from setPoint: %.2f, expected %.2f'%(ccdtemp,self.setPoint)))
-            return False
+            result = False
+        if imageType != 'dark' and not tempCheck(self.darkTemperature,ccdtemp,self.deltaTemp):
+            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different from dark temp: %.2f, expected %.2f'%(ccdtemp,self.darkTemperature)))
+            result = False
+        return result            
     
     def _pre_process(self,filename,binning=1):
         """
@@ -846,6 +853,8 @@ class GuiderImageAnalysis(object):
         # Fail on bad CCD temp here, since we really need the dark to be at the setPoint.
         if not _check_ccd_temp(self,hdr):
             raise BadDarkError
+        else:
+            self.darkTemperature = header['CCDTEMP']
         
         # NOTE: darks are binned.
         # there are very few hot pixels and bulk dark is < 0.02 e/sec at -40C
