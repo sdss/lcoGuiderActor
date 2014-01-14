@@ -784,13 +784,14 @@ def cal_finished(msg,name,guiderImageAnalysis):
         
     cmd.diag('text="cal_finished guiderImageAnalysis.analyze%s()..."'%name)
     try:
-        #setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
+        # Always read the setPoint, so that it is as up-to-date as possible.
+        setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
         if name == 'flat':
             func = "analyzeFlat"
-            guiderImageAnalysis.analyzeFlat(msg.filename,gState.gprobes,cmd)
+            guiderImageAnalysis.analyzeFlat(msg.filename,gState.gprobes,cmd,setPoint)
         elif name == 'dark':
             func = "analyzeDark"
-            guiderImageAnalysis.analyzeDark(msg.filename,cmd)
+            guiderImageAnalysis.analyzeDark(msg.filename,cmd,setPoint)
         else:
             raise ValueError("Don't know how to finish a %s guider cal."%name)
     except GuiderError as e:
@@ -800,7 +801,6 @@ def cal_finished(msg,name,guiderImageAnalysis):
     except Exception as e:
         tback.tback("cal_finished", e)
         cmd.fail('text="%s failed for an unknown reason: %s' % (func,e))
-        #cmd.fail('text="analyzeFlat failed -- it probably could not find any lit fibers near their expected positions: %s"' % (e))
         return
     
     try:
@@ -822,7 +822,7 @@ def flat_finished(msg,guiderImageAnalysis):
     header = pyfits.getheader(msg.filename)
     darkfile = header.get('DARKFILE', None)
     if not darkfile:
-        msg.cmd.fail("text=%s" % qstr("No dark image available!!"))
+        msg.cmd.fail("text=%s" % qstr("No dark image listed in flat header!!"))
         return
     cal_finished(msg,'flat',guiderImageAnalysis)
 #...
