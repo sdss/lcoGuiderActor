@@ -153,6 +153,7 @@ class GuiderImageAnalysis(object):
         self.currentFlatName = ''
         self.processedDark = None
         self.processedFlat = None
+        self.darkTemperature = None
 
         # Print debugging?
         self.printDebug = False
@@ -167,7 +168,7 @@ class GuiderImageAnalysis(object):
         # 8.5 for the GUIDE fibers).  We therefore cut on this radius.
         self.bigFiberRadius = 12.
 
-        # Saturation level.  
+        # Saturation level.
         #need to make use of full 64k image for bright marvels guide stars.
         #A solution was to scale by 2 data into and out of the C code
         #Problems also with the rotation of postage stamps
@@ -570,6 +571,15 @@ class GuiderImageAnalysis(object):
             cmd.warn('text="failed to write FITS file %s: %r"' % (procpath, e))
             raise e
     
+    def _check_ccd_temp(self,header):
+        """Return True if the gcamera CCDTEMP is within deltaTemp of setPoint."""
+        ccdtemp = header['CCDTEMP']
+        if ((self.setPoint - self.deltaTemp) < ccdtemp < (self.setPoint + self.deltaTemp)):
+            return True
+        else:
+            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different from setPoint: %.2f, expected %.2f'%(ccdtemp,self.setPoint)))
+            return False
+    
     def _pre_process(self,filename,binning=1):
         """
         Initial checks and processing on any kind of exposure.
@@ -630,6 +640,7 @@ class GuiderImageAnalysis(object):
         The list of fibers contains an entry for each fiber found.
         """
         image,hdr,sat = self._pre_process(self.gimgfn,binning=self.binning)
+        _check_ccd_temp(self,hdr)
         
         exptime = hdr.get('EXPTIME', 0)
         
@@ -817,7 +828,7 @@ class GuiderImageAnalysis(object):
     def analyzeDark(self, darkFileName, cmd=None):
         """
         Open a dark file, process it, and save the processd dark as
-        self.processedDark
+        self.processedDark, and its temperature as self.darkTemperature.
         """
         if cmd is not None:
             self.cmd = cmd
@@ -832,6 +843,10 @@ class GuiderImageAnalysis(object):
                 self.cmd.warn('text=%s'%qstr('Failed to read processed dark-field from %s; regenerating it.' % darkout))
         
         image,hdr,sat = self._pre_process(darkFileName,binning=self.binning)
+        # Fail on bad CCD temp here, since we really need the dark to be at the setPoint.
+        if not _check_ccd_temp(self,hdr):
+            raise BadDarkError
+        
         # NOTE: darks are binned.
         # there are very few hot pixels and bulk dark is < 0.02 e/sec at -40C
         
@@ -854,11 +869,6 @@ class GuiderImageAnalysis(object):
         if (exptime < 0.5):    #proxy for zero second exposure
            self.cmd.warn('text=%s' % qstr("Dark image less than 0.5 sec"))
            raise BadDarkError
-        ccdtemp = hdr['CCDTEMP']
-        # Check CCD temp, since we really need the dark to be at the setPoint.
-        if not ((self.setPoint - self.deltaTemp) < ccdtemp < (self.setPoint + self.deltaTemp)):
-            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different from setPoint: %.2f, expected %.2f'%(ccdtemp,self.setPoint)))
-            raise BadDarkError
         
         # Convert the dark into a 1-second equivalent exposure.
         # NOTE: we really do want to divide by exptime, not exptimen,
@@ -901,6 +911,7 @@ class GuiderImageAnalysis(object):
                 self.cmd.warn('text=%s'%qstr('Failed to read processed flat-field from %s; regenerating it.' % flatout))
 
         image,hdr,sat = self._pre_process(flatFileName,binning=1)
+        _check_ccd_temp(self,hdr)
         
         exptime = hdr.get('EXPTIME', 0)
         
