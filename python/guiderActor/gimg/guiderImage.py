@@ -572,7 +572,7 @@ class GuiderImageAnalysis(object):
             raise e
     
     def _check_ccd_temp(self,header):
-        """Return True if the gcamera CCDTEMP is within deltaTemp of setPoint."""
+        """Return True if the gcamera CCDTEMP is within deltaTemp of setPoint and darkTemperature."""
         def tempCheck(temp1,temp2,delta):
             return ((temp1 - delta) < temp2 < (temp1 + delta))
 
@@ -582,7 +582,8 @@ class GuiderImageAnalysis(object):
         if not tempCheck(self.setPoint,ccdtemp,self.deltaTemp):
             self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different from setPoint: %.2f, expected %.2f'%(ccdtemp,self.setPoint)))
             result = False
-        if imageType != 'dark' and not tempCheck(self.darkTemperature,ccdtemp,self.deltaTemp):
+        # redundant for darks, irrelevant for flats (don't dark subtract them)
+        if imageType != 'dark' and imageType != 'flat' and not tempCheck(self.darkTemperature,ccdtemp,self.deltaTemp):
             self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different from dark temp: %.2f, expected %.2f'%(ccdtemp,self.darkTemperature)))
             result = False
         return result            

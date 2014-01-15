@@ -769,7 +769,7 @@ def make_movie(actorState,msg,start):
     return True
 #...
 
-def cal_finished(msg,name,guiderImageAnalysis):
+def cal_finished(msg,name,guiderImageAnalysis,actorState):
     """Generic handling of finished dark/flat frame."""
     cmd = msg.cmd
     cmd.respond("processing=%s" % msg.filename)
@@ -784,13 +784,12 @@ def cal_finished(msg,name,guiderImageAnalysis):
         
     cmd.diag('text="cal_finished guiderImageAnalysis.analyze%s()..."'%name)
     try:
+        func = ''.join(("analyze",name[0].upper(),name[1:]))
         # Always read the setPoint, so that it is as up-to-date as possible.
         setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
         if name == 'flat':
-            func = "analyzeFlat"
             guiderImageAnalysis.analyzeFlat(msg.filename,gState.gprobes,cmd,setPoint)
         elif name == 'dark':
-            func = "analyzeDark"
             guiderImageAnalysis.analyzeDark(msg.filename,cmd,setPoint)
         else:
             raise ValueError("Don't know how to finish a %s guider cal."%name)
@@ -813,18 +812,18 @@ def cal_finished(msg,name,guiderImageAnalysis):
         cmd.fail('text="failed to save flat: %s"' % (e))
 #...
 
-def dark_finished(msg,guiderImageAnalysis):
+def dark_finished(msg,guiderImageAnalysis,actorState):
     """Process a finished dark frame."""
-    cal_finished(msg,'dark',guiderImageAnalysis)
+    cal_finished(msg,'dark',guiderImageAnalysis,actorState)
 
-def flat_finished(msg,guiderImageAnalysis):
+def flat_finished(msg,guiderImageAnalysis,actorState):
     """Process a finished flat frame."""
     header = pyfits.getheader(msg.filename)
     darkfile = header.get('DARKFILE', None)
     if not darkfile:
         msg.cmd.fail("text=%s" % qstr("No dark image listed in flat header!!"))
         return
-    cal_finished(msg,'flat',guiderImageAnalysis)
+    cal_finished(msg,'flat',guiderImageAnalysis,actorState)
 #...
 
 def main(actor, queues):
@@ -1070,13 +1069,13 @@ def main(actor, queues):
                 if not msg.success:
                     cmd.fail('text="something went wrong when taking the dark"')
                     continue
-                dark_finished(msg,guiderImageAnalysis)
+                dark_finished(msg,guiderImageAnalysis,actorState)
             
             elif msg.type == Msg.FLAT_FINISHED:
                 if not msg.success:
                     cmd.fail('text="something went wrong when taking the flat"')
                     continue
-                flat_finished(msg,guiderImageAnalysis)
+                flat_finished(msg,guiderImageAnalysis,actorState)
 
             elif msg.type == Msg.FAIL:
                 msg.cmd.fail('guideState="failed"; text="%s"' % msg.text);
