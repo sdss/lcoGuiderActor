@@ -25,7 +25,7 @@ class TestGuiderStep(guiderTester.GuiderTester,unittest.TestCase):
     
     def test_check_fiber_guiding(self):
         self.gState.centerUp = False
-        self.fibers = self.gi(self.cmd,self.guidingIn,self.gState.gprobes,setPoint=-40)
+        self.fibers = self.gi(self.cmd,self.guidingIn,self.gState.gprobes,setPoint=self.setPoint_good)
         for name,i in self.probeNames.items():
             probe = self.gState.gprobes[i]
             fiber = self.fibers[i-1]
@@ -38,7 +38,7 @@ class TestGuiderStep(guiderTester.GuiderTester,unittest.TestCase):
     
     def test_check_fiber_centerUp(self):
         self.gState.centerUp = True
-        self.fibers = self.gi(self.cmd,self.centerUpIn,self.gState.gprobes,setPoint=-40)
+        self.fibers = self.gi(self.cmd,self.centerUpIn,self.gState.gprobes,setPoint=self.setPoint_good)
         for name,i in self.probeNames.items():
             probe = self.gState.gprobes[i]
             fiber = self.fibers[i-1]
