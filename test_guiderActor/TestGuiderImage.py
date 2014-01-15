@@ -48,7 +48,7 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.assertTrue(os.path.exists(self.outFlatFile),'analyzeFlat file write')
         # TBD: some way to test that the correct fibers are identified?
         for name,i in self.probeNames.items():
-            #self.assertEqual(i,self.gi.flatFibers[i].fiberid)
+        #    #self.assertEqual(i,self.gi.flatFibers[i].fiberid)
             print i,self.gi.flatFibers[i].fiberid
         self._check_overwriting(self.inFlatFile,self.outFlatFile,self.gi.analyzeFlat,[self.gState.gprobes])
 
@@ -61,7 +61,8 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
     
     def _temp_run(self,filename,errorText):
         """Help with temperature tests."""
-        header = pyfits.open(filename)
+        header = pyfits.getheader(filename)
+        self.gi.cmd = self.cmd
         result = self.gi._check_ccd_temp(header)
         self.assertFalse(result)
         self.assertTrue(self.cmd.levels == 'w')

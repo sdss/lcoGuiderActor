@@ -647,8 +647,7 @@ class GuiderImageAnalysis(object):
         The list of fibers contains an entry for each fiber found.
         """
         image,hdr,sat = self._pre_process(self.gimgfn,binning=self.binning)
-        _check_ccd_temp(self,hdr)
-        
+
         exptime = hdr.get('EXPTIME', 0)
         
         (darkFileName, flatFileName) = self.findDarkAndFlat(self.gimgfn, hdr)
@@ -657,6 +656,8 @@ class GuiderImageAnalysis(object):
         # Otherwise, we don't need this information...
         cartridgeId = int(hdr['FLATCART'])
         
+        # Check after we've loaded the dark, to ensure the dark temperature was set.
+        self._check_ccd_temp(hdr)
         self.cmd.diag('text=%s'%qstr('Using flat image: %s' % flatFileName))
         if flatFileName != self.currentFlatName:
             try:
@@ -830,7 +831,9 @@ class GuiderImageAnalysis(object):
 
     def readProcessedDark(self, darkFileName):
         """Read darkFileName and return the data."""
-        return pyfits.open(darkFileName)[0].data
+        data = pyfits.open(darkFileName)
+        self.darkTemperature = data[0].header['CCDTEMP']
+        return data[0].data
     
     def analyzeDark(self, darkFileName, cmd=None, setPoint=None):
         """
@@ -853,10 +856,10 @@ class GuiderImageAnalysis(object):
         
         image,hdr,sat = self._pre_process(darkFileName,binning=self.binning)
         # Fail on bad CCD temp here, since we really need the dark to be at the setPoint.
-        if not _check_ccd_temp(self,hdr):
+        if not self._check_ccd_temp(hdr):
             raise BadDarkError
         else:
-            self.darkTemperature = header['CCDTEMP']
+            self.darkTemperature = hdr['CCDTEMP']
         
         # NOTE: darks are binned.
         # there are very few hot pixels and bulk dark is < 0.02 e/sec at -40C
@@ -924,7 +927,7 @@ class GuiderImageAnalysis(object):
                 self.cmd.warn('text=%s'%qstr('Failed to read processed flat-field from %s; regenerating it.' % flatout))
 
         image,hdr,sat = self._pre_process(flatFileName,binning=1)
-        _check_ccd_temp(self,hdr)
+        self._check_ccd_temp(hdr)
         
         exptime = hdr.get('EXPTIME', 0)
         
