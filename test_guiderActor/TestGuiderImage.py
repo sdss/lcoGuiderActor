@@ -4,6 +4,7 @@ Test the behavior of guider flats, including finding fibers..
 """
 import os
 import unittest
+import pyfits
 
 import guiderTester
 
@@ -36,11 +37,13 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self._remove_file(outFile)
         
     def test_analyzeDark(self):
+        """Test GuiderImageAnalysis.analyzeDark()"""
         self.gi.analyzeDark(self.inDarkFile,cmd=self.cmd)
         self.assertTrue(os.path.exists(self.outDarkFile),'analyzeDark file write')
         self._check_overwriting(self.inDarkFile,self.outDarkFile,self.gi.analyzeDark)
     
     def test_analyzeFlat(self):
+        """Test GuiderImageAnalysis.analyzeFlat()"""
         self.gi.analyzeFlat(self.inFlatFile,self.gState.gprobes,cmd=self.cmd)
         self.assertTrue(os.path.exists(self.outFlatFile),'analyzeFlat file write')
         # TBD: some way to test that the correct fibers are identified?
@@ -50,16 +53,38 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self._check_overwriting(self.inFlatFile,self.outFlatFile,self.gi.analyzeFlat,[self.gState.gprobes])
 
     def test_call(self):
+        """Test GuiderImageAnalysis.__call__()"""
         fibers = self._call_gi(self.inDataFile)
         for name,i in self.probeNames.items():
             self.assertEqual(i,fibers[i].fiberid-1)
         self.assertFalse(True,'make a test!')
-
-    def test_badSetPoint(self):
-        self._call_gi(self.inDataFile,setpoint=self.setPoint_bad)
-        self.assertFalse(True,'make a test!')
+    
+    def _temp_run(self,filename,errorText):
+        """Help with temperature tests."""
+        header = pyfits.open(filename)
+        result = self.gi._check_ccd_temp(header)
+        self.assertFalse(result)
+        self.assertTrue(self.cmd.levels == 'w')
+        self.assertTrue(errorText in self.cmd.messages[-1])
         
+    def test_badSetPoint_dark(self):
+        """Test what happens when the ccdtemp is outside the setPoint spec for a dark."""
+        self.gi.setPoint = self.setPoint_bad
+        self._temp_run(self.inDarkFile,'CCD temp signifcantly different from setPoint')
+        
+    def test_badSetPoint_image(self):
+        """Test what happens when the ccdtemp is outside the setPoint spec for an image."""
+        self.gi.setPoint = self.setPoint_bad
+        self.gi.darkTemperature = self.setPoint_good
+        self._temp_run(self.inDataFile,'CCD temp signifcantly different from setPoint')
+    
+    def test_badSetPoint_image(self):
+        """Test what happens when the ccdtemp is outside the dark temp spec for an image."""
+        self.gi.darkTemperature = self.setPoint_bad
+        self._temp_run(self.inDataFile,'CCD temp signifcantly different from dark temp')
+
     def test_saturatedImage(self):
+        """Test GuiderImageAnalysis.__call__() on a completely saturated image."""
         self.assertRaises(GuiderExceptions.GuiderError,self._call_gi,self.saturatedFile)
         self.assertTrue(self.cmd.levels[-2:] == 'we')
         self.assertTrue('Fully saturated' in self.cmd.messages[-1])
