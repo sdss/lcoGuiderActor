@@ -4,6 +4,7 @@ Test the behavior of guider flats, including finding fibers..
 """
 import os
 import unittest
+import re
 import pyfits
 
 import guiderTester
@@ -65,24 +66,24 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.gi.cmd = self.cmd
         result = self.gi._check_ccd_temp(header)
         self.assertFalse(result)
-        self.assertTrue(self.cmd.levels == 'w')
-        self.assertTrue(errorText in self.cmd.messages[-1])
+        self.assertEqual(self.cmd.levels,'w')
+        self.assertEqual('text="%s"'%errorText, self.cmd.messages[-1])
         
     def test_badSetPoint_dark(self):
         """Test what happens when the ccdtemp is outside the setPoint spec for a dark."""
         self.gi.setPoint = self.setPoint_bad
-        self._temp_run(self.inDarkFile,'CCD temp signifcantly different from setPoint')
+        self._temp_run(self.inDarkFile,'CCD temp signifcantly different (>3.0) from setPoint: -40.1, expected -35.0')
         
     def test_badSetPoint_image(self):
         """Test what happens when the ccdtemp is outside the setPoint spec for an image."""
         self.gi.setPoint = self.setPoint_bad
         self.gi.darkTemperature = self.setPoint_good
-        self._temp_run(self.inDataFile,'CCD temp signifcantly different from setPoint')
+        self._temp_run(self.inDataFile,'CCD temp signifcantly different (>3.0) from setPoint: -40.1, expected -35.0')
     
     def test_badSetPoint_image(self):
         """Test what happens when the ccdtemp is outside the dark temp spec for an image."""
         self.gi.darkTemperature = self.setPoint_bad
-        self._temp_run(self.inDataFile,'CCD temp signifcantly different from dark temp')
+        self._temp_run(self.inDataFile,'CCD temp signifcantly different (>3.0) from dark temp: -40.1, expected -35.0')
 
     def test_saturatedImage(self):
         """Test GuiderImageAnalysis.__call__() on a completely saturated image."""

@@ -580,11 +580,13 @@ class GuiderImageAnalysis(object):
         imageType = header['IMAGETYP']
         result = True
         if not tempCheck(self.setPoint,ccdtemp,self.deltaTemp):
-            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different (>%.1f) from setPoint: %.2f, expected %.2f'%(self.deltaTemp,ccdtemp,self.setPoint)))
+            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different (>%.1f) from setPoint: %.1f, expected %.1f'%
+                                         (self.deltaTemp,ccdtemp,self.setPoint)))
             result = False
         # redundant for darks, irrelevant for flats (we don't dark subtract them)
         if imageType != 'dark' and imageType != 'flat' and not tempCheck(self.darkTemperature,ccdtemp,self.deltaTemp):
-            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different (>%.1f) from dark temp: %.2f, expected %.2f'%(self.deltaTemp,ccdtemp,self.darkTemperature)))
+            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different (>%.1f) from dark temp: %.1f, expected %.1f'%
+                                         (self.deltaTemp,ccdtemp,self.darkTemperature)))
             result = False
         return result
     
