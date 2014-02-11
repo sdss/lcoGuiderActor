@@ -23,8 +23,8 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.inDataFile = 'gimg-0040.fits.gz'
         self.outDataFile = 'proc-'+self.inFlatFile
         self.saturatedFile = 'gimg-0004.fits.gz'
-        self.badReadFile1 = '/data/gcam/56608/gimg-0859.fits.gz'
-        self.badReadFile2 = '/data/gcam/56331/gimg-0519.fits.gz'
+        self.badReadFile1 = 'gimg-0859.fits.gz'
+        self.badReadFile2 = 'gimg-0519.fits.gz'
         super(TestGuiderImage,self).setUp()
     
     def _check_overwriting(self, inFile, outFile, analyze, args=[]):
