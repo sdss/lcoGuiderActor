@@ -42,7 +42,6 @@ src/gimg/shUtils.c -text
 test_guiderActor/TestGuiderImage.py -text
 test_guiderActor/TestGuiderState.py -text
 test_guiderActor/TestGuiderStep.py -text
-test_guiderActor/__init__.py -text
 test_guiderActor/gimg-0001.fits.gz -text
 test_guiderActor/gimg-0003.fits.gz -text
 test_guiderActor/gimg-0004.fits.gz -text
