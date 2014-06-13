@@ -1,8 +1,7 @@
 setupRequired(platedb)
-setupOptional(scipy)
 setupRequired(sopActor)
 setupRequired(actorcore)
-setupRequired(platelist)
+setupOptional(platelist)
 setupRequired(RO)
 
 # commenting out, as this brings in a too-new version for actorcore.

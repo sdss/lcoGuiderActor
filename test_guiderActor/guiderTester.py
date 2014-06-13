@@ -14,31 +14,13 @@ Example:
         unittest.main()
 """
 
-import unittest
 import os
+
+from actorcore import TestHelper
 
 from guiderActor.gimg import guiderImage
 from guiderActor import GuiderState
-
-class Cmd(object):
-    def __init__(self):
-        """Save the level of any messages that pass through."""
-        self.levels = ''
-        self.messages = []
-    def _msg(self,txt,level):
-        print level,txt
-        self.levels += level
-        self.messages.append(txt)
-    def inform(self,txt):
-        self._msg(txt,'i')
-    def diag(self,txt):
-        self._msg(txt,'d')
-    def warn(self,txt):
-        self._msg(txt,'w')
-    def fail(self,txt):
-        self._msg(txt,'f')
-    def error(self,txt):
-        self._msg(txt,'e')
+import guiderActor.myGlobals as myGlobals
 
 gprobeKey = {}
 guideInfoKey = {}
@@ -58,15 +40,18 @@ guideInfoKey['acquire'] = [11,216.3289,53.1114,-22.3338,40.5621,43.757,0.00]
 gprobeKey['acquire_disabled'] = [11,2,True,391.00,119.50,28.50,329.00,5.80,0.80,0.00,'ACQUIRE']
 guideInfoKey['acquire_disabled'] = [2,216.3289,53.1114,-22.3338,40.5621,43.757,0.00]
 
-class GuiderTester(object):
+class GuiderTester(TestHelper.ActorTester):
     """
     guiderActor test suites should subclass this and unittest, in that order.
     """
     def setUp(self):
         """Populate fake guide probes, etc."""
+        self.verbose = True
+        self.name = 'guider'
+        super(GuiderTester,self).setUp()
+        myGlobals.actorState = self.actorState
         self.setPoint_good = -40
         self.setPoint_bad = -35
-        self.cmd = Cmd()
         self.gi = guiderImage.GuiderImageAnalysis(self.setPoint_good)
         gState = GuiderState.GuiderState()
         self.probeNames = {}
@@ -78,9 +63,6 @@ class GuiderTester(object):
             if 'disabled' in name:
                 gState.gprobes[gk[1]].disabled = True
         self.gState = gState
-    
-    def tearDown(self):
-        pass
     
     def _call_gi(self,filename,setpoint=None,args=[]):
         """Use this to simplify calls to guiderImageAnalysis."""

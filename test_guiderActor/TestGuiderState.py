@@ -5,7 +5,12 @@ Test the GuiderState module using unittest.
 import unittest
 import numpy as np
 
+from actorcore import TestHelper
+
+import guiderTester
+
 from guiderActor import GuiderState
+import guiderActor.myGlobals as myGlobals
 
 gprobeKey = {}
 gprobeKey['good'] = [10,1,True,100,100,10,0,-.1,-.1,0,'GUIDE']
@@ -17,27 +22,11 @@ gprobeKey['broken'] = [10,6,False,600,600,10,0,-.1,-.1,0,'GUIDE']
 
 ugriz = np.array([13,13.5,14,14.5,15])
 
-class Model(object):
-    """quick replacement for Model in opscore/actorcore."""
-    def __init__(self,key=None,value=None):
-        self.keyVarDict = {}
-        if key:
-            self.keyVarDict[key] = value
-#...
-class State(object):
-    """quick replacement for guiderActor_main.State"""
-    def __init__(self,actor):
-        self.actor = actor
-        self.models = {}
-#...
-
-class TestGuiderState(unittest.TestCase):
+class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
     def setUp(self):
+        super(TestGuiderState,self).setUp()
         self.gState = GuiderState.GuiderState()
-        # need a tcc.axePos value
-        #GuiderState.myGlobals.actorState = guiderActor_main.State(None)
-        GuiderState.myGlobals.actorState = State(None)
-        GuiderState.myGlobals.actorState.models = {'tcc':Model('axePos',[20,30,40])}
+        #myGlobals.actorState.models = {'tcc':Model('axePos',[20,30,40])}
         for k,v in gprobeKey.items():
             self.gState.gprobes[v[1]] = GuiderState.GProbe(gprobeKey=v)
             self.gState.gprobes[v[1]].ugriz = ugriz
@@ -91,6 +80,37 @@ class TestGuiderState(unittest.TestCase):
             else:
                 self.assertFalse(value,name)
     
+    def _setDecenter(self,decenters,enable=None,new=True):
+        decenters = {'decenterRA':1,'decenterDec':2}
+        self.gState.setDecenter(decenters,self.cmd,enable)
+        self.assertEqual(self.gState.decenterRA,decenters.get('decenterRA',0))
+        self.assertEqual(self.gState.decenterDec,decenters.get('decenterDec',0))
+        self.assertEqual(self.gState.decenterRot,decenters.get('decenterRot',0))
+        self.assertEqual(self.gState.mangaDither,decenters.get('mangaDither','?'))
+        if new:
+            self.assertIn(self.cmd,self.gState.decenterCmd)
+        else:
+            self.assertEqual(self.gState.decenterCmd,[])
+    def test_setDecenter_on(self):
+        self._setDecenter({},enable=True)
+    def test_setDecenter_off(self):
+        self.gState.setDecenter({},self.cmd,True)
+        self._setDecenter({},enable=False)
+    def test_setDecenter_new(self):
+        decenters = {'decenterRA':1,'decenterDec':2}
+        self._setDecenter(decenters)
+    def test_setDecenter_mangaDither(self):
+        decenters = {'decenterRA':1,'decenterDec':2,'mangaDither':'C'}
+        self._setDecenter(decenters)
+    def test_setDecenter_same(self):
+        decenters = {'decenterRA':1,'decenterDec':2}
+        self._setDecenter(decenters)
+        self.gState.finish_decenter()
+        # this prevents "this command has already finished"
+        self.cmd = TestHelper.Cmd()
+        self._setDecenter(decenters,new=False)
+        self.assertTrue(self.cmd.finished)
+
     def test_FrameInfo(self):
         plugPlateScale = 10.
         arcsecPerMM = 3600./plugPlateScale

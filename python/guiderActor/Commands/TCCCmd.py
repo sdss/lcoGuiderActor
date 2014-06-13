@@ -18,7 +18,7 @@ from guiderActor import Msg
 import guiderActor
 import guiderActor.myGlobals as myGlobals
 
-import gimg.findsinglestar as findstar
+import guiderActor.gimg.findsinglestar as findstar
 reload(findstar)
 
 cameraNames = {3:'ecamera',

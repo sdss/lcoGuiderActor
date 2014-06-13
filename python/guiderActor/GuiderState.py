@@ -264,6 +264,8 @@ class GuiderState(object):
         self.cartridge = -1
         self.plate = -1
         self.pointing = "?"
+        self.plateType = "?"
+        self.surveyMode = "?"
         self.expTime = 0
         self.stack = 1
         self.inMotion = False
@@ -292,13 +294,7 @@ class GuiderState(object):
             self.pid[what] = PID.PID(self.expTime, 0, 0, 0)
 
         # reset the decenter positions.
-        self.decenter = False                #gstate only
-        self.setDecenter("decenterRA",0.)
-        self.setDecenter("decenterDec",0.)
-        self.setDecenter("decenterRot",0.)
-        self.decenterChanged = True
-        self.decenterFocus = numpy.nan
-        self.decenterScale = numpy.nan
+        self.clearDecenter()
     #...
 
     def deleteAllGprobes(self):
@@ -336,17 +332,56 @@ class GuiderState(object):
         
     def setCmd(self, cmd=None):
         self.guideCmd = cmd
+    
+    def setDecenter(self, decenters, cmd, enable):
+        """
+        Set decenter[RA,Dec,Rot] and mangaDither to the values in decenters.
+        Save the cmd that sent it, if it is a different position from the current one.
+        """
+        if enable is not None:
+            self.decenter = enable
 
-    def setDecenter(self, axis, value=0):
-        """Set axis="decenter[RA,Dec,Rot]" to value."""
-        if axis == "decenterRA":
-            self.decenterRA = value
-        elif axis == "decenterDec":
-            self.decenterDec = value
-        elif axis == "decenterRot":
-            self.decenterRot = value
+        newRA = decenters.get('decenterRA',0)
+        newDec = decenters.get('decenterDec',0)
+        newRot = decenters.get('decenterRot',0)
+        # Store the cmd, if we'll have to actually apply a new location,
+        # or just finish if the decenter is identical to the current one.
+        if self.decenterRA != newRA or \
+           self.decenterDec != newDec or \
+           self.decenterRot != newRot or \
+           enable is not None:
+            self.decenterCmd.append(cmd)
         else:
-            raise RuntimeError, ("Unknown decenter axis name %s" % axis)
+            cmd.finish()
+            return
+        self.decenterRA = newRA
+        self.decenterDec = newDec
+        self.decenterRot = newRot
+        # if this isn't the 'C' position, unless mangaDither is specified
+        # we don't know what the actual dither location is!
+        if newRA == 0 and newDec == 0 and newRot == 0:
+            default = 'C'
+        else:
+            default = '?'
+        self.mangaDither = decenters.get('mangaDither',default)
+    
+    def finish_decenter(self):
+        """Finish any pending decenter cmds."""
+        for cmd in self.decenterCmd:
+            cmd.finish('')
+        self.decenterCmd = []
+    
+    def clearDecenter(self):
+        """Clear all decenter information."""
+        
+        self.decenterCmd = []
+        self.decenter = False
+        self.mangaDither = 'C'
+        self.decenterRA = 0
+        self.decenterDec = 0
+        self.decenterRot = 0
+        self.decenterFocus = numpy.nan
+        self.decenterScale = numpy.nan
 
     def setScales(self, plugPlateScale=None,
                   dSecondary_dmm=None,

@@ -17,8 +17,6 @@ import opscore.utility.YPF as YPF
 from guiderActor import *
 import guiderActor
 import guiderActor.myGlobals as myGlobals
-import masterThread
-import gcameraThread
 
 class GuiderCmd(object):
     """ Wrap commands to the guider actor"""
@@ -55,17 +53,13 @@ class GuiderCmd(object):
                                         keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
                                         keys.Key("nfilt", types.Int(), help="number of input readings to filter with."),
                                         keys.Key("geek", help="Show things that only some of us love"),
-                                        keys.Key("plot", help="Plot things"),
-                                        keys.Key("psPlot", help="Save copy of plots"),
-                                        keys.Key("display", types.String(), help="DISPLAY variable to use"),
-                                        keys.Key("spiderInstAng", types.Float(), help="Value to use for spiderInstAng"),
                                         keys.Key("cartfile", types.String(), help="cartridge file"),
                                         keys.Key("plugfile", types.String(), help="plugmap file"),
                                         keys.Key("file", types.String(), help="guider file"),
-                                        keys.Key("decenter", types.String(), help="apply decenter offsets to guiding"),
                                         keys.Key("decenterRA", types.Float(), help="Telescope absolute offset for guiding in RA arcsec"),
                                         keys.Key("decenterDec", types.Float(), help="Telescope absolute offset for guiding in Dec arcsec"),
                                         keys.Key("decenterRot", types.Float(), help="Telescope absolute offset for guiding in Rot"),
+                                        keys.Key("ditherPos", types.String(),  help="Named MaNGA guider dither position"),
                                         keys.Key("scale", types.Float(), help="Current scale from \"tcc show scale\""),
                                         keys.Key("delta", types.Float(), help="Delta scale (percent)"),
                                         keys.Key("stack", types.Int(), help="number of itime gcamera integrations to request per exposure."),
@@ -79,7 +73,7 @@ class GuiderCmd(object):
         # Declare commands
         #
         self.vocab = [
-            ("on", "[<time>] [force] [oneExposure] [decenter] [plot] [psPlot] [<display>] [<spiderInstAng>] [<stack>]", self.guideOn),
+            ("on", "[<time>] [force] [oneExposure] [<stack>]", self.guideOn),
             ("off", "", self.guideOff),
             ("setExpTime", "<time> [<stack>]", self.setExpTime),
             ("setPID", "(raDec|rot|focus|scale) <Kp> [<Ti>] [<Td>] [<Imax>] [nfilt]", self.setPID),
@@ -102,7 +96,9 @@ class GuiderCmd(object):
             ('starInFiber', "[<probe>] [<gprobe>] [<fromProbe>] [<fromGprobe>]", self.starInFiber),
             ("setScale", "<delta>|<scale>", self.setScale),
             ("scaleChange", "<delta>|<scale>", self.scaleChange),
+            ('decenter', '(on|off)', self.decenter),
             ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter),
+            ('mangaDither', "<ditherPos>", self.mangaDither),
             ('setRefractionBalance', "<corrRatio>", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
             ]
@@ -182,32 +178,14 @@ class GuiderCmd(object):
     def guideOn(self, cmd):
         """Turn guiding on"""
 
-        force = "force" in cmd.cmd.keywords
+        force = "force" in cmd.cmd.keywords 
         oneExposure = "oneExposure" in cmd.cmd.keywords
-        plot = "plot" in cmd.cmd.keywords
-        psPlot = "psPlot" in cmd.cmd.keywords
-        display = cmd.cmd.keywords["display"].values[0] if "display" in cmd.cmd.keywords else None
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
         stack = cmd.cmd.keywords["stack"].values[0] if "stack" in cmd.cmd.keywords else 1
-        spiderInstAng = cmd.cmd.keywords["spiderInstAng"].values[0] if "spiderInstAng" in cmd.cmd.keywords else None
-        decenter = True if "decenter" in cmd.cmd.keywords else None
-
-        if spiderInstAng and not force:
-            cmd.fail('text="You may only specify a spiderInstAng with force, for debugging during the day"')
-            return
-
-        if decenter and not force:
-            cmd.fail('text="You must specify decenter with force. Decentering is not used as part of any current SDSS3 observations."')
-            return
-
-        if display:
-            os.environ["DISPLAY"] = display
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
                                                                 start=True, expTime=expTime, stack=stack,
-                                                                spiderInstAng=spiderInstAng,
-                                                                force=force, oneExposure=oneExposure,
-                                                                plot=plot, psPlot=psPlot, decenter=decenter))
+                                                                force=force, oneExposure=oneExposure))
     def guideOff(self, cmd):
         """Turn guiding off"""
 
@@ -363,6 +341,8 @@ class GuiderCmd(object):
         boresight_ra = cmdVar.getLastKeyVarData(pointingInfoKey)[3]
         boresight_dec = cmdVar.getLastKeyVarData(pointingInfoKey)[4]
         design_ha = cmdVar.getLastKeyVarData(pointingInfoKey)[5]
+        survey = cmdVar.getLastKeyVarData(pointingInfoKey)[8]
+        surveyMode = cmdVar.getLastKeyVarData(pointingInfoKey)[9]
         if design_ha < 0:
             design_ha += 360
 
@@ -435,7 +415,7 @@ class GuiderCmd(object):
                 cartridge=cartridge, plate=plate, pointing=pointing,
                 fscanMJD=fscanMJD, fscanID=fscanID,
                 boresight_ra=boresight_ra, boresight_dec=boresight_dec,
-                design_ha=design_ha,
+                design_ha=design_ha, survey=survey, surveyMode=surveyMode,
                 gprobes=gprobes))
 
     def addGuideOffsets(self, cmd, plate, pointingID, gprobes):
@@ -547,19 +527,45 @@ class GuiderCmd(object):
                 cmd.inform('text="%s"' % t)
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STATUS, cmd=cmd, finish=True))
+    
+    def decenter(self, cmd):
+        """Enable/disable decentered guiding."""
+        on = "on" in cmd.cmd.keywords
+        masterQueue = myGlobals.actorState.queues[guiderActor.MASTER]
+        masterQueue.put(Msg(Msg.DECENTER, cmd=cmd, enable=on))
 
     def setDecenter(self, cmd):
-        """Guide at an absolute offset location"""
-        #require elsewhere that guiding be run with force to allow decentered guiding
+        """Specify absolute offset location for decentered guiding."""
+        keywords = cmd.cmd.keywords
         #for now Decenter rot is around (RA+decenterRA, Dec+decenterDec)
-        decenterRA  = cmd.cmd.keywords["decenterRA"].values[0] if "decenterRA" in cmd.cmd.keywords else 0
-        decenterDec = cmd.cmd.keywords["decenterDec"].values[0] if "decenterDEC" in cmd.cmd.keywords else 0
-        decenterRot = cmd.cmd.keywords["decenterRot"].values[0] if "decenterRot" in cmd.cmd.keywords else 0
-        decenterFocus = cmd.cmd.keywords["decenterFocus"].values[0] if "decenterFocus" in cmd.cmd.keywords else 0
-        decenterScale = cmd.cmd.keywords["decenterScale"].values[0] if "decenterScale" in cmd.cmd.keywords else 0
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.DECENTER, cmd=cmd, decenterRA=decenterRA,
-                                                                decenterDec=decenterDec, decenterRot=decenterRot,
-                                                                decenterFocus=decenterFocus, decenterScale=decenterScale, finish=True))
+        decenters = {}
+        decenters['decenterRA'] = keywords["decenterRA"].values[0] if "decenterRA" in keywords else 0
+        decenters['decenterDec'] = keywords["decenterDec"].values[0] if "decenterDEC" in keywords else 0
+        
+        # Though these are currently available, we don't want to use them.
+        if "decenterRot" in keywords:
+            cmd.fail('Guider cannot apply a decenter in Rotation (yet).')
+            return
+        
+        masterQueue = myGlobals.actorState.queues[guiderActor.MASTER]
+        masterQueue.put(Msg(Msg.DECENTER, cmd=cmd, decenters=decenters))
+    
+    def mangaDither(self, cmd):
+        """Specify a particular manga dither position for decentered guiding."""
+        # ra, dec, rot
+        dithers = {'N':{'decenterRA':-0.417, 'decenterDec':+0.721, 'decenterRot':0.0},
+                   'S':{'decenterRA':-0.417, 'decenterDec':-0.721, 'decenterRot':0.0},
+                   'E':{'decenterRA':+0.833, 'decenterDec':0., 'decenterRot':0.0},
+                   'C':{'decenterRA':0., 'decenterDec':0., 'decenterRot':0.0}}
+        ditherPos = cmd.cmd.keywords['ditherPos'].values[0]
+        try:
+            decenters = dithers[ditherPos]
+            decenters['mangaDither'] = ditherPos
+        except KeyError as e:
+            cmd.fail("text=%s" % qstr("Failed to parse manga dither position: %s"%ditherPos))
+        else:
+            masterQueue = myGlobals.actorState.queues[guiderActor.MASTER]
+            masterQueue.put(Msg(Msg.DECENTER, cmd=cmd, decenters=decenters))
     
     def makeMovie(self,cmd):
         """Create a movie of guider images in /data/gcam/movieMJD from a range of exposures from start to end."""
@@ -569,3 +575,4 @@ class GuiderCmd(object):
         movieQueue = myGlobals.actorState.queues[guiderActor.MOVIE]
         movieQueue.put(Msg(Msg.MAKE_MOVIE, cmd=cmd,
                            mjd=mjd, start=start, end=end, finish=True))
+#...

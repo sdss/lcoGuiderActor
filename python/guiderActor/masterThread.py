@@ -1,4 +1,4 @@
-import ConfigParser
+"""master thread for guiderActor."""
 import Queue, threading
 import math, numpy, re
 import time
@@ -31,11 +31,6 @@ def adiff(a1, a2):
 
     return dd
 
-try:
-    gState
-except:
-    gState = GuiderState.GuiderState()
-
 class FakeCommand(object):
     def _respond(self, tag, text):
         print "%s %s" % (tag, text)
@@ -52,12 +47,12 @@ class FakeCommand(object):
     def fail(self, text):
         self._respond('f', text)
 
-def processOneFile(guiderFile):
+def processOneFile(gstate, guiderFile):
     queues = dict(MASTER=Queue.Queue())
 
     guideStep(None, queues, gState.guideCmd, guiderFile, True)
 
-def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None, cmd=None, guideCmd=None):
+def processOneProcFile(gState, guiderFile, cartFile, plateFile, actor=None, queues=None, cmd=None, guideCmd=None):
     gState.setGuideMode('axes', False)
     gState.setGuideMode('focus', False)
     gState.setGuideMode('scale', False)
@@ -67,9 +62,17 @@ def processOneProcFile(guiderFile, cartFile, plateFile, actor=None, queues=None,
     if not queues: queues = dict(MASTER=Queue.Queue())
 
     gState.setCmd(guideCmd)
-    guideStep(None, queues, cmd, cmd, guiderFile, True)
+    guideStep(None, queues, cmd, gState, guiderFile, True)
 
-def _check_fiber(fiber,gState,guideCmd):
+def send_decenter_status(cmd, gState, frameNo):
+    """Output the decenter status keywords, including the most recent frame number."""
+    cmd.inform("decenter=%d, %s, %7.3f, %7.3f, %7.3f, %7.3f, %7.3f" % (
+                frameNo, ("enabled" if gState.decenter else "disabled"),
+                gState.decenterRA, gState.decenterDec,
+                gState.decenterRot, gState.decenterFocus, gState.decenterScale))
+    cmd.inform("mangaDither=%s"%(gState.mangaDither))
+
+def _check_fiber(fiber, gState, guideCmd):
     """
     Check whether the current fiber should currently be enabled.
     """
@@ -86,7 +89,7 @@ def _check_fiber(fiber,gState,guideCmd):
         if fiber.gProbe.disabled:
             guideCmd.diag('text="Gprobe %d is not enabled."' % fiber.fiberid)
         return fiber.gProbe.enabled
-#...        
+#...
 
 def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     """
@@ -102,11 +105,11 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
     # phi is the orientation of the alignment hole measured clockwise from N
     # rotation is the anticlockwise rotation from x on the ALTA to the pin
-    theta = 90                   # allow for 90 deg rot of camera view, should be -90 
+    theta = 90                   # allow for 90 deg rot of camera view, should be -90
     theta += gProbe.rotation # allow for intrinsic fibre rotation
     try:
         theta -= gProbe.phi      # allow for orientation of alignment hole
-    except Exception, e:
+    except Exception as e:
         cmd.warn('text="skipping phi-less probe %s"' % (fiber.fiberid))
         return
     
@@ -114,7 +117,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
 
     #FIXME PH -- We should ignore gprobes not present on plate/pointing (MARVELS dual pointing)
     #               and ignore fibers not found in flat.
-    #            However we probably want to record values of disabled fibers for diagnosis 
+    #            However we probably want to record values of disabled fibers for diagnosis
     if numpy.isnan(fiber.dx) or numpy.isnan(fiber.dy) or numpy.isnan(poserr):
         guideCmd.warn("text=%s" %
                       qstr("NaN in analysis for gprobe %d star=(%g, %g) fiber measured=(%g, %g), nominal=(%g,%g)" % (
@@ -197,14 +200,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
         dRA  += gState.decenterRA/frameInfo.arcsecPerMM
         dDec += gState.decenterDec/frameInfo.arcsecPerMM
         #decenterRot applied after guide solution
-
-    #output the keywords only when the decenter changes
-    if gState.decenterChanged:
-        guideCmd.inform("decenter=%d, %s, %7.2f, %7.2f, %7.2f, %7.2f, %7.2f" % (
-                        frameInfo.frameNo, ("enabled" if gState.decenter else "disabled"), gState.decenterRA, gState.decenterDec,
-                        gState.decenterRot, gState.decenterFocus, gState.decenterScale))
-        gState.decenterChanged = False
-
+    
     fiber.dRA = dRA
     fiber.dDec = dDec
     raCenter  = gProbe.xFocal
@@ -216,19 +212,13 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
         fiber.fwhm, gProbe.focusOffset,
         fiber.flux, fiber.mag, gProbe.ref_mag, fiber.sky, fiber.skymag))
     
-    #print "%d %2d 0x%02x  %7.2f %7.2f  %7.2f %7.2f  %6.1f %6.1f  %6.1f %6.1f  %6.1f %6.1f  %06.1f  %7.3f %7.3f %7.0f %7.2f %4.0f" % (
-    #    frameInfo.frameNo, fiber.fiberid, gProbe.gprobebits,
-    #    dRA, dDec, fiber.dx, fiber.dy, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen,
-    #    gProbe.xFocal, gProbe.yFocal, gProbe.rotStar2Sky, fiber.fwhm/frameInfo.sigmaToFWHM, fiber.sky, fiber.flux, fiber.mag,
-    #    gProbe.focusOffset)
-
     if gProbe.tooFaint:
         return
-
+    
     #Collect fwhms for good in focus stars
     if gProbe.atFocus and gProbe.good:
         frameInfo.inFocusFwhm.append(fiber.fwhm)
-
+    
     #accumulate guiding errors for good stars used in fit
     frameInfo.guideRMS += fiber.dx**2 + fiber.dy**2
     frameInfo.guideXRMS += fiber.dx**2
@@ -237,7 +227,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
     frameInfo.guideRaRMS += dRA**2
     frameInfo.guideDecRMS += dDec**2
     #guideAzRMS += fiber.dAz**2
-    #guideAltRMS += fiber.dAlt**2        
+    #guideAltRMS += fiber.dAlt**2
 
     frameInfo.b[0] += dRA
     frameInfo.b[1] += dDec
@@ -255,7 +245,7 @@ def _do_one_fiber(fiber,gState,guideCmd,frameInfo):
 
     # Now scale.  We don't actually solve for scale and axis updates
     # simultanously, and we don't allow for the axis update when
-    # estimating the scale. 
+    # estimating the scale.
     frameInfo.b3 += raCenter*dRA + decCenter*dDec
 #...
 
@@ -295,11 +285,19 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     A[1, 1] += d*d*ivar
 #...
 
-def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
-    """ One step of the guide loop, based on the given guider file. 
+def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
+              guiderImageAnalysis, output_verify='warn'):
+    """ One step of the guide loop, based on the given guider file.
 
-    Args: (TOOOO MANY!!)
-        actor      - 
+    Args:
+        actor: the current actor instance: lets us send direct tcc commands.
+        queues: the queue list, so we can put commands on it.
+        cmd: the currently active command, for message passing.
+        gState: an instance of GuiderState, holding information about the gprobes, etc.
+        inFile: the name of the current raw gcamera file.
+        oneExposure: True if we are only handling a single exposure.
+        guiderImageAnalysis: an instance of that class, to process the raw image.
+        output_verify: passed on to the fits writer. See the pyfits docs for more.
     """
     actorState = guiderActor.myGlobals.actorState
     guideCmd = gState.guideCmd
@@ -345,7 +343,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     except GuiderError as e:
         guideCmd.fail('guideState="failed"; text=%s' %qstr("Error processing gcamera image."))
         gState.setCmd(None)
-        return        
+        return
     except Exception as e:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("Unknown error in processing guide images: %s" % e))
         gState.setCmd(None)
@@ -383,8 +381,6 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
 
     # Set the decenter parameters in frameInfo, so they don't get lost if decentering
     # changes during processing.
-    # TBD: Alternately, we could just pass gState to GuiderImage and not worry about
-    # the loss of those values for that single image...
     if gState.decenter:
         frameInfo.setDecenter(gState)
     else:
@@ -406,7 +402,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
         else:
             guideCmd.warn('text="Telescope moved during exposure -- skipping this image."')
 
-        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
 
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
@@ -432,26 +428,26 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
         dRA = x[0, 0]/gState.plugPlateScale
         dDec = x[1, 0]/gState.plugPlateScale
         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
-
-#        #PH Kludge add the decenter guiding rotation offset here for now (in degrees)
-#        if gState.decenter:
-#            dRot += gState.decenterRot/3600.0
-
+        
+        # TBD: we are not applying any rotation decentering at present.
+        #PH Kludge add the decenter guiding rotation offset here for now (in degrees)
+        #if gState.decenter:
+        #    dRot += gState.decenterRot/3600.0
+        
         frameInfo.dRA  = dRA
         frameInfo.dDec = dDec
         frameInfo.dRot = dRot
-        print 'dRA,dDec,dRot', dRA, dDec, dRot
-
-        if gState.centerUp:
+        
+        # directly apply a shift for centerUp and decentering.
+        # otherwise, apply the shift via the usual pid.
+        if gState.centerUp or gState.decenterCmd:
             offsetRa = -dRA
             offsetDec = -dDec
             offsetRot = 0
         else:
-            offsetRa  = -gState.pid["raDec"].update(dRA)                    
+            offsetRa  = -gState.pid["raDec"].update(dRA)
             offsetDec = -gState.pid["raDec"].update(dDec)
             offsetRot = -gState.pid["rot"].update(dRot) if nStar > 1 else 0 # don't update I
-
-        print 'offsetRA, offsetDec, offsetRot', offsetRa, offsetDec, offsetRot
 
         frameInfo.filtRA  = offsetRa
         frameInfo.filtDec = offsetDec
@@ -498,7 +494,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
         guideAzRMS  = numpy.nan
         guideAltRMS = numpy.nan
         #frameInfo.guideAzRMS = guideAzRMS
-        #frameInfo.guideAltRMS = guideAltRMS     
+        #frameInfo.guideAltRMS = guideAltRMS
      
         if gState.guideAxes:
             offsetsOK = True
@@ -508,7 +504,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
                 offsetsOK = False
                 guideCmd.warn('text="Failed to issue offset"')
 
-            if offsetRot: 
+            if offsetRot:
                 cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
                                          cmdStr="offset guide %f, %f, %g"%(0.0, 0.0, -offsetRot))
             if cmdVar.didFail:
@@ -535,7 +531,7 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
         guideCmd.warn("text=%s" % qstr("Unable to solve for axis offsets"))
 
     if nStar <= 1 or gState.centerUp:      # don't bother with focus/scale!
-        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.setCmd(None)
@@ -587,9 +583,11 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
     nguideRejectFitRMS = 0
 
     # RMS guiding error output has to be after scale estimation so the full fit residual can be reported
-    guideCmd.inform("guideRMS=%5d,%4.3f,%4d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d,%4d" % (
-        frameInfo.frameNo, frameInfo.guideRMS, frameInfo.nguideRMS, frameInfo.guideAzRMS, frameInfo.guideAltRMS, 
-        frameInfo.guideXRMS, frameInfo.guideYRMS, guideFitRMS, nguideFitRMS, nguideRejectFitRMS))
+    guideCmd.inform("guideRMS=%5d,%4.3f,%4d,%4.3f,%4.3f,%4.3f,%4.3f,%4.3f,%4d,%4d,%4.3f,%4.3f" % (
+        frameInfo.frameNo, frameInfo.guideRMS, frameInfo.nguideRMS,
+        frameInfo.guideAzRMS, frameInfo.guideAltRMS,
+        frameInfo.guideXRMS, frameInfo.guideYRMS, guideFitRMS, nguideFitRMS, nguideRejectFitRMS,
+        frameInfo.guideRaRMS, frameInfo.guideDecRMS))
 
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
@@ -650,7 +648,8 @@ def guideStep(actor, queues, cmd, inFile, oneExposure, guiderImageAnalysis):
         x = None
 
     # Write output fits file for TUI
-    guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes)
+    guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
+    return frameInfo
 #...
 
 def loadAllProbes(cmd, gState):
@@ -687,8 +686,8 @@ def loadAllProbes(cmd, gState):
         #platetype = ypm['platetype'].value
         #cmd.info('scienceProgram=%s,%s'%(instruments,platetype))
         
-        # It is useful to keep the object information as well, 
-        # so that we can put "any star down any hole". This is potentially 
+        # It is useful to keep the object information as well,
+        # so that we can put "any star down any hole". This is potentially
         # very useful for testing.
         # TBD: we'll probably need a new type here for MaNGA.
         keep = pm[numpy.where(((pm.holeType == "GUIDE") & (pm.objType == "NA"))
@@ -703,7 +702,8 @@ def loadTccBlock(cmd, actorState, gState):
     !!!!!!!!!!!!!!!!!!11
     jkp TBD: Why do we do this separately from loadAllProbes?
     They issue the same catPlPlugMapM command, right?
-    I think we can merge them together
+    I think we can merge them together, and/or get rid of loadAllProbes and
+    replace it with specific platedbActor calls to load just the bits we want.
     !!!!!!!!!!!!!!!!!!11
     """
     try:
@@ -769,7 +769,7 @@ def make_movie(actorState,msg,start):
     return True
 #...
 
-def cal_finished(msg,name,guiderImageAnalysis,actorState):
+def cal_finished(msg, name, guiderImageAnalysis, actorState, gState):
     """Generic handling of finished dark/flat frame."""
     cmd = msg.cmd
     cmd.respond("processing=%s" % msg.filename)
@@ -812,19 +812,80 @@ def cal_finished(msg,name,guiderImageAnalysis,actorState):
         cmd.fail('text="failed to save flat: %s"' % (e))
 #...
 
-def dark_finished(msg,guiderImageAnalysis,actorState):
+def dark_finished(msg, guiderImageAnalysis, actorState, gState):
     """Process a finished dark frame."""
-    cal_finished(msg,'dark',guiderImageAnalysis,actorState)
+    cal_finished(msg,'dark',guiderImageAnalysis,actorState,gstate)
 
-def flat_finished(msg,guiderImageAnalysis,actorState):
+def flat_finished(msg, guiderImageAnalysis, actorState, gState):
     """Process a finished flat frame."""
     header = pyfits.getheader(msg.filename)
     darkfile = header.get('DARKFILE', None)
     if not darkfile:
         msg.cmd.fail("text=%s" % qstr("No dark image listed in flat header!!"))
         return
-    cal_finished(msg,'flat',guiderImageAnalysis,actorState)
+    cal_finished(msg,'flat',guiderImageAnalysis,actorState,gState)
 #...
+
+def reset_pid_terms(gState, terms=None):
+    """Reset all PID terms, or just those listed."""
+    if terms == None:
+        terms = gState.pid.keys()
+    for key in terms:
+        gState.pid[key].reset()
+
+#
+# Actual guider commands, and sub-commands.
+#
+def load_cartridge(msg, queues, gState, actorState):
+    """
+    Load cartridge information into the appropriate systems.
+    1. Process the information from a loadCartridge command into gState.
+    2. load the instrument block into the TCC.
+    3. load all guide probes, for "any star->any fiber" tricks.
+    """
+    
+    gState.deleteAllGprobes()
+    gState.setRefractionBalance(0.0)
+
+    gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
+    gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
+    gState.boresight_ra, gState.boresight_dec = msg.boresight_ra, msg.boresight_dec
+    gState.design_ha = msg.design_ha
+    # turn APOGEE;MaNGA into APOGEE-MaNGA
+    gState.plateType = msg.survey.replace(';','-')
+    gState.surveyMode = msg.surveyMode
+    for id, gProbe in msg.gprobes.items():
+        gState.gprobes[id] = gProbe
+            
+    # Build and install an instrument block for this cartridge info
+    loadTccBlock(msg.cmd, actorState, gState)
+    loadAllProbes(msg.cmd, gState)
+    for id,gProbe in gState.gprobes.items():
+        test = (gState.allProbes.fiberId == id) & (gState.allProbes.holeType == 'GUIDE')
+        if test.any(): # should only be one
+            gProbe.ugriz = gState.allProbes.mag[test][0]
+    
+    # TBD: SDSS4: We may have to twiddle with this for coobserved plates.
+    # What to do with APOGEEMANGA? Also use the surveyMode?
+    if gState.plateType == 'APOGEE':
+        gState.setRefractionBalance(1.0)
+    
+    # Report the cartridge status
+    queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+#...
+
+def set_decenter(cmd, decenters, gState, enable):
+    """Enable/disable decentered guiding, and set offset coordinates."""
+    # if we didn't get an enable message, don't allow the position to be changed.
+    if enable is None:
+        if not gState.decenter:
+            failMsg = "Decentered guiding must be enabled before location can be specified."
+            cmd.fail("text='%s'"%failMsg)
+            return
+    
+    gState.setDecenter(decenters,cmd,enable)
+#...
+
 
 def main(actor, queues):
     """Main loop for master thread"""
@@ -835,8 +896,9 @@ def main(actor, queues):
     timeout = actorState.timeout
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
-    fakeSpiderInstAng = None            # the value we claim for the SpiderInstAng
     startFrame = None                   # guider frame number to start movie at.
+    frameInfo = None                    # to catch guideStep's return.
+    gState = GuiderState.GuiderState()
     # need to wait a couple seconds to let the models sync up.
     time.sleep(3)
     setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
@@ -889,13 +951,16 @@ def main(actor, queues):
                     
                     if success:
                         msg.cmd.respond("guideState=stopping")
+                        # cleanup any pending decenter commands (e.g. decenter off)
+                        send_decenter_status(gState.guideCmd,gState,frameInfo.frameNo)
+                        gState.finish_decenter()
+                        
                         queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
                         if gState.guideCmd != msg.cmd:
                             msg.cmd.finish()
-
+                        
                         gState.guideCmd.finish("guideState=off")
                         gState.setCmd(None)
-
                     else:
                         queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
                         msg.cmd.respond("guideState=failed")
@@ -919,7 +984,6 @@ def main(actor, queues):
 
                 force = msg.force
                 oneExposure = msg.oneExposure
-                fakeSpiderInstAng = msg.spiderInstAng
                 
                 if gState.guideCmd:
                     errMsg = "The guider appears to already be running"
@@ -935,7 +999,7 @@ def main(actor, queues):
                     continue
 
                 if not guidingIsOK(msg.cmd, actorState, force=force):
-                    queues[MASTER].put(Msg(Msg.FAIL, msg.cmd, text=""))
+                    queues[MASTER].put(Msg(Msg.FAIL, msg.cmd, text="Not ok to guide in current state."))
                     continue
 
                 guideCmd = msg.cmd
@@ -954,34 +1018,30 @@ def main(actor, queues):
                     if simulating[0]:
                         startFrame = simulating[2]
                 
-                #
-                # Reset any PID I terms
-                #
-                for key in gState.pid.keys():
-                    gState.pid[key].reset()
+                reset_pid_terms(gState)
 
                 guideCmd.respond("guideState=on")
-                if msg.decenter: 
-                    gState.decenter = True 
-                else: 
-                    gState.decenter = False
 
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
                                         expTime=gState.expTime, stack=gState.stack))
 
             elif msg.type == Msg.REPROCESS_FILE:
-                processOneProcFile(msg.filename, actor, queues, cmd=msg.cmd)
+                processOneProcFile(gState, msg.filename, actor, queues, cmd=msg.cmd)
                 msg.cmd.finish('text="I do hope that succeeded."')
                 
             elif msg.type == Msg.READ_PLATE_FILES:
-                processOneProcFile(msg.filename, actor, queues, cmd=msg.cmd)
+                processOneProcFile(gState, msg.filename, actor, queues, cmd=msg.cmd)
                 msg.cmd.finish('text="I do so hope that succeeded."')
                 
             elif msg.type == Msg.TCC_EXPOSURE:
-                queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER], 
+                queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER],
                                         expTime=msg.expTime, forTCC=msg.forTCC, camera=msg.camera))
 
             elif msg.type == Msg.EXPOSURE_FINISHED:
+                # !!!!!!!!!!!!
+                # TBD: is this forTCC bit necessary? I don't think it ever gets used.
+                # The TCCCmd does txtForTcc, but I don't think we ever do after exposures.
+                # !!!!!!!!!!!!
                 if msg.forTCC:
                     tccState = msg.forTCC
 
@@ -1001,41 +1061,34 @@ def main(actor, queues):
                                                             "image: binXY begXY sizeXY expTime camID temp"))))
                     msg.cmd.finish('txtForTcc=" OK"')
                     continue
-
+                
                 if not gState.guideCmd:    # exposure already finished
                     gState.inMotion = False
                     continue
-
+                
                 if not msg.success:
                     gState.inMotion = False
                     queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False, success=False))
                     continue
-
-                guideStep(actor, queues, msg.cmd, msg.filename, oneExposure, guiderImageAnalysis)
+                
+                frameInfo = guideStep(actor, queues, msg.cmd, gState, msg.filename, oneExposure, guiderImageAnalysis)
                 gState.inMotion = False
+                
+                # output the keywords after the decenter changes, and finish the command.
+                if gState.decenterCmd:
+                    send_decenter_status(gState.guideCmd,gState,frameInfo.frameNo)
+                    gState.finish_decenter()
+                    reset_pid_terms(gState)
+                
+                # Declare the centerUp to be finished.
                 if gState.centerUp:
-                    gState.centerUp.finish('')
+                    gState.centerUp.finish()
                     gState.centerUp = False
-
-                    # Reset any PID I terms and smoothing filters
-                    for key in gState.pid.keys():
-                        gState.pid[key].reset()
-
+                    reset_pid_terms(gState)
                     # Stuff has changed; tell STUI.
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=False))
                     
                 if not gState.guideCmd:    # something fatal happened in guideStep
-                    continue
-
-                #Check if offsets were changed during guiding without force
-                if (gState.decenter and not force):
-                    cmd.fail('text="Decentred guiding must use force."')
-                    gState.setDecenter("decenterRA")  #reset all to 0
-                    gState.setDecenter("decenterDec")
-                    gState.setDecenter("decenterRot")
-                    gState.decenter = False
-                    gState.decenterChanged = True
-                    queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False))
                     continue
 
                 #
@@ -1058,7 +1111,7 @@ def main(actor, queues):
                 if gState.cartridge <= 0:
                     msg.cmd.fail('text="no valid cartridge is loaded"')
                     continue
-                queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER], 
+                queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER],
                                         expType="flat", expTime=msg.expTime, cartridge=gState.cartridge))
             
             elif msg.type == Msg.TAKE_DARK:
@@ -1069,43 +1122,21 @@ def main(actor, queues):
                 if not msg.success:
                     cmd.fail('text="something went wrong when taking the dark"')
                     continue
-                dark_finished(msg,guiderImageAnalysis,actorState)
+                dark_finished(msg,guiderImageAnalysis,actorState,gState)
             
             elif msg.type == Msg.FLAT_FINISHED:
                 if not msg.success:
                     cmd.fail('text="something went wrong when taking the flat"')
                     continue
-                flat_finished(msg,guiderImageAnalysis,actorState)
+                flat_finished(msg,guiderImageAnalysis,actorState,gState)
 
             elif msg.type == Msg.FAIL:
                 msg.cmd.fail('guideState="failed"; text="%s"' % msg.text);
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 startFrame = None # clear the start frame: don't need it any more!
-                gState.deleteAllGprobes()
-                gState.setRefractionBalance(0.0)
-
-                gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
-                gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
-                gState.boresight_ra, gState.boresight_dec = msg.boresight_ra, msg.boresight_dec
-                gState.design_ha = msg.design_ha
-                for id, gProbe in msg.gprobes.items():
-                    gState.gprobes[id] = gProbe
+                load_cartridge(msg, queues, gState, actorState)
                     
-                # Build and install an instrument block for this cartridge info
-                loadTccBlock(msg.cmd, actorState, gState)
-                loadAllProbes(msg.cmd, gState)
-                for id,gProbe in gState.gprobes.items():
-                    test = (gState.allProbes.fiberId == id) & (gState.allProbes.holeType == 'GUIDE')
-                    if test.any(): # should only be one
-                        gProbe.ugriz = gState.allProbes.mag[test][0]
-
-                if gState.cartridge > 0 and gState.cartridge < 10:
-                    gState.setRefractionBalance(1.0)
-
-                # Report the cartridge status
-                queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
-                
             elif msg.type == Msg.SET_PID:
                 gState.pid[msg.what].setPID(Kp=msg.Kp, Ti=msg.Ti, Td=msg.Td, Imax=msg.Imax, nfilt=msg.nfilt)
 
@@ -1234,8 +1265,7 @@ def main(actor, queues):
                     gState.inMotion = False
                     cmd.fail('text="Failed to set scale"')
                 else:
-                    gState.pid['focus'].reset()
-                    gState.pid['scale'].reset()
+                    reset_pid_terms(gState,['focus','scale'])
                     cmd.finish('text="scale change completed"')
 
             elif msg.type == Msg.SET_SCALE:
@@ -1261,22 +1291,18 @@ def main(actor, queues):
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
                 
             elif msg.type == Msg.DECENTER:
-                #Allow decenters to be setup prior to guiding
-                gState.setDecenter("decenterRA",msg.decenterRA)
-                gState.setDecenter("decenterDec",msg.decenterDec)
-                gState.setDecenter("decenterRot",msg.decenterRot)
-                gState.decenterChanged = True
-                
-                if msg.finish:
-                    msg.cmd.finish()
+                enable = getattr(msg,'enable',None)
+                decenters = getattr(msg,'decenters',{})
+                set_decenter(msg.cmd, decenters, gState, enable)
                 
             elif msg.type == Msg.STATUS:
                 # Try to generate status even after we have failed.
                 cmd = msg.cmd if msg.cmd.alive else actor.bcast
-
+                
                 cmd.respond("cartridgeLoaded=%d, %d, %s, %d, %d" % (
                     gState.cartridge, gState.plate, gState.pointing, gState.fscanMJD, gState.fscanID))
-
+                cmd.respond("survey=%s, %s"%(gState.plateType, gState.surveyMode))
+                
                 try:
                     if not msg.full:
                         if msg.finish:
@@ -1288,7 +1314,10 @@ def main(actor, queues):
                 cmd.respond("guideState=%s" % ("on" if gState.guideCmd else "off"))
                 cmd.inform('text="The guider is %s"' % ("running" if gState.guideCmd else "off"))
                 cmd.inform('text="Decentering is %s"' % ("off" if not gState.decenter else "on"))
-                
+                if gState.decenter:
+                    frameNo = getattr(frameInfo,'frameNo',-2)
+                    send_decenter_status(cmd,gState,frameNo)
+
                 # Some fiber IDs may be absent from gprobeBits.keys(), so start them all with UNKNOWN
                 liveProbes = gState.gprobes.keys()
                 if liveProbes:
@@ -1305,7 +1334,7 @@ def main(actor, queues):
                                                        gState.gcameraMagnification, gState.gcameraPixelSize,
                                                        gState.dSecondary_dmm,))
                 for w in gState.pid.keys():
-                    cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w, 
+                    cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (w,
                                                            gState.pid[w].Kp, gState.pid[w].Ti, gState.pid[w].Td,
                                                            gState.pid[w].Imax, gState.pid[w].nfilt))
                 if gState.refractionBalance != 0.0:
@@ -1323,8 +1352,9 @@ def main(actor, queues):
         except Exception as e:
             errMsg = "Unexpected exception %s in guider %s thread" % (e, threadName)
             if gState.guideCmd:
-                gState.guideCmd.warn('text="%s"' % errMsg)
-            actor.bcast.warn('text="%s"' % errMsg)
+                gState.guideCmd.error('text="%s"' % errMsg)
+            else:
+                actor.bcast.error('text="%s"' % errMsg)
             gState.setCmd(False)
             # jkp NOTE: this gives a RunTimeError/max recurision depth if
             # guiderActor isn't built correctly (missing lib/libguide.so)

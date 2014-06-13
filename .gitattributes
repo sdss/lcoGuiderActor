@@ -39,9 +39,7 @@ src/gimg/attic.c -text
 src/gimg/gutils.c -text
 src/gimg/ipGguide.c -text
 src/gimg/shUtils.c -text
-test_guiderActor/TestGuiderImage.py -text
 test_guiderActor/TestGuiderState.py -text
-test_guiderActor/TestGuiderStep.py -text
 test_guiderActor/gimg-0001.fits.gz -text
 test_guiderActor/gimg-0003.fits.gz -text
 test_guiderActor/gimg-0004.fits.gz -text
@@ -49,4 +47,8 @@ test_guiderActor/gimg-0040.fits.gz -text
 test_guiderActor/gimg-0519.fits.gz -text
 test_guiderActor/gimg-0859.fits.gz -text
 test_guiderActor/guiderTester.py -text
+test_guiderActor/profile_guider.py -text
+test_guiderActor/test_GuiderCmd.py -text
+test_guiderActor/test_guiderImage.py -text
+test_guiderActor/test_masterThread.py -text
 ups/guiderActor.table -text
