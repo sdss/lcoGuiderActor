@@ -90,5 +90,5 @@ def main(actor, queues):
         except Queue.Empty:
             actor.bcast.diag('text="gcamera alive"')
         except Exception, e:
-            actor.bcast.diag('text="gcamera thread got unexpected exception: %s"' % (e))
+            actor.bcast.error('text="gcamera thread got unexpected exception: %s"' % (e))
             

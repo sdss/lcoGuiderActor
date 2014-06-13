@@ -83,8 +83,8 @@ class ImageMaker(object):
         
         self.index = os.path.splitext(infile)[0].split('-')[-1]
         data = pyfits.open(infile)
-        self.plate = data[0].header['PLATEID']
-        self.cart =  data[0].header['CARTID']
+        self.plate = data[0].header.get('PLATEID')
+        self.cart =  data[0].header.get('CARTID')
             
         
         self.guiderView = asinh(data[0].data,scale_min=5.,scale_max=scale_max,non_linear=10.)
@@ -100,13 +100,13 @@ class ImageMaker(object):
         self.plateView = np.ma.masked_array(self.plateView, mask == 4)
         
         hdr = data[0].header
-        self.seeing = hdr['seeing']
-        self.offset = tuple(np.array((hdr['dra'],hdr['ddec'],hdr['drot']))*3600.)
-        self.focus = hdr['dfocus']
-        self.scale = hdr['filtscle']
-        self.rms = hdr['gdrms']
-        self.time = hdr['date-obs']
-        self.ccdtemp = hdr['ccdtemp']
+        self.seeing = hdr.get('seeing')
+        self.offset = tuple(np.array((hdr.get('dra'),hdr.get('ddec'),hdr.get('drot')))*3600.)
+        self.focus = hdr.get('dfocus')
+        self.scale = hdr.get('filtscle')
+        self.rms = hdr.get('gdrms')
+        self.time = hdr.get('date-obs')
+        self.ccdtemp = hdr.get('ccdtemp')
         
         self._guide_locations()
         # dictionaries to hold information about the probes in each view

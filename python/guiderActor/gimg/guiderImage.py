@@ -255,7 +255,7 @@ class GuiderImageAnalysis(object):
         path = os.path.expandvars("$GUIDERACTOR_DIR/lib/libguide.so")
         libguide = ctypes.CDLL(path)
         if not libguide:
-            self.cmd.warn('text=%s'%qstr('Failed to load "libguide.so" from %s ($GUIDERACTOR_DIR/lib/libguide.so)' % path))
+            self.cmd.error('text=%s'%qstr('Failed to load "libguide.so" from %s ($GUIDERACTOR_DIR/lib/libguide.so)' % path))
         libguide.gfindstars.argtypes = [ctypes.POINTER(REGION), ctypes.POINTER(FIBERDATA), ctypes.c_int]
         libguide.gfindstars.restype = ctypes.c_int
         libguide.fiberdata_new.argtypes = [ctypes.c_int]
@@ -326,8 +326,10 @@ class GuiderImageAnalysis(object):
 
             plateCards = actorFits.plateCards(models, cmd=cmd)
             actorFits.extendHeader(cmd, imageHDU.header, plateCards)
+            guiderCards = actorFits.guiderCards(models, cmd=cmd)
+            actorFits.extendHeader(cmd, imageHDU.header, guiderCards)
         except Exception as e:
-            self.cmd.warn('text=%s'%qstr('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e)))
+            self.cmd.error('text=%s'%qstr('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e)))
             raise e
 
     def getGuideloopCards(self, cmd, frameInfo):
@@ -352,6 +354,8 @@ class GuiderImageAnalysis(object):
                 ('guideYRMS',    'gdYRMS',   'CCD Y component of guiding RMS, arcsec'),
                 ('guideAzRMS',    'gdAzRMS',  'Az component of guiding RMS error, arcsec'),
                 ('guideAltRMS', 'gdAltRMS', 'Alt component of guiding RMS error, arcsec'),
+                ('guideRaRMS',    'gdRaRMS',  'RA component of guiding RMS error, arcsec'),
+                ('guideDecRMS', 'gdDecRMS', 'Dec component of guiding RMS error, arcsec'),
                 ('guideFitRMS',  'gdFRMS',  'RMS of fit to guide star posn, arcsec'),
                 ('nguideFitRMS', 'ngdFRMS', 'N stars used for fit RMS'),
                 ('decenterRA',    'dcnRA',   'applied user supplied offset in RA, arcsec'),
@@ -544,7 +548,7 @@ class GuiderImageAnalysis(object):
         return hdulist
 
 
-    def writeFITS(self, models, cmd, frameInfo, gprobes):
+    def writeFITS(self, models, cmd, frameInfo, gprobes, output_verify='warn'):
         """
         Write a fits file containing the processed results for this exposure.
         """
@@ -565,10 +569,10 @@ class GuiderImageAnalysis(object):
             directory,filename = os.path.split(procpath)
             # TBD: NOTE: pyfits 2.4.0trunk at APO currently borks when computing
             # the internal checksum here. Just remove checksum=False once that is fixed.
-            actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644,checksum=False)
+            actorFits.writeFits(cmd, hdulist, directory, filename, doCompress=True, chmod=0644, checksum=True, output_verify=output_verify)
             self.cmd.inform('file=%s/,%s' % (directory, filename))
         except Exception as e:
-            cmd.warn('text="failed to write FITS file %s: %r"' % (procpath, e))
+            cmd.error('text="failed to write FITS file %s: %r"' % (procpath, e))
             raise e
     
     def _check_ccd_temp(self,header):
@@ -1013,7 +1017,7 @@ class GuiderImageAnalysis(object):
         fibers = keepfibers
 
         if len(fibers) == 0:
-            self.cmd.warn('text=%s'%qstr('Failed to find any fibers in guider flat!'))
+            self.cmd.error('text=%s'%qstr('Failed to find any fibers in guider flat!'))
             raise NoFibersFoundError
 
         # Find a single x,y offset by testing possibly corresponding

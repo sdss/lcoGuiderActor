@@ -7,6 +7,8 @@ import unittest
 import re
 import pyfits
 
+from actorcore import TestHelper
+
 import guiderTester
 
 from guiderActor.gimg import guiderImage
@@ -96,6 +98,16 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.gi.cmd = self.cmd
         self.assertRaises(GuiderExceptions.BadReadError,self.gi._pre_process,self.badReadFile1,binning=2)
         self.assertRaises(GuiderExceptions.BadReadError,self.gi._pre_process,self.badReadFile2,binning=2)
+    
+    def test_dither_headers(self):
+        """check that the dither keywords get into the header."""
+        self.actorState.models['guider'] = TestHelper.Model('guider',TestHelper.guiderState['guiderOnDecenter'])
+        self.gi.cmd = self.cmd
+        objectname = 'somename'
+        hdu = pyfits.open(self.inDataFile)[0]
+        frameInfo = GuiderState.FrameInfo(-1,1,2,3)
+        self.gi.fillPrimaryHDU(self.cmd,self.actorState.models,hdu,frameInfo,objectname)
+        self.assertEqual(hdu.header['MGDPOS'],'N')
 #...
 
 if __name__ == '__main__':
