@@ -47,7 +47,7 @@ class FakeCommand(object):
     def fail(self, text):
         self._respond('f', text)
 
-def processOneFile(gstate, guiderFile):
+def processOneFile(gState, guiderFile):
     queues = dict(MASTER=Queue.Queue())
 
     guideStep(None, queues, gState.guideCmd, guiderFile, True)
@@ -814,7 +814,7 @@ def cal_finished(msg, name, guiderImageAnalysis, actorState, gState):
 
 def dark_finished(msg, guiderImageAnalysis, actorState, gState):
     """Process a finished dark frame."""
-    cal_finished(msg,'dark',guiderImageAnalysis,actorState,gstate)
+    cal_finished(msg,'dark',guiderImageAnalysis,actorState,gState)
 
 def flat_finished(msg, guiderImageAnalysis, actorState, gState):
     """Process a finished flat frame."""
