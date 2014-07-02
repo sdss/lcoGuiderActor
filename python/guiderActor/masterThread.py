@@ -851,8 +851,7 @@ def load_cartridge(msg, queues, gState, actorState):
     gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
     gState.boresight_ra, gState.boresight_dec = msg.boresight_ra, msg.boresight_dec
     gState.design_ha = msg.design_ha
-    # turn APOGEE;MaNGA into APOGEE-MaNGA
-    gState.plateType = msg.survey.replace(';','-')
+    gState.plateType = msg.survey
     gState.surveyMode = msg.surveyMode
     for id, gProbe in msg.gprobes.items():
         gState.gprobes[id] = gProbe
