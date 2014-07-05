@@ -1300,7 +1300,7 @@ def main(actor, queues):
                 
                 cmd.respond("cartridgeLoaded=%d, %d, %s, %d, %d" % (
                     gState.cartridge, gState.plate, gState.pointing, gState.fscanMJD, gState.fscanID))
-                cmd.respond("survey=%s, %s"%(gState.plateType, gState.surveyMode))
+                cmd.respond("survey=%s, %s"%(qstr(gState.plateType), qstr(gState.surveyMode)))
                 
                 try:
                     if not msg.full:
