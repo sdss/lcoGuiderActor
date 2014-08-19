@@ -1,4 +1,4 @@
-setupRequired(platedb)
+setupRequired(sdss_python_module)
 setupRequired(sopActor)
 setupRequired(actorcore)
 setupOptional(platelist)

@@ -661,7 +661,7 @@ def loadAllProbes(cmd, gState):
     """
     gState.allProbes = None
     try:
-        path = os.path.join(os.environ['PLATEDB_DIR'],
+        path = os.path.join(os.environ['SDSS_PYTHON_MODULE_DIR'],
                             'bin', 'catPlPlugMapM')
         cmd1 = "%s -c %s -m %s -p %s -f %s %s" % (path,
                                                   gState.cartridge, gState.fscanMJD,
