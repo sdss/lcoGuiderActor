@@ -1037,10 +1037,8 @@ def main(actor, queues):
                                         expTime=msg.expTime, forTCC=msg.forTCC, camera=msg.camera))
 
             elif msg.type == Msg.EXPOSURE_FINISHED:
-                # !!!!!!!!!!!!
-                # TBD: is this forTCC bit necessary? I don't think it ever gets used.
-                # The TCCCmd does txtForTcc, but I don't think we ever do after exposures.
-                # !!!!!!!!!!!!
+                # the forTCC bit is used when doing TCC->guider commands, e.g.
+                # during a pointing model or telescope collimation.
                 if msg.forTCC:
                     tccState = msg.forTCC
 
@@ -1051,7 +1049,11 @@ def main(actor, queues):
                         continue
                         
                     tccState.doreadFilename = msg.filename
-                    ccdtemp = actorState.models["gcamera"].keyVarDict["cooler"][1]
+                    # We only ever use raw tcc commands with the ecamera.
+                    try:
+                        ccdtemp = actorState.models["ecamera"].keyVarDict["cooler"][1]
+                    except:
+                        ccdtemp = 0
                     msg.cmd.respond('txtForTcc=%s' % (qstr('%d %d %0.1f %0.1f %0.1f %0.1f %0.2f %d %0.2f %s' % \
                                                            (tccState.binX, tccState.binY,
                                                             tccState.ctrX, tccState.ctrY,
