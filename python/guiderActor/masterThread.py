@@ -661,8 +661,7 @@ def loadAllProbes(cmd, gState):
     """
     gState.allProbes = None
     try:
-        path = os.path.join(os.environ['SDSS_PYTHON_MODULE_DIR'],
-                            'bin', 'catPlPlugMapM')
+        path = 'catPlPlugMapM'
         cmd1 = "%s -c %s -m %s -p %s -f %s %s" % (path,
                                                   gState.cartridge, gState.fscanMJD,
                                                   gState.pointing, gState.fscanID,
@@ -1037,8 +1036,10 @@ def main(actor, queues):
                                         expTime=msg.expTime, forTCC=msg.forTCC, camera=msg.camera))
 
             elif msg.type == Msg.EXPOSURE_FINISHED:
-                # the forTCC bit is used when doing TCC->guider commands, e.g.
-                # during a pointing model or telescope collimation.
+                # !!!!!!!!!!!!
+                # TBD: is this forTCC bit necessary? I don't think it ever gets used.
+                # The TCCCmd does txtForTcc, but I don't think we ever do after exposures.
+                # !!!!!!!!!!!!
                 if msg.forTCC:
                     tccState = msg.forTCC
 
@@ -1049,11 +1050,7 @@ def main(actor, queues):
                         continue
                         
                     tccState.doreadFilename = msg.filename
-                    # We only ever use raw tcc commands with the ecamera.
-                    try:
-                        ccdtemp = actorState.models["ecamera"].keyVarDict["cooler"][1]
-                    except:
-                        ccdtemp = 0
+                    ccdtemp = actorState.models["gcamera"].keyVarDict["cooler"][1]
                     msg.cmd.respond('txtForTcc=%s' % (qstr('%d %d %0.1f %0.1f %0.1f %0.1f %0.2f %d %0.2f %s' % \
                                                            (tccState.binX, tccState.binY,
                                                             tccState.ctrX, tccState.ctrY,
