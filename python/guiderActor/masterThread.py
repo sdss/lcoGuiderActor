@@ -13,7 +13,6 @@ from opscore.utility.qstr import qstr
 import opscore.utility.tback as tback
 import opscore.utility.YPF as YPF
 import RO
-import RO.Astro.Tm.MJDFromPyTuple as astroMJD
 
 import PID
 
@@ -299,6 +298,9 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guiderImageAnalysis: an instance of that class, to process the raw image.
         output_verify: passed on to the fits writer. See the pyfits docs for more.
     """
+    # Object to gather all per-frame guiding info into.
+    frameInfo = GuiderState.FrameInfo(frameNo,arcsecPerMM,guideCameraScale,gState.plugPlateScale)
+
     actorState = guiderActor.myGlobals.actorState
     guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
@@ -311,19 +313,19 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     if not flatfile:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("No flat image available"))
         gState.setCmd(None)
-        return
+        return frameInfo
     
     if not darkfile:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("No dark image available"))
         gState.setCmd(None)
-        return
+        return frameInfo
 
     if flatcart != gState.cartridge:
         if False:
             guideCmd.fail('guideState="failed"; text=%s' % qstr("Guider flat is for cartridge %d but %d is loaded" % (
                             flatcart, gState.cartridge)))
             gState.setCmd(None)
-            return
+            return frameInfo
         else:
             guideCmd.warn("text=%s" % qstr("Guider flat is for cartridge %d but %d is loaded" % (
                 flatcart, gState.cartridge)))
@@ -335,27 +337,25 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guideCmd.inform("text='GuiderImageAnalysis.findStars() got %i fibers'" % len(fibers))
     except BadReadError as e:
         guideCmd.warn('text=%s' %qstr("Skipping badly formatted image."))
-        return
+        return frameInfo
     except FlatError as e:
         guideCmd.fail('guideState="failed"; text=%s' %qstr("Error reading/processing guider flat."))
         gState.setCmd(None)
-        return
+        return frameInfo
     except GuiderError as e:
         guideCmd.fail('guideState="failed"; text=%s' %qstr("Error processing gcamera image."))
         gState.setCmd(None)
-        return
+        return frameInfo
     except Exception as e:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("Unknown error in processing guide images: %s" % e))
         gState.setCmd(None)
         tback.tback("GuideTest", e)
-        return
+        return frameInfo
 
     # Setup to solve for the axis and maybe scale offsets.  We work consistently
     # in mm on the focal plane, only converting to angles to command the TCC.
     guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
     arcsecPerMM = 3600./gState.plugPlateScale   #arcsec per mm
-    # Object to gather all per-frame guiding info into.
-    frameInfo = GuiderState.FrameInfo(frameNo,arcsecPerMM,guideCameraScale,gState.plugPlateScale)
     
     #
     # N.B. fiber.xFocal and fiber.yFocal are the offsets of the stars
@@ -407,12 +407,12 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.setCmd(None)
-            return
+            return frameInfo
 
         #if guidingIsOK(cmd, actorState):
         #    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
         #                            expTime=gState.expTime))
-        return
+        return frameInfo
         
     frameInfo.A[2, 0] = frameInfo.A[0, 2]
     frameInfo.A[2, 1] = frameInfo.A[1, 2]
@@ -535,7 +535,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.setCmd(None)
-        return
+        return frameInfo
 
     #
     # Scale
@@ -1036,10 +1036,8 @@ def main(actor, queues):
                                         expTime=msg.expTime, forTCC=msg.forTCC, camera=msg.camera))
 
             elif msg.type == Msg.EXPOSURE_FINISHED:
-                # !!!!!!!!!!!!
-                # TBD: is this forTCC bit necessary? I don't think it ever gets used.
-                # The TCCCmd does txtForTcc, but I don't think we ever do after exposures.
-                # !!!!!!!!!!!!
+                # the forTCC bit is used when doing TCC->guider commands, e.g.
+                # during a pointing model or telescope collimation.
                 if msg.forTCC:
                     tccState = msg.forTCC
 
@@ -1050,7 +1048,11 @@ def main(actor, queues):
                         continue
                         
                     tccState.doreadFilename = msg.filename
-                    ccdtemp = actorState.models["gcamera"].keyVarDict["cooler"][1]
+                    # We only ever use raw tcc commands with the ecamera.
+                    try:
+                        ccdtemp = actorState.models["ecamera"].keyVarDict["cooler"][1]
+                    except:
+                        ccdtemp = 0
                     msg.cmd.respond('txtForTcc=%s' % (qstr('%d %d %0.1f %0.1f %0.1f %0.1f %0.2f %d %0.2f %s' % \
                                                            (tccState.binX, tccState.binY,
                                                             tccState.ctrX, tccState.ctrY,
