@@ -14,8 +14,6 @@ import opscore.utility.tback as tback
 import opscore.utility.YPF as YPF
 import RO
 
-import PID
-
 from gimg.guiderImage import GuiderImageAnalysis
 from gimg.GuiderExceptions import *
 
@@ -844,7 +842,6 @@ def load_cartridge(msg, queues, gState, actorState):
     """
     
     gState.deleteAllGprobes()
-    gState.setRefractionBalance(0.0)
 
     gState.cartridge, gState.plate, gState.pointing = msg.cartridge, msg.plate, msg.pointing
     gState.fscanMJD, gState.fscanID = msg.fscanMJD, msg.fscanID
@@ -865,8 +862,7 @@ def load_cartridge(msg, queues, gState, actorState):
     
     # TBD: SDSS4: We may have to twiddle with this for coobserved plates.
     # What to do with APOGEEMANGA? Also use the surveyMode?
-    if gState.plateType == 'APOGEE':
-        gState.setRefractionBalance(1.0)
+    gState.setRefractionBalance(gState.plateType)
     
     # Report the cartridge status
     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
@@ -1144,7 +1140,7 @@ def main(actor, queues):
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
             elif msg.type == Msg.SET_REFRACTION:
-                gState.setRefractionBalance(msg.value)
+                gState.refractionBalance = msg.value
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
