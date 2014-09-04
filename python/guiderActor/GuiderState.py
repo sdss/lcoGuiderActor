@@ -284,8 +284,8 @@ class GuiderState(object):
         self.setGuideMode("axes")
         self.setGuideMode("focus")
         self.setGuideMode("scale")
-        self.setRefractionBalance(0.0)
-        
+        self.refractionBalance = 0
+
         # Will contain [id]:gProbe pairs
         self.gprobes = {}
         
@@ -327,8 +327,12 @@ class GuiderState(object):
         else:
             raise RuntimeError, ("Unknown guide mode %s" % mode)
 
-    def setRefractionBalance(self, value=0.0):
-        self.refractionBalance = value
+    def setRefractionBalance(self, survey):
+        """Set the refraction balance based on the survey name."""
+        if survey == 'APOGEE' or survey == 'APOGEE-2':
+            self.refractionBalance = 1
+        else:
+            self.refractionBalance = 0
         
     def setCmd(self, cmd=None):
         self.guideCmd = cmd

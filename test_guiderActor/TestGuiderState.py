@@ -10,7 +10,6 @@ from actorcore import TestHelper
 import guiderTester
 
 from guiderActor import GuiderState
-import guiderActor.myGlobals as myGlobals
 
 gprobeKey = {}
 gprobeKey['good'] = [10,1,True,100,100,10,0,-.1,-.1,0,'GUIDE']
@@ -39,7 +38,7 @@ class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
                 self.assertTrue(value,name)
             else:
                 self.assertFalse(value,name)
-    def test_aboveFocus(self):
+    def test_belowFocus(self):
         for name in gprobeKey:
             probe = self.gState.gprobes[gprobeKey[name][1]]
             value = probe.belowFocus
@@ -119,6 +118,21 @@ class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
         guideCameraScale = gcameraMagnification * gcameraPixelSize * 1e-3
         frameInfo = GuiderState.FrameInfo(1,arcsecPerMM,guideCameraScale,plugPlateScale)
         self.assertAlmostEqual(frameInfo.micronsPerArcsec,plugPlateScale/3.6)
+
+    def _setRefractionBalance(self, survey, expect):
+        self.gState.setRefractionBalance(survey)
+        self.assertEqual(self.gState.refractionBalance, expect)
+
+    def test_setRefractionBalance_eBOSS(self):
+        self._setRefractionBalance('eBOSS', 0)
+    def test_setRefractionBalance_APOGEE(self):
+        self._setRefractionBalance('APOGEE', 1)
+    def test_setRefractionBalance_APOGEE2(self):
+        self._setRefractionBalance('APOGEE-2', 1)
+    def test_setRefractionBalance_MaNGA(self):
+        self._setRefractionBalance('MaNGA', 0)
+    def test_setRefractionBalance_ApogeeManga(self):
+        self._setRefractionBalance('APOGEE&MaNGA', 0)
 #...
 
 if __name__ == '__main__':
