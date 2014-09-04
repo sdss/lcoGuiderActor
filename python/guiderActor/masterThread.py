@@ -862,7 +862,7 @@ def load_cartridge(msg, queues, gState, actorState):
     
     # TBD: SDSS4: We may have to twiddle with this for coobserved plates.
     # What to do with APOGEEMANGA? Also use the surveyMode?
-    gState.setRefractionBalance(gState.plateType)
+    gState.setRefractionBalance(gState.plateType, gState.surveyMode)
     
     # Report the cartridge status
     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
