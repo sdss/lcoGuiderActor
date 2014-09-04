@@ -119,20 +119,26 @@ class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
         frameInfo = GuiderState.FrameInfo(1,arcsecPerMM,guideCameraScale,plugPlateScale)
         self.assertAlmostEqual(frameInfo.micronsPerArcsec,plugPlateScale/3.6)
 
-    def _setRefractionBalance(self, survey, expect):
-        self.gState.setRefractionBalance(survey)
+    def _setRefractionBalance(self, plateType, surveyMode, expect):
+        self.gState.setRefractionBalance(plateType, surveyMode)
         self.assertEqual(self.gState.refractionBalance, expect)
 
     def test_setRefractionBalance_eBOSS(self):
-        self._setRefractionBalance('eBOSS', 0)
+        self._setRefractionBalance('eBOSS', 'None', 0)
     def test_setRefractionBalance_APOGEE(self):
-        self._setRefractionBalance('APOGEE', 1)
+        self._setRefractionBalance('APOGEE', 'None', 1)
     def test_setRefractionBalance_APOGEE2(self):
-        self._setRefractionBalance('APOGEE-2', 1)
-    def test_setRefractionBalance_MaNGA(self):
-        self._setRefractionBalance('MaNGA', 0)
-    def test_setRefractionBalance_ApogeeManga(self):
-        self._setRefractionBalance('APOGEE&MaNGA', 0)
+        self._setRefractionBalance('APOGEE-2', 'None', 1)
+    def test_setRefractionBalance_MaNGADither(self):
+        self._setRefractionBalance('MaNGA', 'MaNGA Dither', 0)
+    def test_setRefractionBalance_MaNGAStare(self):
+        self._setRefractionBalance('MaNGA', 'MaNGA Stare', 0)
+    def test_setRefractionBalance_ApogeeLead(self):
+        self._setRefractionBalance('APOGEE-2&MaNGA', 'APOGEE lead', 1)
+    def test_setRefractionBalance_ApogeeMangaDither(self):
+        self._setRefractionBalance('APOGEE-2&MaNGA', 'MaNGA Dither', 0)
+    def test_setRefractionBalance_ApogeeMangaStare(self):
+        self._setRefractionBalance('APOGEE-2&MaNGA', 'MaNGA Stare', 0)
 #...
 
 if __name__ == '__main__':
