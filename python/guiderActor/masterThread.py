@@ -296,14 +296,19 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guiderImageAnalysis: an instance of that class, to process the raw image.
         output_verify: passed on to the fits writer. See the pyfits docs for more.
     """
+    # Setup to solve for the axis and maybe scale offsets.  We work consistently
+    # in mm on the focal plane, only converting to angles to command the TCC.
+    guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
+    arcsecPerMM = 3600./gState.plugPlateScale   #arcsec per mm
+    frameNo = int(re.search(r"([0-9]+)\.fits.*$", inFile).group(1))
+
     # Object to gather all per-frame guiding info into.
     frameInfo = GuiderState.FrameInfo(frameNo,arcsecPerMM,guideCameraScale,gState.plugPlateScale)
 
     actorState = guiderActor.myGlobals.actorState
     guideCmd = gState.guideCmd
     guideCmd.respond("processing=%s" % inFile)
-    frameNo = int(re.search(r"([0-9]+)\.fits.*$", inFile).group(1))
-
+    
     h = pyfits.getheader(inFile)
     flatfile = h.get('FLATFILE', None)
     flatcart = h.get('FLATCART', None)
@@ -350,11 +355,6 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         tback.tback("GuideTest", e)
         return frameInfo
 
-    # Setup to solve for the axis and maybe scale offsets.  We work consistently
-    # in mm on the focal plane, only converting to angles to command the TCC.
-    guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
-    arcsecPerMM = 3600./gState.plugPlateScale   #arcsec per mm
-    
     #
     # N.B. fiber.xFocal and fiber.yFocal are the offsets of the stars
     # wrt the center of the plate in mm; fiber.xcen/star.xs are in pixels,
@@ -1006,7 +1006,17 @@ def main(actor, queues):
                     # Keep track of the first exposure number for generating movies.
                     # Take nextSeqNo+1 because the current value may still be the one
                     # issued from the gcamera flat command, which we don't want for this.
-                    startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+                    try:
+                        startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+                        # If 'nextSeqno' hasn't been seen yet (e.g., guider was started after gcamera),
+                        # we need to get gcamera status first.
+                    except TypeError:
+                        cmdVar = actorState.actor.cmdr.call(actor="gcamera", forUserCmd=msg.cmd, cmdStr="status")
+                        if cmdVar.didFail:
+                            queues[MASTER].put(Msg(Msg.FAIL, msg.cmd, text="Cannot get gcamera status!"))
+                            continue
+                        # now we can do this safely.
+                        startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
                     # if we're in simulation mode, use that number instead.
                     simulating = actorState.models['gcamera'].keyVarDict['simulating']
                     if simulating[0]:
