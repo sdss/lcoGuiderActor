@@ -18,6 +18,8 @@ import os
 
 from actorcore import TestHelper
 
+from sopActor.utils.tcc import TCCState
+
 from guiderActor.gimg import guiderImage
 from guiderActor import GuiderState
 import guiderActor.myGlobals as myGlobals
@@ -40,6 +42,12 @@ guideInfoKey['acquire'] = [11,216.3289,53.1114,-22.3338,40.5621,43.757,0.00]
 gprobeKey['acquire_disabled'] = [11,2,True,391.00,119.50,28.50,329.00,5.80,0.80,0.00,'ACQUIRE']
 guideInfoKey['acquire_disabled'] = [2,216.3289,53.1114,-22.3338,40.5621,43.757,0.00]
 
+
+def updateModel(name,model):
+    """Update the named actorState model with new parameters."""
+    myGlobals.actorState.models[name] = TestHelper.Model(name,model)
+
+
 class GuiderTester(TestHelper.ActorTester):
     """
     guiderActor test suites should subclass this and unittest, in that order.
@@ -49,6 +57,7 @@ class GuiderTester(TestHelper.ActorTester):
         self.verbose = True
         self.name = 'guider'
         super(GuiderTester,self).setUp()
+        self.actorState.tccState = TCCState(self.actorState.models["tcc"])
         myGlobals.actorState = self.actorState
         self.setPoint_good = -40
         self.setPoint_bad = -35

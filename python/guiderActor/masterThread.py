@@ -880,6 +880,12 @@ def set_decenter(cmd, decenters, gState, enable):
     gState.setDecenter(decenters,cmd,enable)
 #...
 
+def set_refraction(cmd, gState, corrRatio, plateType, surveyMode):
+    """Set refraction balance to either a specific value or based on plateType/surveyMode."""
+    if corrRatio is not None:
+        gState.refractionBalance = corrRatio
+    elif plateType is not None:
+        gState.setRefractionBalance(plateType,surveyMode)
 
 def main(actor, queues):
     """Main loop for master thread"""
@@ -1150,8 +1156,7 @@ def main(actor, queues):
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
             elif msg.type == Msg.SET_REFRACTION:
-                gState.refractionBalance = msg.value
-
+                set_refraction(msg.cmd, gState, msg.corrRatio, msg.plateType, msg.surveyMode)
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
@@ -1383,11 +1388,9 @@ def guidingIsOK(cmd, actorState, force=False):
     if force:
         return True
 
-    bypassed = actorState.models["sop"].keyVarDict["bypassed"]
-    bypassNames = actorState.models["sop"].keyVarDict["bypassNames"]
-    bypassSubsystem = dict(zip(bypassNames, bypassed))
-    ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
+    bypassedNames = actorState.models["sop"].keyVarDict["bypassedNames"]
 
+    ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
     open, closed = 0, 0
     for s in ffsStatus:
         if s == None:
@@ -1399,23 +1402,23 @@ def guidingIsOK(cmd, actorState, force=False):
 
     if open != 8:
         msg = "FF petals aren\'t all open"
-        if bypassSubsystem.get("ffs", False):
+        if 'ffs' in bypassedNames:
             cmd.warn('text="%s; guidingIsOk failed, but ffs is bypassed in sop"' % msg)
         else:
             cmd.warn('text="%s; aborting guiding"' % msg)
             return False
     
     # This lets guiderImageAnalysis know to ignore dark frames.
-    actorState.bypassDark = bypassSubsystem.get('guider_dark',False)
+    actorState.bypassDark = 'guider_dark' in bypassedNames
     
 #   should we allow guiding with lamps on if axes are disabled
 #   check if lamps are actually ON
     ffLamp = actorState.models["mcp"].keyVarDict["ffLamp"]
     hgCdLamp = actorState.models["mcp"].keyVarDict["hgCdLamp"]
     neLamp = actorState.models["mcp"].keyVarDict["neLamp"]
-    if (any(ffLamp) and not bypassSubsystem.get('ff_lamp', False)) or \
-            (any(hgCdLamp) and not bypassSubsystem.get('hgcd_lamp', False)) or \
-            (any(neLamp) and not bypassSubsystem.get('ne_lamp', False)):
+    if (any(ffLamp) and 'lamp_ff' not in bypassedNames) or \
+       (any(hgCdLamp) and 'lamp_hgcd' not in bypassedNames) or \
+       (any(neLamp) and 'lamp_ne' not in bypassedNames):
         cmd.warn('text="Calibration lamp on; aborting guiding"')
         return False
 
@@ -1428,7 +1431,7 @@ def guidingIsOK(cmd, actorState, force=False):
     
     tccState = actorState.tccState
     if tccState.halted or tccState.goToNewField:
-        if bypassSubsystem.get("axes", False):
+        if 'axes' in bypassedNames:
             cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
         else:
             cmd.warn('text="TCC motion aborted guiding"')
