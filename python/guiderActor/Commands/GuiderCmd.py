@@ -65,6 +65,10 @@ class GuiderCmd(object):
                                         keys.Key("stack", types.Int(), help="number of itime gcamera integrations to request per exposure."),
                                         keys.Key("corrRatio", types.Float(),
                                                  help="How much refraction correction to apply (0..)"),
+                                        keys.Key("plateType", types.String(),
+                                                 help="Name of the current plateType (survey concatenation)"),
+                                        keys.Key("surveyMode", types.String(),
+                                                 help="Name of the current surveyMode"),
                                         keys.Key("movieMJD", types.String(), help="The MJD that we want to generate the movie for."),
                                         keys.Key("start",types.Int(),help="Guider frame number to start the movie at."),
                                         keys.Key("end",types.Int(),help="Guider frame number to end the movie at."),
@@ -99,7 +103,7 @@ class GuiderCmd(object):
             ('decenter', '(on|off)', self.decenter),
             ('setDecenter', "[<decenterRA>] [<decenterDec>] [<decenterRot>]", self.setDecenter),
             ('mangaDither', "<ditherPos>", self.mangaDither),
-            ('setRefractionBalance', "<corrRatio>", self.setRefractionBalance),
+            ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
             ]
     #
@@ -457,10 +461,14 @@ class GuiderCmd(object):
                 gProbe.haYOffsets[wavelength] = offset[0].yfoff
 
     def setRefractionBalance(self, cmd):
-        """ Top-level 'setRefractionBalance <ratio> command """
-        
+        """Set refraction balance to a specific correction ratio, or based on plateType/surveyMode."""
+        keywords = cmd.cmd.keywords
+        corrRatio = keywords["corrRatio"].values[0] if 'corrRatio' in keywords else None
+        plateType = keywords["plateType"].values[0] if 'plateType' in keywords else None
+        surveyMode = keywords["surveyMode"].values[0] if 'surveyMode' in keywords else None
+
         myGlobals.actorState.queues[guiderActor.MASTER].put(
-            Msg(Msg.SET_REFRACTION, value=cmd.cmd.keywords["corrRatio"].values[0], cmd=cmd))
+            Msg(Msg.SET_REFRACTION, corrRatio=corrRatio, plateType=plateType, surveyMode=surveyMode, cmd=cmd))
 
     def ping(self, cmd):
         """ Top-level 'ping' command handler. Query the actor for liveness/happiness. """

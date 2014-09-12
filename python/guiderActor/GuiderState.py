@@ -327,11 +327,11 @@ class GuiderState(object):
         else:
             raise RuntimeError, ("Unknown guide mode %s" % mode)
 
-    def setRefractionBalance(self, survey, surveyMode):
+    def setRefractionBalance(self, plateType, surveyMode):
         """Set the refraction balance based on the survey name."""
-        if survey == 'APOGEE' or survey == 'APOGEE-2':
+        if plateType == 'APOGEE' or plateType == 'APOGEE-2':
             self.refractionBalance = 1
-        elif (survey == 'APOGEE&MaNGA' or survey == 'APOGEE-2&MaNGA') and \
+        elif (plateType == 'APOGEE&MaNGA' or plateType == 'APOGEE-2&MaNGA') and \
              (surveyMode == 'APOGEE lead'):
             self.refractionBalance = 1
         else:

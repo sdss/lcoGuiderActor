@@ -2,14 +2,14 @@
 """
 Test the behavior of the various guider master thread commands.
 """
-import os
 import unittest
-import pyfits
+from actorcore import TestHelper
 
 import guiderTester
 
 from guiderActor.gimg import guiderImage
-from guiderActor import masterThread, GuiderState
+from guiderActor import GuiderState
+from guiderActor import masterThread
 
 from guiderActor.gimg import GuiderExceptions
 
@@ -100,6 +100,76 @@ class TestDecenter(guiderTester.GuiderTester,unittest.TestCase):
         self.assertEqual(self.gState.decenterRA,0)
         self.assertEqual(self.gState.decenterDec,0)
         self.assertEqual(self.gState.mangaDither,'C')
+
+class TestSetRefraction(guiderTester.GuiderTester,unittest.TestCase):
+    def _set_refraction(self, corrRatio, plateType, surveyMode, expect):
+        self.gState.refractionBalance = -100 # ensure it's always different to start.
+        masterThread.set_refraction(self.cmd, self.gState, corrRatio, plateType, surveyMode)
+        self.assertEqual(self.gState.refractionBalance, expect)
+    def test_corrRatio_1(self):
+        self._set_refraction(1, None, None, 1)
+    def test_apogee(self):
+        self._set_refraction(None, 'APOGEE', None, 1)
+    def test_boss(self):
+        self._set_refraction(None, 'eBOSS', None, 0)
+
+
+class TestGuidingIsOK(guiderTester.GuiderTester,unittest.TestCase):
+    def _guidingIsOK(self, expect, nWarn=0, force=False):
+        result = masterThread.guidingIsOK(self.cmd, self.actorState, force=force)
+        self.assertEqual(result, expect)
+        self._check_levels(0, 0, nWarn, 0)
+
+    def test_force(self):
+        self._guidingIsOK(True, force=True)
+
+    def test_boss_science(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
+        self._guidingIsOK(True)
+
+    def test_ffs_closed(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['all_off'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        self._guidingIsOK(False, 1)
+    def test_ffs_closed_bypassed(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['all_off'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs'])
+        self._guidingIsOK(True, 1)
+
+    def test_fflamp_on(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['flats'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        self._guidingIsOK(False, 1)
+    def test_fflamp_on_bypassed(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['flats'])
+        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs','lamp_ff'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        self._guidingIsOK(True, 1)
+    def test_arclamps_on(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['arcs'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        self._guidingIsOK(False, 1)
+    def test_arclamps_on_bypassed(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['arcs'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs','lamp_hgcd','lamp_ne'])
+        self._guidingIsOK(True, 1)
+
+    def test_tcc_halted(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['stopped'])
+        # NOTE: TBD: Since I'm not using real models, I have to force the tccState class to behave.
+        self.actorState.tccState.halted = True
+        self._guidingIsOK(False, 1)
+    def test_tcc_motion_bypassed(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['stopped'])
+        # NOTE: TBD: Since I'm not using real models, I have to force the tccState class to behave.
+        self.actorState.tccState.halted = True
+        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['axes'])
+        self._guidingIsOK(True, 1)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

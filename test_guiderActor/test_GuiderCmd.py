@@ -80,7 +80,7 @@ class TestDecentering(GuiderCmdTester,unittest.TestCase):
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
         if didFail:
             with self.assertRaises(AttributeError):
-                self._run_cmd('setDecenter %s'%(args),queue)
+                msg = self._run_cmd('setDecenter %s'%(args),queue)
                 self.assertEquals(msg,None)
                 self._check_cmd(0,0,0,1)
                 self.assertTrue(msg.finish)
@@ -98,6 +98,25 @@ class TestDecentering(GuiderCmdTester,unittest.TestCase):
         self._setDecenter(expect,'decenterDec=10')
     def test_setDecenter_rot(self):
         self._setDecenter({},'decenterRot=10',didFail=True)
+
+class TestSetRefractionBalance(GuiderCmdTester,unittest.TestCase):
+    def _setRefractionBalance(self, args, expect):
+        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        msg = self._run_cmd('setRefractionBalance %s'%(args),queue)
+        self.assertEqual(msg.type, guiderActor.Msg.SET_REFRACTION)
+        self.assertEqual(msg.corrRatio, expect.get('corrRatio',None))
+        self.assertEqual(msg.plateType, expect.get('plateType',None))
+        self.assertEqual(msg.surveyMode, expect.get('surveyMode',None))
+
+    def test_corrRatio_1(self):
+        args = 'corrRatio=1'
+        expect = {'corrRatio':1}
+        self._setRefractionBalance(args,expect)
+    def test_survey(self):
+        args = 'plateType="APOGEE-2&MaNGA" surveyMode="APOGEE lead" '
+        expect = {'plateType':'APOGEE-2&MaNGA',
+                  'surveyMode':'APOGEE lead'}
+        self._setRefractionBalance(args,expect)
 
 if __name__ == '__main__':
     verbosity = 2
