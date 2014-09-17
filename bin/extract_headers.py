@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Extract some header values from the past for analysis."""
 
 import glob
@@ -5,7 +6,9 @@ import argparse
 import os
 import sys
 
-from astropy.io import fits
+import fitsio
+#from astropy.io import fits
+import pyfits
 import numpy as np
 
 class Headers(object):
@@ -51,7 +54,8 @@ class Headers(object):
         """Get the headers from all requested files."""
         result = []
         for f in files:
-            header = fits.getheader(f)
+            header = fitsio.read_header(f, 0)
+            #header = pyfits.getheader(f)
             # don't want darks or flats
             if 'object' in header['IMAGETYP']:
                 if self.verbose:
@@ -65,8 +69,9 @@ class Headers(object):
 
     def write(self, filename):
         """Write the result to a fits file."""
-        hdu = fits.BinTableHDU(self.data)
-        hdu.writeto(filename)
+        #hdu = pyfits.BinTableHDU(self.data)
+        #hdu.writeto(filename)
+        hdu = fitsio.write(filename, self.data)
         if self.verbose:
             print "Wrote to:", filename
 
@@ -86,7 +91,7 @@ def main(argv=None):
         print "Error: no files found in glob %s"%args.FILEGLOB
         return
     headers = Headers(verbose=args.verbose)
-    headers(files, args.OUTFILE)
+    headers(sorted(files), args.OUTFILE)
 
 if __name__ == "__main__":
     main()
