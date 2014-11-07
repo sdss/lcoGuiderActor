@@ -211,7 +211,7 @@ class GuiderCmd(object):
         # Force up an image-only guide loop
         for what in ["scale", "focus", "axes"]:
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enable=False))
-        actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=True,
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=True, oneExposure=False,
                                                       expTime=expTime, stack=stack, force=True))
         if probe:
             cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
