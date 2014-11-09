@@ -80,12 +80,12 @@ class TestDecentering(GuiderCmdTester,unittest.TestCase):
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
         if didFail:
             with self.assertRaises(AttributeError):
-                msg = self._run_cmd('setDecenter %s'%(args),queue)
+                msg = self._run_cmd('setDecenter %s'%(args), None, empty=True)
                 self.assertEquals(msg,None)
-                self._check_cmd(0,0,0,1)
+                self._check_cmd(0,0,0,0, True, True)
                 self.assertTrue(msg.finish)
         else:
-            msg = self._run_cmd('setDecenter %s'%(args),queue)
+            msg = self._run_cmd('setDecenter %s'%(args), queue)
             self.assertEqual(msg.type,guiderActor.Msg.DECENTER)
             self.assertIsNone(getattr(msg,'finish',None))
             self.assertEqual(msg.decenters['decenterRA'],expect.get('decenterRA',0))
@@ -117,6 +117,22 @@ class TestSetRefractionBalance(GuiderCmdTester,unittest.TestCase):
         expect = {'plateType':'APOGEE-2&MaNGA',
                   'surveyMode':'APOGEE lead'}
         self._setRefractionBalance(args,expect)
+
+class TestEcam(GuiderCmdTester,unittest.TestCase):
+    def _ecamOn(self, args, expect={}):
+        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        msg = self._run_cmd('ecamOn %s'%(args),queue)
+        self.assertEqual(msg.type, guiderActor.Msg.ECAM_ON)
+        self.assertEqual(msg.time, expect.get('time',5))
+    def test_ecamOn(self):
+        self._ecamOn('')
+    def test_ecamOn_time10(self):
+        self._ecamOn('time=11', {'time':11})
+
+    def test_ecamOff(self):
+        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        msg = self._run_cmd('ecamOff',queue)
+        self.assertEqual(msg.type, guiderActor.Msg.ECAM_OFF)
 
 if __name__ == '__main__':
     verbosity = 2

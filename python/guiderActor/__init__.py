@@ -47,6 +47,8 @@ class Msg(object):
     class SET_REFRACTION(): pass
     class STAR_IN_FIBER(): pass
     class MAKE_MOVIE(): pass
+    class ECAM_ON(): pass
+    class ECAM_OFF(): pass
     
     def __init__(self, type, cmd, **data):
         self.type = type
