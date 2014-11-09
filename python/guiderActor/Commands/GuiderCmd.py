@@ -2,10 +2,8 @@
 
 """ Wrap top-level guider functions. """
 
-import pdb
 import logging
 import os, re, sys
-import numpy
 import threading
 
 import opscore.protocols.keys as keys
@@ -105,6 +103,8 @@ class GuiderCmd(object):
             ('mangaDither', "<ditherPos>", self.mangaDither),
             ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
+            ('ecamOn', '[<time>]', self.ecamOn),
+            ('ecamOff', '', self.ecamOff)
             ]
     #
     # Define commands' callbacks
@@ -583,4 +583,20 @@ class GuiderCmd(object):
         movieQueue = myGlobals.actorState.queues[guiderActor.MOVIE]
         movieQueue.put(Msg(Msg.MAKE_MOVIE, cmd=cmd,
                            mjd=mjd, start=start, end=end, finish=True))
+
+    def ecamOn(self, cmd):
+        """
+        Start taking exposures with the ecamera.
+        Apply darks, flats, and tell STUI to display the result.
+        """
+        time = cmd.cmd.keywords['time'].values[0] if 'time' in cmd.cmd.keywords else 5
+
+        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        queue.put(Msg(Msg.ECAM_ON, cmd=cmd, time=time))
+
+    def ecamOff(self, cmd):
+        """Stop an ongoing ecamera exposure sequence."""
+        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        queue.put(Msg(Msg.ECAM_OFF, cmd=cmd))
+
 #...
