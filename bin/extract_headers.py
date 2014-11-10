@@ -71,7 +71,7 @@ class Headers(object):
         """Write the result to a fits file."""
         #hdu = pyfits.BinTableHDU(self.data)
         #hdu.writeto(filename)
-        hdu = fitsio.write(filename, self.data)
+        fitsio.write(filename, self.data)
         if self.verbose:
             print "Wrote to:", filename
 
