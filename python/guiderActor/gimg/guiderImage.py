@@ -328,6 +328,9 @@ class GuiderImageAnalysis(object):
             actorFits.extendHeader(cmd, imageHDU.header, plateCards)
             guiderCards = actorFits.guiderCards(models, cmd=cmd)
             actorFits.extendHeader(cmd, imageHDU.header, guiderCards)
+            apoCards = actorFits.apoCards(models, cmd=cmd)
+            actorFits.extendHeader(cmd, imageHDU.header, apoCards)
+
         except Exception as e:
             self.cmd.error('text=%s'%qstr('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e)))
             raise e
