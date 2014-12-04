@@ -7,7 +7,6 @@ from actorcore import TestHelper
 
 import guiderTester
 
-from guiderActor.gimg import guiderImage
 from guiderActor import GuiderState
 from guiderActor import masterThread
 
@@ -25,10 +24,10 @@ class TestMasterThread(guiderTester.GuiderTester,unittest.TestCase):
 class TestGuiderStep(guiderTester.GuiderTester,unittest.TestCase):
     """Test the phases of guiderStep in masterThread"""
     def setUp(self):
-        self.centerUpIn = 'gimg-0024.fits.gz'
-        self.centerUpOut = 'proc-'+self.centerUpIn
-        self.guidingIn = 'gimg-0040.fits.gz'
-        self.guidingOut = 'proc-'+self.guidingIn
+        self.centerUpIn = 'data/gimg-0024.fits.gz'
+        self.centerUpOut = 'data/proc-'+self.centerUpIn
+        self.guidingIn = 'data/gimg-0040.fits.gz'
+        self.guidingOut = 'data/proc-'+self.guidingIn
         super(TestGuiderStep,self).setUp()
     
     def tearDown(self):
@@ -170,6 +169,10 @@ class TestGuidingIsOK(guiderTester.GuiderTester,unittest.TestCase):
         self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['axes'])
         self._guidingIsOK(True, 1)
 
+class TestEcam(guiderTester.GuiderTester,unittest.TestCase):
+    """Tests for turning ecam processing on and off."""
+    def test_ecam_on(self):
+        self.fail()
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
