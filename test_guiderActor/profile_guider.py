@@ -16,9 +16,9 @@ def updateModel(name,model):
     """Update the named actorState model with new parameters."""
     myGlobals.actorState.models[name] = TestHelper.Model(name,model)
 
-darkFile = 'gimg-0001.fits.gz'
-flatFile = 'gimg-0003.fits.gz'
-dataFile = 'gimg-0040.fits.gz'
+darkFile = 'data/gimg-0001.fits.gz'
+flatFile = 'data/gimg-0003.fits.gz'
+dataFile = 'data/gimg-0040.fits.gz'
 
 helper = guiderTester.GuiderTester()
 helper.setUp()
@@ -33,7 +33,7 @@ helper.gState.guideCmd = helper.cmd
 
 def timeit_helper():
     masterThread.guideStep(actor,None,helper.cmd,helper.gState,dataFile,False,helper.gi)
-    os.remove('proc-gimg-0040.fits.gz')
+    os.remove('data/proc-gimg-0040.fits.gz')
 
 # Paste this line for a multi-pass timing run in ipython, after pasting the above.
 # %timeit timeit_helper()
