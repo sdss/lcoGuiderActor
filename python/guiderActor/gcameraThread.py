@@ -37,11 +37,6 @@ def main(actor, queues):
                     expType = "expose" 
 
                 filenameKey = guiderActor.myGlobals.actorState.models[camera].keyVarDict["filename"]
-
-                try:
-                    forTCC = msg.forTCC
-                except:
-                    forTCC = False
                     
                 cmdStr="%s time=%f" % (expType, msg.expTime)
                 if expType == "flat":
@@ -73,12 +68,12 @@ def main(actor, queues):
 
                 if cmdVar.didFail:
                     msg.cmd.warn('text="Failed to take exposure"')
-                    msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, success=False, forTCC=forTCC))
+                    msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, success=False))
                     continue
 
                 filename = cmdVar.getLastKeyVarData(filenameKey)[0]
 
-                msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, success=True, forTCC=forTCC))
+                msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, success=True))
 
             elif msg.type == Msg.ABORT_EXPOSURE:
                 if not msg.quiet:

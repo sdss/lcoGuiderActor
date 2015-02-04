@@ -40,10 +40,6 @@ class State(object):
         return msg
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-        
-from sopActor.utils.tcc import TCCState
-
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 def getActorState():
     print "RHL actorState", actorState
@@ -73,14 +69,8 @@ class Guider(actorcore.Actor.Actor):
         actorState.timeout = 60         # timeout on message queues
 
         Guider.startThreads(actorState, restartQueues=True)
-        #
-        # Start listening to the TCC's keywords that announce that it's done a move or halt
-        # that might invalidate guiding
-        #
-        actorState.tccState = TCCState(actorState.models["tcc"])
-        #
+
         # Handle the hated ini file
-        #
         try:
             expTime = float(self.config.get('gcamera', "exposureTime"))
         except ConfigParser.NoOptionError:

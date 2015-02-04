@@ -18,8 +18,6 @@ import os
 
 from actorcore import TestHelper
 
-from sopActor.utils.tcc import TCCState
-
 from guiderActor.gimg import guiderImage
 from guiderActor import GuiderState
 import guiderActor.myGlobals as myGlobals
@@ -57,7 +55,6 @@ class GuiderTester(TestHelper.ActorTester):
         self.verbose = True
         self.name = 'guider'
         super(GuiderTester,self).setUp()
-        self.actorState.tccState = TCCState(self.actorState.models["tcc"])
         myGlobals.actorState = self.actorState
         self.setPoint_good = -40
         self.setPoint_bad = -35
