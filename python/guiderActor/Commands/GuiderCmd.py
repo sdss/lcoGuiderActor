@@ -221,12 +221,11 @@ class GuiderCmd(object):
                 return
 
         cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
-                                            cmdStr="track/pterr=(noobj,nocorr)")
+                                            cmdStr="track/pterr")
         if cmdVar.didFail:
             cmd.fail("text=\"Failed to move to a bright star\"")
             return
 
-        #probeId = actorState.models["mcp"].keyVarDict["ptErrProbe"]
         cmd.finish("text='There should be a bright star in probe'")
 
     def loadAllProbes(self, cmd):

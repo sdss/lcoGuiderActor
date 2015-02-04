@@ -539,7 +539,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     # Scale
     #
     dScale = frameInfo.b3/frameInfo.A[2, 2]
-    dScaleCorrection = -dScale * 100.    #value for operators to enter manually
+    # dScaleCorrection = -dScale * 100.    #value for operators to enter manually <-- unused!
     offsetScale = -gState.pid["scale"].update(dScale)
 
     frameInfo.dScale = dScale
@@ -549,7 +549,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     guideCmd.respond("scaleError=%g" % (dScale))
     guideCmd.respond("scaleChange=%g, %s" % (offsetScale,
                                              "enabled" if gState.guideScale else "disabled"))
-    guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))
+    # guideCmd.inform('text="delta percentage scale correction =%g"' % (dScaleCorrection))  <-- unused!
     curScale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
 
     # There is (not terribly surprisingly) evidence of crosstalk between scale and focus adjustements.
@@ -696,6 +696,10 @@ def loadAllProbes(cmd, gState):
     
 def loadTccBlock(cmd, actorState, gState):
     """
+    This is used for fk5InFiber (exclusively, I think).
+    We should only call it immediately prior to using fk5InFiber, via:
+       guider prepFk5InFiber
+
     !!!!!!!!!!!!!!!!!!11
     jkp TBD: Why do we do this separately from loadAllProbes?
     They issue the same catPlPlugMapM command, right?
@@ -727,10 +731,6 @@ def loadTccBlock(cmd, actorState, gState):
         if ret < 0:
             raise RuntimeError("xfer job failed with %s" % (-retcode))
 
-        cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
-                                            cmdStr="set inst=spectro/gcview=%s/keep=(scaleFac)" % (gState.plate))
-        if cmdVar.didFail:
-            cmd.fail('text="Failed to set inst!"')
     except Exception, e:
         cmd.warn('text=%s' % (qstr("could not load a per-cartridge instrument block: %s" % (e))))
 #...
@@ -853,7 +853,17 @@ def load_cartridge(msg, queues, gState, actorState):
         gState.gprobes[id] = gProbe
             
     # Build and install an instrument block for this cartridge info
-    loadTccBlock(msg.cmd, actorState, gState)
+    # NOTE: TBD: we don't actually need to do loadTccBlock unless we want fk5infiber.
+    # See ticket #2229 for how we should deal with this: the blocks end up litering
+    # a directory on the tcc, and we can't upload them to the new tcc via scp anyway.
+    # loadTccBlock(msg.cmd, actorState, gState)
+
+    # newtcc NOTE: We still need to "set inst=spectro", but the rest of it we probably don't need.
+    #cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=msg.cmd,
+    #                                    cmdStr="set inst=spectro")#/gcview=%s/keep=(scaleFac)" % (gState.plate))
+    #if cmdVar.didFail:
+    #    msg.cmd.fail('text="Failed to set inst!"')
+    
     loadAllProbes(msg.cmd, gState)
     for id,gProbe in gState.gprobes.items():
         test = (gState.allProbes.fiberId == id) & (gState.allProbes.holeType == 'GUIDE')
@@ -911,7 +921,7 @@ def main(actor, queues):
 
             qlen = queues[MASTER].qsize()
             if qlen > 0 and msg.cmd:
-                msg.cmd.diag("master thread has %d items after a .get()" % (qlen))
+                msg.cmd.diag("text=master thread has %d items after a .get()" % (qlen))
                 
             if msg.type == Msg.EXIT:
                 if msg.cmd:
@@ -1043,41 +1053,17 @@ def main(actor, queues):
                 processOneProcFile(gState, msg.filename, actor, queues, cmd=msg.cmd)
                 msg.cmd.finish('text="I do so hope that succeeded."')
                 
-            elif msg.type == Msg.TCC_EXPOSURE:
-                queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER],
-                                        expTime=msg.expTime, forTCC=msg.forTCC, camera=msg.camera))
-
             elif msg.type == Msg.EXPOSURE_FINISHED:
-                # the forTCC bit is used when doing TCC->guider commands, e.g.
-                # during a pointing model or telescope collimation.
-                if msg.forTCC:
-                    tccState = msg.forTCC
-
-                    if not msg.success:
-                        tccState.doreadFilename = None
-                        msg.cmd.warn('text="exposure failed"')
-                        msg.cmd.finish('txtForTcc=" OK"')
-                        continue
-                        
-                    tccState.doreadFilename = msg.filename
-                    # We only ever use raw tcc commands with the ecamera.
-                    try:
-                        ccdtemp = actorState.models["ecamera"].keyVarDict["cooler"][1]
-                    except:
-                        ccdtemp = 0
-                    msg.cmd.respond('txtForTcc=%s' % (qstr('%d %d %0.1f %0.1f %0.1f %0.1f %0.2f %d %0.2f %s' % \
-                                                           (tccState.binX, tccState.binY,
-                                                            tccState.ctrX, tccState.ctrY,
-                                                            tccState.sizeX, tccState.sizeY,
-                                                            tccState.itime, tccState.gImCamID, ccdtemp,
-                                                            "image: binXY begXY sizeXY expTime camID temp"))))
-                    msg.cmd.finish('txtForTcc=" OK"')
-                    continue
-                
                 if not gState.guideCmd:    # exposure already finished
                     gState.inMotion = False
                     continue
                 
+                # TBD: need to check whether the telescope moved here, and
+                # ignore this frame if a "tcc offset" was issued.
+                # This requires something that monitors tccModel.moveItems[4:]
+                # changing to 'Y' so we can flag it, and clear the flag only
+                # after we get to this point and have checked it.
+
                 if not msg.success:
                     gState.inMotion = False
                     queues[MASTER].put(Msg(Msg.START_GUIDING, gState.guideCmd, start=False, success=False))
@@ -1305,7 +1291,13 @@ def main(actor, queues):
                 enable = getattr(msg,'enable',None)
                 decenters = getattr(msg,'decenters',{})
                 set_decenter(msg.cmd, decenters, gState, enable)
-                
+            
+            elif msg.type == Msg.ECAM_ON:
+                queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.guideCmd, replyQueue=queues[MASTER],
+                                    expTime=gState.expTime, stack=gState.stack, camera='ecamera'))
+
+                pass
+
             elif msg.type == Msg.STATUS:
                 # Try to generate status even after we have failed.
                 cmd = msg.cmd if msg.cmd.alive else actor.bcast
@@ -1428,9 +1420,10 @@ def guidingIsOK(cmd, actorState, force=False):
     if uvLamp.getValue() or whtLamp.getValue():
         cmd.warn('text="Calibration lamp commanded on; aborting guiding"')
         return False
-    
-    tccState = actorState.tccState
-    if tccState.halted or tccState.goToNewField:
+
+    tccModel = actorState.models['tcc']
+    axisCmdState = tccModel.keyVarDict['axisCmdState']
+    if any(x.lower() != 'tracking' for x in axisCmdState):
         if 'axes' in bypassedNames:
             cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
         else:

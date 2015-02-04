@@ -7,10 +7,10 @@ from actorcore import TestHelper
 
 import guiderTester
 
-from guiderActor import GuiderState
 from guiderActor import masterThread
 
-from guiderActor.gimg import GuiderExceptions
+# from guiderActor import GuiderState
+# from guiderActor.gimg import GuiderExceptions
 
 
 class TestMasterThread(guiderTester.GuiderTester,unittest.TestCase):
@@ -124,48 +124,45 @@ class TestGuidingIsOK(guiderTester.GuiderTester,unittest.TestCase):
 
     def test_boss_science(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
         self._guidingIsOK(True)
 
     def test_ffs_closed(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['all_off'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
         self._guidingIsOK(False, 1)
     def test_ffs_closed_bypassed(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['all_off'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
         self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs'])
         self._guidingIsOK(True, 1)
 
     def test_fflamp_on(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['flats'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
         self._guidingIsOK(False, 1)
     def test_fflamp_on_bypassed(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['flats'])
         self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs','lamp_ff'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
         self._guidingIsOK(True, 1)
     def test_arclamps_on(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['arcs'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
         self._guidingIsOK(False, 1)
     def test_arclamps_on_bypassed(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['arcs'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['moving'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
         self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs','lamp_hgcd','lamp_ne'])
         self._guidingIsOK(True, 1)
 
     def test_tcc_halted(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['stopped'])
-        # NOTE: TBD: Since I'm not using real models, I have to force the tccState class to behave.
-        self.actorState.tccState.halted = True
+        guiderTester.updateModel('tcc',TestHelper.tccState['halted'])
         self._guidingIsOK(False, 1)
     def test_tcc_motion_bypassed(self):
         guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['stopped'])
-        # NOTE: TBD: Since I'm not using real models, I have to force the tccState class to behave.
-        self.actorState.tccState.halted = True
+        guiderTester.updateModel('tcc',TestHelper.tccState['halted'])
         self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['axes'])
         self._guidingIsOK(True, 1)
 

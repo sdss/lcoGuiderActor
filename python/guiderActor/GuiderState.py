@@ -240,8 +240,11 @@ class GProbe(object):
         a2 = 0.506
         a3 = -0.0312
         
-        #get airmass from tcc only gives alt = tcc.axePos[2] 
-        zd = 90. - actorState.models["tcc"].keyVarDict["axePos"][1]
+        #get airmass from tcc only gives alt = tcc.axePos[2]
+        try:
+            zd = 90. - actorState.models["tcc"].keyVarDict["axePos"][1]
+        except TypeError:
+            zd = 90. # if the tcc doesn't return a proper position.
         # TBD: zd=0 never occurs for tracking, but need to test for zd=0 for simulate
         airmass = 1./math.cos(math.radians(zd))
         gobs = value[1] + airmass*k0_g

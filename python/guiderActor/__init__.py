@@ -1,4 +1,3 @@
-import numpy
 import Queue
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -40,8 +39,6 @@ class Msg(object):
     class CHANGE_SCALE(): pass
     class REPROCESS_FILE(): pass
     class READ_PLATE_FILES(): pass
-    class TCC_EXPOSURE(): pass
-    class TCC_EXPOSURE_FINISHED(): pass
     class DECENTER(): pass
     class CENTERUP(): pass
     class SET_REFRACTION(): pass
@@ -75,7 +72,7 @@ class Msg(object):
 def flushQueue(queue):
     """flush queue"""
     
-    while True:     
+    while True:
         try:
             msg = queue.get(timeout=0)
         except Queue.Empty:
