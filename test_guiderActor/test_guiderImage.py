@@ -17,15 +17,23 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
     def setUp(self):
         self.verbose = True
         self.fileDir = 'data'
+        # calibration files
         self.inDarkFile = 'gimg-0001.fits.gz'
         self.outDarkFile = 'proc-'+self.inDarkFile
         self.inFlatFile = 'gimg-0003.fits.gz'
         self.outFlatFile = 'proc-'+self.inFlatFile
-        self.inDataFile = 'gimg-0040.fits.gz'
-        self.outDataFile = 'proc-'+self.inFlatFile
+
+        # bad files
         self.saturatedFile = 'gimg-0004.fits.gz'
         self.badReadFile1 = 'gimg-0859.fits.gz'
         self.badReadFile2 = 'gimg-0519.fits.gz'
+
+        # good data files
+        self.inDataFile = 'gimg-0040.fits.gz'
+        self.outDataFile = 'proc-'+self.inFlatFile
+
+        # values for comparison after processing good data files.
+        self.inDataResults = 'something.fits'
         super(TestGuiderImage,self).setUp()
     
     def path(self, filename):
@@ -64,6 +72,8 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
     def test_call(self):
         """Test GuiderImageAnalysis.__call__()"""
         fibers = self._call_gi(self.path(self.inDataFile))
+
+
         for name,i in self.probeNames.items():
             self.assertEqual(i,fibers[i].fiberid-1)
         self.assertFalse(True,'make a test!')
@@ -76,7 +86,7 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.assertFalse(result)
         self.assertEqual(self.cmd.levels,'w')
         self.assertEqual('text="%s"'%errorText, self.cmd.messages[-1])
-        
+
     def test_badSetPoint_dark(self):
         """Test what happens when the ccdtemp is outside the setPoint spec for a dark."""
         self.gi.setPoint = self.setPoint_bad
@@ -92,6 +102,15 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         """Test what happens when the ccdtemp is outside the dark temp spec for an image."""
         self.gi.darkTemperature = self.setPoint_bad
         self._temp_run(self.path(self.inDataFile),'CCD temp signifcantly different (>3.0) from dark temp: -40.1, expected -35.0')
+
+    def test_no_setPoint(self):
+        """Test what happens when the setPoint `is None."""
+        #self.gi.darkTemperature = self.setPoint_bad
+        self.gi.setPoint = None
+        header = pyfits.getheader(self.path(self.inDataFile))
+        self.gi.cmd = self.cmd
+        with self.assertRaises(GuiderExceptions.GuiderError):
+            self.gi._check_ccd_temp(header)
 
     def test_saturatedImage(self):
         """Test GuiderImageAnalysis.__call__() on a completely saturated image."""
@@ -113,7 +132,7 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         hdu = pyfits.open(self.path(self.inDataFile))[0]
         frameInfo = GuiderState.FrameInfo(-1,1,2,3)
         self.gi.fillPrimaryHDU(self.cmd,self.actorState.models,hdu,frameInfo,objectname)
-        self.assertEqual(hdu.header['MGDPOS'],'N')        
+        self.assertEqual(hdu.header['MGDPOS'],'N')
 #...
 
 if __name__ == '__main__':
