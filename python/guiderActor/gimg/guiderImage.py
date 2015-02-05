@@ -333,8 +333,8 @@ class GuiderImageAnalysis(object):
 
         except Exception as e:
             self.cmd.error('text=%s'%qstr('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e)))
-            raise e
 
+            raise e
     def getGuideloopCards(self, cmd, frameInfo):
         defs = (('dRA', 'DRA', 'measured offset in RA, deg'),
                 ('dDec', 'DDec', 'measured offset in Dec, deg'),
@@ -586,14 +586,21 @@ class GuiderImageAnalysis(object):
         ccdtemp = header['CCDTEMP']
         imageType = header['IMAGETYP']
         result = True
-        if not tempCheck(self.setPoint,ccdtemp,self.deltaTemp):
-            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different (>%.1f) from setPoint: %.1f, expected %.1f'%
-                                         (self.deltaTemp,ccdtemp,self.setPoint)))
-            result = False
+        warnText = 'CCD temp signifcantly different (>%.1f) from %s: %.1f, expected %.1f'
+        try:
+            if not tempCheck(self.setPoint,ccdtemp,self.deltaTemp):
+                self.cmd.warn('text=%s'%qstr(warnText%(self.deltaTemp, 'setPoint', ccdtemp, self.setPoint)))
+                result = False
+        except TypeError:
+            msg = 'unknown error when checking setPoint (%s) against exposure ccdtemp (%s).'%(self.setPoint,ccdtemp)
+            # this problem sometimes occurs after the guider is restarted.
+            if self.setPoint is None:
+                msg = 'setPoint is None: issue gcamera status and try again.'
+            raise GuiderError(msg)
+
         # redundant for darks, irrelevant for flats (we don't dark subtract them)
         if imageType != 'dark' and imageType != 'flat' and not tempCheck(self.darkTemperature,ccdtemp,self.deltaTemp):
-            self.cmd.warn('text=%s'%qstr('CCD temp signifcantly different (>%.1f) from dark temp: %.1f, expected %.1f'%
-                                         (self.deltaTemp,ccdtemp,self.darkTemperature)))
+            self.cmd.warn('text=%s'%qstr(warnText%(self.deltaTemp, 'dark temp', ccdtemp, self.darkTemperature)))
             result = False
         return result
     
@@ -641,7 +648,7 @@ class GuiderImageAnalysis(object):
     def findStars(self, gprobes):
         """
         Identify the centers of the stars in the fibers.
-        Assums self.gimgfn is set to the correct file name.
+        Assumes self.gimgfn is set to the correct file name.
         
         gState is a GuiderState instance, containing a gprobes dict.
         
