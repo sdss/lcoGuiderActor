@@ -369,10 +369,18 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
                                    actorState.models["tcc"].keyVarDict["utc_TAI"][0])
     LST = RO.Astro.Tm.lastFromUT1(UTC, longitude)
     
-    RAkey = actorState.models["tcc"].keyVarDict["objNetPos"][0]
-    RA = RAkey.getPos()
-    HA = adiff(LST, RA)     # The corrections are indexed by degrees, happily.
-    frameInfo.dHA = adiff(HA, gState.design_ha)
+    try:
+        # NEWTCC: is there a better keyword than this to get the current RA?
+        RAkey = actorState.models["tcc"].keyVarDict["objNetPos"][0]
+        RA = RAkey.getPos()
+        HA = adiff(LST, RA)     # The corrections are indexed by degrees, happily.
+        frameInfo.dHA = adiff(HA, gState.design_ha)
+    except:
+        guideCmd.error('text="Could not determine current RA from TCC objNetPos. Please issue: tcc show object /full"')
+        guideCmd.warn('text="WARNING: refraction corrections to guiding will not work until this is dealt with."')
+        RA = numpy.nan
+        HA = numpy.nan
+        frameInfo.dHA = 0
     haLimWarn = False
     guideCmd.diag('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
                   (LST, RA, HA, gState.design_ha,frameInfo.dHA))
