@@ -1,3 +1,9 @@
+"""
+A relatively basic proportional-integral-derivative controller, used to compute
+the axis corrections to apply to the telescope, using the errors computed from
+the guider frames.
+"""
+
 import numpy
 
 class PID(object):
@@ -8,6 +14,7 @@ class PID(object):
         self.Ti = Ti                    # Integral time
         self.Td = Td                    # Derivative time
 
+        # NOTE: TBD: Imax is currently unused!
         self.Imax = Imax                # limit to abs(.Ix)
         self.tfilt = tfilt
         if tfilt != None:
@@ -25,7 +32,7 @@ class PID(object):
     def filterX(self, x):
         """ Apply some smoothing/predictive filter to inputs. Dumb median now; kalman maybe later.
         No adjustements being made to dt/Ti/Td.
-        """ 
+        """
 
         if len(self._xhist) > 1:
             self._xhist[:-1] = self._xhist[1:]
@@ -34,9 +41,12 @@ class PID(object):
         self.histlen = min(self.histlen+1, len(self._xhist))
         return numpy.median(self._xhist[-self.histlen:])
     
-    def update(self, x):
+    def update(self, x, dt = None):
         """GIven a new sample of the error, x, return the PID update"""
         
+        if dt is None:
+            dt = self.dt
+
         if self._x is None:
             self.Dx = 0
             self.Ix = 0
@@ -44,17 +54,19 @@ class PID(object):
             x = self.filterX(x)
         else:
             x = self.filterX(x)
-            self.Dx = (x - self._x)/self.dt
-            self.Ix += self.dt*x
+            self.Dx = (x - self._x)/dt
+            self.Ix += dt*x / self.Ti # scale by Ti now
 
-        if self.Imax > 0 and abs(self.Ix) > self.Imax:
-            self.Ix = self.Imax if self.Ix > 0 else -self.Imax
+        # NOTE: TBD: ignoring this because we are scaling Ti with altitude,
+        # so to do this right, we'd have to think about how to use Imax in that case.
+        # if self.Imax > 0 and abs(self.Ix) > self.Imax:
+        #     self.Ix = self.Imax if self.Ix > 0 else -self.Imax
 
         self._x = x
 
         correction = self._x + self.Td*self.Dx
         if self.Ti:
-            correction += self.Ix/self.Ti
+            correction += self.Ix
             
         return self.Kp*correction
 

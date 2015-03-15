@@ -15,6 +15,7 @@ Example:
 """
 
 import os
+import ConfigParser
 
 from actorcore import TestHelper
 
@@ -46,6 +47,14 @@ def updateModel(name,model):
     myGlobals.actorState.models[name] = TestHelper.Model(name,model)
 
 
+def initialize_pid(config, gState):
+    """Initialize the PID classes and set default PID values."""
+    for axis in config.options('PID'):
+        axis = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")[axis.upper()]
+        Kp, Ti, Td, Imax, nfilt = [float(v) for v in config.get('PID', axis).split()]
+        gState.set_pid_defaults(axis, Kp=Kp, Ti=Ti, Td=Td, Imax=Imax, nfilt=nfilt)
+        gState.pid[axis].setPID(Kp=Kp, Ti=Ti, Td=Td, Imax=Imax, nfilt=nfilt)
+
 class GuiderTester(TestHelper.ActorTester):
     """
     guiderActor test suites should subclass this and unittest, in that order.
@@ -60,6 +69,11 @@ class GuiderTester(TestHelper.ActorTester):
         self.setPoint_bad = -35
         self.gi = guiderImage.GuiderImageAnalysis(self.setPoint_good)
         gState = GuiderState.GuiderState()
+
+        self.config = ConfigParser.ConfigParser()
+        self.config.read('../etc/guider.cfg')
+        initialize_pid(self.config, gState)
+
         self.probeNames = {}
         for name in gprobeKey:
             gk = gprobeKey[name]

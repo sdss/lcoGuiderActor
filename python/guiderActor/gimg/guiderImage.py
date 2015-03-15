@@ -570,8 +570,6 @@ class GuiderImageAnalysis(object):
                            'Estimate of current seeing, arcsec fwhm')
             self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, objectname)
             directory,filename = os.path.split(procpath)
-            # TBD: NOTE: pyfits 2.4.0trunk at APO currently borks when computing
-            # the internal checksum here. Just remove checksum=False once that is fixed.
             actorFits.writeFits(cmd, hdulist, directory, filename, doCompress=True, chmod=0644, checksum=True, output_verify=output_verify)
             self.cmd.inform('file=%s/,%s' % (directory, filename))
         except Exception as e:

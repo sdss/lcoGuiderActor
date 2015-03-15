@@ -45,10 +45,12 @@ test_guiderActor/data/gimg-0004.fits.gz -text
 test_guiderActor/data/gimg-0040.fits.gz -text
 test_guiderActor/data/gimg-0519.fits.gz -text
 test_guiderActor/data/gimg-0859.fits.gz -text
+test_guiderActor/data/linear_uniform_dt.txt -text
 test_guiderActor/guiderTester.py -text
 test_guiderActor/profile_guider.py -text
 test_guiderActor/test_GuiderCmd.py -text
 test_guiderActor/test_guiderImage.py -text
 test_guiderActor/test_guiderState.py -text
 test_guiderActor/test_masterThread.py -text
+test_guiderActor/test_pid.py -text
 ups/guiderActor.table -text
