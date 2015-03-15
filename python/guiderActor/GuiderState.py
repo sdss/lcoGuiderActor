@@ -3,7 +3,7 @@ Classes related to the current state of the guider.
 """
 
 import numpy
-import math 
+import math
 
 import PID
 from guiderActor import myGlobals
@@ -270,10 +270,11 @@ class GuiderState(object):
         self.plateType = "?"
         self.surveyMode = "?"
         self.expTime = 0
+        self.readTime = 0
         self.stack = 1
         self.inMotion = False
         self.centerUp = False
-        self.guideCmd = None
+        self.cmd = None
 
         self.fscanMJD = self.fscanID = -1
         self.design_ha = numpy.nan
@@ -291,10 +292,21 @@ class GuiderState(object):
 
         # Will contain [id]:gProbe pairs
         self.gprobes = {}
-        
-        self.pid = {}               # PIDs for various axes
-        for what in ["raDec", "rot", "scale", "focus"]:
-            self.pid[what] = PID.PID(self.expTime, 0, 0, 0)
+    
+        # PIDs for various axes, and their default, on-initialization values.
+        self.pid = {}
+        self.pid_defaults = {}
+        self.pid_time = {}  # times that each pid is updated, to track delta-t.
+        for axis in ["raDec", "rot", "scale", "focus"]:
+            self.pid[axis] = PID.PID(self.expTime, 0, 0, 0)
+            self.pid_defaults[axis] = {}
+            self.pid_time[axis] = None
+
+        # The alt > alt_high ra/dec/rot I term for the PID.
+        # Smoothly change to this value from alt_low to alt_high.
+        self.Ti_highalt = 50.
+        self.alt_low = 60.
+        self.alt_high = 80.
 
         # reset the decenter positions.
         self.clearDecenter()
@@ -341,7 +353,7 @@ class GuiderState(object):
             self.refractionBalance = 0
         
     def setCmd(self, cmd=None):
-        self.guideCmd = cmd
+        self.cmd = cmd
     
     def setDecenter(self, decenters, cmd, enable):
         """
@@ -406,6 +418,66 @@ class GuiderState(object):
             self.gcameraPixelSize = gcameraPixelSize
         if gcameraMagnification != None:
             self.gcameraMagnification = gcameraMagnification
+
+    def set_pid_defaults(self, axis, **kwargs):
+        """Set the default pid values for axis."""
+        for key in kwargs:
+            self.pid_defaults[axis][key] = kwargs[key]
+
+    def reset_pid_terms(self, terms=None):
+        """Reset all PID terms, or just those listed."""
+        if terms == None:
+            terms = self.pid.keys()
+        for key in terms:
+            self.pid[key].reset()
+
+    def scale_pid_with_alt(self, alt):
+        """
+        Change the PID coefficients with altitude, so we are smoothly increasing
+        Ti as altitude increases.
+        Return True if we changed the PID values.
+        """
+        def twoPointForm(x0,y0,x1,y1,x):
+            """Equation of a line from two points"""
+            return (y1-y0)/(x1-x0) * (x-x0) + y0
+
+        old_Ti = self.pid['raDec'].Ti
+
+        # use .get() incase set_pid_defaults wasn't called.
+        Ti_low = self.pid_defaults['raDec'].get('Ti',200)
+        Ti_high = self.Ti_highalt
+        if alt < self.alt_low:
+            Ti = Ti_low
+        elif alt > self.alt_high:
+            Ti = Ti_high
+        else:  # between low and high limits...
+            Ti = twoPointForm(self.alt_low, Ti_low, self.alt_high, Ti_high, alt)
+            # delta = (self.alt_high - self.alt_low)
+            # Ti = min(1, (1 - (self.alt_high - alt)/delta)) * self.Ti_highalt
+        if old_Ti != Ti:
+            for axis in ['raDec']:#, 'rot']:
+                self.pid[axis].setPID(Ti=Ti)
+            return True
+        else:
+            return False
+
+    def update_pid_time(self, axis, newtime):
+        """Update the time associated with axis, and output dt (new-old)."""
+        try:
+            dt = newtime - self.pid_time[axis]
+        except TypeError:
+            dt = None
+        self.pid_time[axis] = newtime
+        return dt
+
+    def output_pid(self, cmd=None):
+        if cmd is None:
+            cmd = self.cmd
+        for axis in self.pid.keys():
+            cmd.respond("pid=%s,%g,%g,%g,%g,%d" % (axis,
+                        self.pid[axis].Kp, self.pid[axis].Ti, self.pid[axis].Td,
+                        self.pid[axis].Imax, self.pid[axis].nfilt))
+
 
 class FrameInfo(object):
     """

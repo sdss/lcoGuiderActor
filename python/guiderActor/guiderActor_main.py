@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 """An actor to run the guider"""
 
-import inspect, os, re, sys
+import re
 import Queue, threading
 
 import opscore.actor.model
 import opscore.actor.keyvar
 
 import actorcore.Actor
-
-import actorkeys
 
 import gcameraThread
 import masterThread
@@ -71,12 +69,9 @@ class Guider(actorcore.Actor.Actor):
         Guider.startThreads(actorState, restartQueues=True)
 
         # Handle the hated ini file
-        try:
-            expTime = float(self.config.get('gcamera', "exposureTime"))
-        except ConfigParser.NoOptionError:
-            expTime = 10.0
-
-        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, None, expTime=expTime))
+        expTime = float(self.config.get('gcamera', "exposureTime"))
+        readTime = float(self.config.get('gcamera', "binnedReadTime"))
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_TIME, None, expTime=expTime, readTime=readTime))
  
         plugPlateScale = float(self.config.get('telescope', "scale"))
         dSecondary_dmm = float(self.config.get('telescope', "dSecondary_dmm"))
@@ -92,10 +87,10 @@ class Guider(actorcore.Actor.Actor):
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, None, what=what,
                                                           enable=enable))
 
-        for what in self.config.options("PID"):
-            what = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")[what.upper()]
-            Kp, Ti, Td, Imax, nfilt = [float(v) for v in self.config.get('PID', what).split()]
-            actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, None, what=what,
+        for axis in self.config.options('PID'):
+            axis = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")[axis.upper()]
+            Kp, Ti, Td, Imax, nfilt = [float(v) for v in self.config.get('PID', axis).split()]
+            actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, None, axis=axis, initialize=True,
                                                           Kp=Kp, Ti=Ti, Td=Td, Imax=Imax, nfilt=int(nfilt)))
 
         #

@@ -139,6 +139,46 @@ class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
         self._setRefractionBalance('APOGEE-2&MaNGA', 'MaNGA Dither', 0)
     def test_setRefractionBalance_ApogeeMangaStare(self):
         self._setRefractionBalance('APOGEE-2&MaNGA', 'MaNGA Stare', 0)
+
+    def test_set_pid_defaults(self):
+        values = dict(Kp=1, Ti=2, Td=3, Imax=4, nfilt=5)
+        self.gState.set_pid_defaults('raDec',**values)
+        for x in values:
+            self.assertEqual(self.gState.pid_defaults['raDec'][x], values[x])
+
+    def _scale_pid_with_alt(self, alt, expect_Ti):
+        result = self.gState.scale_pid_with_alt(alt)
+        for axis in expect_Ti:
+            self.assertEqual(self.gState.pid[axis].Ti, expect_Ti[axis], "%s does not match"%axis)
+        return result
+    def test_scale_pid_with_alt_low(self):
+        expect_Ti = {'raDec':250, 'rot':250, 'scale':0, 'focus':0}
+        result = self._scale_pid_with_alt(50, expect_Ti)
+        self.assertFalse(result)
+    def test_scale_pid_with_alt_mid(self):
+        expect_Ti = {'raDec':150, 'rot':250, 'scale':0, 'focus':0}
+        result = self._scale_pid_with_alt(70, expect_Ti)
+        self.assertTrue(result)
+    def test_scale_pid_with_alt_high(self):
+        expect_Ti = {'raDec':50, 'rot':250, 'scale':0, 'focus':0}
+        result = self._scale_pid_with_alt(85, expect_Ti)
+        self.assertTrue(result)
+
+    def test_update_pid_time_first_try(self):
+        result = self.gState.update_pid_time('raDec',2)
+        self.assertIsNone(result)
+        self.assertEqual(self.gState.pid_time['raDec'], 2)
+
+    def test_update_pid_time(self):
+        self.gState.update_pid_time('raDec',2)
+        result = self.gState.update_pid_time('raDec',3)
+        self.assertEqual(result, 1)
+        self.assertEqual(self.gState.pid_time['raDec'], 3)
+
+
+    def test_output_pid(self):
+        self.gState.output_pid(self.cmd)
+        self._check_cmd(0,4,0,0,False)
 #...
 
 if __name__ == '__main__':
