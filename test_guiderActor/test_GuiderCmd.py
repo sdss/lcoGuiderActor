@@ -24,14 +24,15 @@ class GuiderCmdTester(guiderTester.GuiderTester):
         super(GuiderCmdTester,self).setUp()
         self.timeout = 1
         # Do this after super setUp, as that's what creates actorState.
-        myGlobals.actorState.queues = {}
-        myGlobals.actorState.queues[guiderActor.MASTER] = Queue('master')
+        self.queues = {}
+        self.queues[guiderActor.MASTER] = Queue('master')
+        myGlobals.actorState.queues = self.queues
         self.guiderCmd = GuiderCmd.GuiderCmd(self.actor)
 
 class TestDecentering(GuiderCmdTester,unittest.TestCase):
     """mangaDither, decenter on/off, setDecenter."""
     def _mangaDither(self,expect,args):
-        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('mangaDither %s'%(args),queue)
         self.assertEqual(msg.type,guiderActor.Msg.DECENTER)
         self.assertEqual(msg.decenters['decenterRA'],expect['decenterRA'])
@@ -64,7 +65,7 @@ class TestDecentering(GuiderCmdTester,unittest.TestCase):
         self._mangaDither(expect,'ditherPos=E')
     
     def _decenter(self,expect,args):
-        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('decenter %s'%(args),queue)
         self.assertEqual(msg.type,guiderActor.Msg.DECENTER)
         self.assertEqual(msg.enable,expect['on'])
@@ -77,7 +78,7 @@ class TestDecentering(GuiderCmdTester,unittest.TestCase):
         self._decenter(expect,'off')
 
     def _setDecenter(self,expect,args,didFail=False):
-        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        queue = self.queues[guiderActor.MASTER]
         if didFail:
             with self.assertRaises(AttributeError):
                 msg = self._run_cmd('setDecenter %s'%(args), None, empty=True)
@@ -101,7 +102,7 @@ class TestDecentering(GuiderCmdTester,unittest.TestCase):
 
 class TestSetRefractionBalance(GuiderCmdTester,unittest.TestCase):
     def _setRefractionBalance(self, args, expect):
-        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('setRefractionBalance %s'%(args),queue)
         self.assertEqual(msg.type, guiderActor.Msg.SET_REFRACTION)
         self.assertEqual(msg.corrRatio, expect.get('corrRatio',None))
@@ -120,7 +121,7 @@ class TestSetRefractionBalance(GuiderCmdTester,unittest.TestCase):
 
 class TestEcam(GuiderCmdTester,unittest.TestCase):
     def _ecamOn(self, args, expect={}):
-        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('ecamOn %s'%(args),queue)
         self.assertEqual(msg.type, guiderActor.Msg.ECAM_ON)
         self.assertEqual(msg.time, expect.get('time',5))
@@ -130,7 +131,7 @@ class TestEcam(GuiderCmdTester,unittest.TestCase):
         self._ecamOn('time=11', {'time':11})
 
     def test_ecamOff(self):
-        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+        queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('ecamOff',queue)
         self.assertEqual(msg.type, guiderActor.Msg.ECAM_OFF)
 
