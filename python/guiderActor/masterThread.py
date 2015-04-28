@@ -318,7 +318,7 @@ def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRo
 
 
 def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
-              guiderImageAnalysis, output_verify='warn'):
+              guiderImageAnalysis, output_verify='warn', camera='gcamera'):
     """ One step of the guide loop, based on the given guider file.
 
     Args:
@@ -330,6 +330,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         oneExposure: True if we are only handling a single exposure.
         guiderImageAnalysis: an instance of that class, to process the raw image.
         output_verify: passed on to the fits writer. See the pyfits docs for more.
+        camera: set to 'ecamera' to not search for fibers and skip fiber-related processing.
     """
     # Setup to solve for the axis and maybe scale offsets.  We work consistently
     # in mm on the focal plane, only converting to angles to command the TCC.
@@ -371,7 +372,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     try:
         setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
         guideCmd.inform('text="guideStep GuiderImageAnalysis.findStars()..."')
-        fibers = guiderImageAnalysis(cmd,inFile,gState.gprobes,setPoint=setPoint,bypassDark=actorState.bypassDark)
+        fibers = guiderImageAnalysis(cmd,inFile,gState.gprobes,setPoint=setPoint,bypassDark=actorState.bypassDark,camera=camera)
         guideCmd.inform("text='GuiderImageAnalysis.findStars() got %i fibers'" % len(fibers))
     except GuiderExceptions.BadReadError as e:
         guideCmd.warn('text=%s' %qstr("Skipping badly formatted image."))
@@ -388,6 +389,10 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guideCmd.fail('guideState="failed"; text=%s' % qstr("Unknown error in processing guide images: %s" % e))
         gState.setCmd(None)
         tback.tback("GuideTest", e)
+        return frameInfo
+
+    # Don't need to do anything else with ecam images.
+    if camera == 'ecamera':
         return frameInfo
 
     #
@@ -936,11 +941,11 @@ def ecam_off(cmd, gState, queues):
     cmd.respond("guideState=stopping")
     queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, cmd, quiet=True, priority=Msg.MEDIUM))
 
-    # If the off command came from a user, finish their command first.
-    if gState.cmd != cmd:
-        cmd.finish()
     gState.cmd.finish("guideState=off")
     gState.setCmd(None)
+    # If the off command came from a user, finish their command too.
+    if gState.cmd != cmd:
+        cmd.finish()
 
 
 def main(actor, queues):
@@ -1115,7 +1120,9 @@ def main(actor, queues):
                     queues[MASTER].put(Msg(Msg.START_GUIDING, gState.cmd, start=False, success=False))
                     continue
 
-                frameInfo = guideStep(actor, queues, msg.cmd, gState, msg.filename, oneExposure, guiderImageAnalysis)
+                camera = getattr(msg,'camera','gcamera')
+
+                frameInfo = guideStep(actor, queues, msg.cmd, gState, msg.filename, oneExposure, guiderImageAnalysis, camera=camera)
                 gState.inMotion = False
                 
                 # output the keywords after the decenter changes, and finish the command.
@@ -1149,7 +1156,7 @@ def main(actor, queues):
                     gState.setCmd(None)
                 else:
                     queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
-                                            expTime=gState.expTime, stack=gState.stack))
+                                            expTime=gState.expTime, stack=gState.stack, camera=camera))
                 
             elif msg.type == Msg.TAKE_FLAT:
                 if gState.cartridge <= 0:
