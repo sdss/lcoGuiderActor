@@ -36,7 +36,8 @@ class Headers(object):
                      'GDXRMS',
                      'GDYRMS',
                      'FILENAME',
-                     'DATE-OBS']
+                     'DATE-OBS',
+                     'PLATEID']
 
     def __call__(self, files, outfilename):
         """Extract the headers defined in init, and write the result as FITS."""
@@ -70,8 +71,8 @@ class Headers(object):
     def write(self, filename):
         """Write the result to a fits file."""
         #hdu = pyfits.BinTableHDU(self.data)
-        #hdu.writeto(filename)
-        fitsio.write(filename, self.data)
+        #hdu.writeto(filename, clobber=True)
+        hdu = fitsio.write(filename, self.data, clobber=True)
         if self.verbose:
             print "Wrote to:", filename
 
