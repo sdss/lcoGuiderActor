@@ -81,7 +81,7 @@ def main(actor, queues):
 
                 filename = cmdVar.getLastKeyVarData(filenameKey)[0]
 
-                msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, success=True))
+                msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, camera=camera, success=True))
 
             elif msg.type == Msg.ABORT_EXPOSURE:
                 if not msg.quiet:
