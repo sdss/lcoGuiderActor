@@ -1,3 +1,11 @@
+"""
+Thread for commanding both the gcamera and ecamera.
+
+It's ok to handle them both in one thread, because we can't use them at the same
+time, so they'll never conflict with each other.
+"""
+
+
 import Queue, threading
 
 from guiderActor import *
@@ -34,7 +42,7 @@ def main(actor, queues):
                 try:
                     expType = msg.expType
                 except:
-                    expType = "expose" 
+                    expType = "expose"
 
                 filenameKey = guiderActor.myGlobals.actorState.models[camera].keyVarDict["filename"]
                     
@@ -59,7 +67,7 @@ def main(actor, queues):
                 
                 actor.bcast.diag('text="%s %s with timeLim=%s"' % (camera, cmdStr, timeLim))
                 try:
-                    cmdVar = actor.cmdr.call(actor=camera, cmdStr=cmdStr, 
+                    cmdVar = actor.cmdr.call(actor=camera, cmdStr=cmdStr,
                                              keyVars=[filenameKey], timeLim=timeLim, forUserCmd=msg.cmd)
                     actor.bcast.diag('text="%s %s didFail=%s"' % (camera, cmdStr, cmdVar.didFail))
                 except Exception, e:

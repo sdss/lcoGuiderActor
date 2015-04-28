@@ -913,6 +913,36 @@ def set_refraction(cmd, gState, corrRatio, plateType, surveyMode):
     elif plateType is not None:
         gState.setRefractionBalance(plateType,surveyMode)
 
+def ecam_on(cmd, gState, actorState, queues):
+    """Start taking and processing exposures with the engineering camera."""
+    if gState.cmd:
+        cmd.fail("text=The guider appears to already be running")
+        return False
+
+    if not guidingIsOK(cmd, actorState):
+        queues[MASTER].put(Msg(Msg.FAIL, cmd, text="Not ok to guide in current state."))
+        return False
+
+    gState.setCmd(cmd)
+    gState.cmd.respond("guideState=on")
+    queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
+                        expTime=gState.expTime, camera='ecamera'))
+
+def ecam_off(cmd, gState, queues):
+    """Stop taking exposures with the engineering camera."""
+    if gState.cmd is None:
+        cmd.fail('text="ecam not currently exposing."')
+        return False
+    cmd.respond("guideState=stopping")
+    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, cmd, quiet=True, priority=Msg.MEDIUM))
+
+    # If the off command came from a user, finish their command first.
+    if gState.cmd != cmd:
+        cmd.finish()
+    gState.cmd.finish("guideState=off")
+    gState.setCmd(None)
+
+
 def main(actor, queues):
     """Main loop for master thread"""
 
@@ -1312,9 +1342,11 @@ def main(actor, queues):
                 set_decenter(msg.cmd, decenters, gState, enable)
             
             elif msg.type == Msg.ECAM_ON:
-                queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.guideCmd, replyQueue=queues[MASTER],
-                                    expTime=gState.expTime, stack=gState.stack, camera='ecamera'))
+                ecam_on(msg.cmd, gState, actorState, queues)
+                pass
 
+            elif msg.type == Msg.ECAM_OFF:
+                ecam_off(msg.cmd, gState, queues)
                 pass
 
             elif msg.type == Msg.STATUS:
