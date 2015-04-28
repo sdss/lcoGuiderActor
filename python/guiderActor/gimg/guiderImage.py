@@ -14,8 +14,8 @@ import pyfits
 import numpy
 from numpy import *
 
-from scipy.ndimage.morphology import binary_closing, binary_dilation, binary_fill_holes, binary_erosion
-from scipy.ndimage.measurements import label, center_of_mass, find_objects
+from scipy.ndimage.morphology import binary_closing, binary_dilation, binary_erosion
+from scipy.ndimage.measurements import label, center_of_mass
 
 from GuiderExceptions import *
 import actorcore.utility.fits as actorFits
@@ -141,13 +141,14 @@ class GuiderImageAnalysis(object):
         """
         self.setPoint = setPoint
         self.outputDir = ''
+        self.camera = 'gcamera'
         # set during findStars():
         self.fibers = None
         self.guiderImage = None
         self.guiderHeader = None
         self.maskImage = None
         self.bypassDark = False
-        
+
         # So that we don't have to re-open dark and flat files every time.
         self.currentDarkName = ''
         self.currentFlatName = ''
@@ -925,44 +926,13 @@ class GuiderImageAnalysis(object):
         self.currentDarkName = darkFileName
     #...
     
-    def analyzeFlat(self, flatFileName, gprobes, cmd=None, stamps=False, setPoint=None):
-        """
-        Return (flat,mask,fibers): with the processed flat, mask to apply
-        to the image and flat to mask everything but the fibers, and a list
-        of the fiber number to x,y position.
-        
-        NOTE: returns a list of fibers the same length as 'gprobes';
-        some will have xcen=ycen=NaN; test with fiber.is_fake()
-        """
-        if cmd is not None:
-            self.cmd = cmd
-        if setPoint is not None:
-            self.setPoint = setPoint
-
-        flatout = self.getProcessedOutputName(flatFileName)
-        directory,filename = os.path.split(flatout)
-        
-        if os.path.exists(flatout):
-            self.cmd.inform('text=%s'%qstr('Reading processed flat-field from %s' % flatout))
-            try:
-                self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes, stamps)
-                return
-            except:
-                self.cmd.warn('text=%s'%qstr('Failed to read processed flat-field from %s; regenerating it.' % flatout))
-
-        image,hdr,sat = self._pre_process(flatFileName,binning=1)
-        self._check_ccd_temp(hdr)
-        
-        exptime = hdr.get('EXPTIME', 0)
-        
-        # NOTE: we are not dark-subtracting the flats,
-        # because they are so short and have ~20k counts and are unbinned.
-        
+    def _find_fibers_in_flat(image):
+        """Identify the fibers in a flat image."""
         # FIXME -- we KNOW the area (ie, the number of pixels) of the
         # fibers -- we could choose the threshold appropriately.
         # NOTE, that's not always true, we sometimes lose fibers, even
         # acquisition fibers which are pretty big.
-        
+
         # HACK -- find threshold level inefficiently.
         # This is the threshold level that was used in "gfindfibers".
         i2 = image.copy().ravel()
@@ -1094,8 +1064,8 @@ class GuiderImageAnalysis(object):
                 continue
             fmap[fi] = probei
             finvmap[int(probei)] = fi
-        dx = mean([dx for fi,probei,dx,dy in fmatch])
-        dy = mean([dy for fi,probei,dx,dy in fmatch])
+        dx = mean([x for fi,probei,x,y in fmatch])
+        dy = mean([y for fi,probei,x,y in fmatch])
         self.cmd.inform('text=%s'%qstr('Matched %i fibers, with dx,dy = (%g,%g)' % (len(fmap), dx, dy)))
 
         # Record the fiber id, and remember the gprobe...
@@ -1172,7 +1142,6 @@ class GuiderImageAnalysis(object):
         # we don't want the bzero header keyword set.
         # it somehow is ending up in the raw flat files, but not the object files.
         del hdr['BZERO']
-        pixunit = 'binned guider-camera pixels' # jkp TBD: unused?
 
         # For writing fiber postage stamps, fill in rotation fields.
         for p in gprobes.values():
@@ -1183,9 +1152,45 @@ class GuiderImageAnalysis(object):
         if hdulist is None:
             self.cmd.warn('text=%s'%qstr('Failed to create processed flat file'))
         
-        # TBD: NOTE: pyfits 2.4.0trunk at APO currently borks when computing
-        # the internal checksum here. Just remove checksum=False once that is fixed.
-        actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644,checksum=False)
+        return hdulist,gprobes,stamps
+
+    def analyzeFlat(self, flatFileName, gprobes, cmd=None, stamps=False, setPoint=None):
+        """
+        Return (flat,mask,fibers): with the processed flat, mask to apply
+        to the image and flat to mask everything but the fibers, and a list
+        of the fiber number to x,y position.
+        
+        NOTE: returns a list of fibers the same length as 'gprobes';
+        some will have xcen=ycen=NaN; test with fiber.is_fake()
+        """
+        if cmd is not None:
+            self.cmd = cmd
+        if setPoint is not None:
+            self.setPoint = setPoint
+
+        flatout = self.getProcessedOutputName(flatFileName)
+        directory,filename = os.path.split(flatout)
+        
+        if os.path.exists(flatout):
+            self.cmd.inform('text=%s'%qstr('Reading processed flat-field from %s' % flatout))
+            try:
+                self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes, stamps)
+                return
+            except:
+                self.cmd.warn('text=%s'%qstr('Failed to read processed flat-field from %s; regenerating it.' % flatout))
+
+        image,hdr,sat = self._pre_process(flatFileName,binning=1)
+        self._check_ccd_temp(hdr)
+        
+        exptime = hdr.get('EXPTIME', 0)
+        
+        # NOTE: we are not dark-subtracting the flats,
+        # because they are so short and have ~20k counts and are unbinned.
+
+        if self.camera == 'gcamera':
+            hdulist,gprobes,stamps = self._find_fibers_in_flat(image)
+
+        actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
         # Now read that file we just wrote...
         self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes, stamps)
         self.currentFlatName = flatFileName
