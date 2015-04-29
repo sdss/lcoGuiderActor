@@ -437,7 +437,7 @@ class GuiderImageAnalysis(object):
         return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
 
     def _get_basic_hdulist(self, image, primhdr, bg):
-        """Return an hdulist with the most basic header keywords filled in."""
+        """Return an hdulist with the most basic header keywords filled in."""           
         imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
         imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
         imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
@@ -449,8 +449,8 @@ class GuiderImageAnalysis(object):
         """Generate an HDU list to be inserted into the proc-file header."""
         if stampImage is None:
             stampImage = image
-        bg = np.median(image[mask == 0])
         hdulist = self._get_basic_hdulist(image,primhdr,bg)
+        bg = np.median(image[mask == 0])
 
         try:
             # List the fibers by fiber id.
@@ -717,7 +717,7 @@ class GuiderImageAnalysis(object):
         img[mask > 0] = 0
 
         if self.camera == 'ecamera':
-            return None
+            return []
         else:
             # img16 = img.astype(np.int16)
             c_image = np_array_to_REGION(np.img16)
@@ -793,6 +793,12 @@ class GuiderImageAnalysis(object):
         """
         flatfits = pyfits.open(flatFileName)
         flat = flatfits[0].data
+        if self.camera == 'ecamera':
+            # TBD: eventually we'll actually compute a mask for the ecam flats
+            # for now, just assume all pixels are good.
+            mask = np.zeros_like(flat,np.int8)
+            return flat, mask, []
+        
         mask = flatfits[1].data
         table = flatfits[6].data
         x = table.field('xcenter')
@@ -1122,6 +1128,9 @@ class GuiderImageAnalysis(object):
             self.setPoint = setPoint
 
         flatout = self.getProcessedOutputName(flatFileName)
+        if self.camera == 'ecamera':
+            #TBD: kludge, since we don't gzip unprocessed ecam files, because IRAF.
+            flatout = flatout + '.gz'
         directory,filename = os.path.split(flatout)
         
         if os.path.exists(flatout):
@@ -1141,9 +1150,11 @@ class GuiderImageAnalysis(object):
         if self.camera == 'gcamera':
             hdulist,gprobes = self._find_fibers_in_flat(image, flatFileName, gprobes, hdr)
         elif self.camera == 'ecamera':
-            hdulist = self._get_basic_hdulist(hdr, None, None, None, None)
+            bg = np.median(image)#TBD: this is a poor choice for star-filled ecam images!
+            image = bin_image(image,self.binning)
+            hdulist = self._get_basic_hdulist(image, hdr, bg)
             gprobes = None
-
+        
         actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
         # Now read that file we just wrote...
         self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes)
