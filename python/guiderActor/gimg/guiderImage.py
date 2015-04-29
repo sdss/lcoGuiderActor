@@ -436,18 +436,22 @@ class GuiderImageAnalysis(object):
         stamps[maskstamps > 0] = bg
         #print 'bg=', bg
         return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
-    
+
+    def _get_basic_hdulist(image, primhdr, bg):
+        """Return an hdulist with the most basic header keywords filled in."""
+        imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
+        imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
+        imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
+        hdulist = pyfits.HDUList()
+        hdulist.append(imageHDU)
+        return hdulist
+
     def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask, stampImage=None):
         """Generate an HDU list to be inserted into the proc-file header."""
         if stampImage is None:
             stampImage = image
-        #bg = median(image[numpy.isfinite(image)])
         bg = median(image[mask == 0])
-        
-        imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
-        imageHDU.header.update('SDSSFMT', 'GPROC 1 4', 'type major minor version for this file')
-        imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
-        imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
+        hdulist = self._get_basic_hdulist(image,primhdr,bg)
 
         try:
             # List the fibers by fiber id.
@@ -486,8 +490,6 @@ class GuiderImageAnalysis(object):
                     stampSizes.append(2)
                     bigs.append(f)
 
-            hdulist = pyfits.HDUList()
-            hdulist.append(imageHDU)
             hdulist.append(pyfits.ImageHDU(mask))
             hdulist += self.getStampHDUs(smalls, bg, stampImage, mask)
             hdulist += self.getStampHDUs(bigs, bg, stampImage, mask)
@@ -549,7 +551,7 @@ class GuiderImageAnalysis(object):
 
             hdulist.append(pyfits.new_table(cols))
         except Exception as e:
-            self.cmd.warn('text=%s'%qstr('could not write proc- guider file: %s' % (e,)))
+            self.cmd.warn('text=%s'%qstr('could not create header for proc- guider file: %s' % (e,)))
             tback('guiderImage write', e)
             raise e
         return hdulist
@@ -808,10 +810,11 @@ class GuiderImageAnalysis(object):
         radius = table.field('radius')
         fiberid = table.field('fiberid')
         fibers = []
-        for xi,yi,ri,fi in zip(x,y,radius,fiberid):
-            f = Fiber(fi, xi, yi, ri, 0)
-            f.gProbe = gprobes.get(fi)
-            fibers.append(f)
+        if gprobes is not None:
+            for xi,yi,ri,fi in zip(x,y,radius,fiberid):
+                f = Fiber(fi, xi, yi, ri, 0)
+                f.gProbe = gprobes.get(fi)
+                fibers.append(f)
 
         # !!!!!!!!!!!!!!1
         # TBD: This doesn't seem to be used for anything at all...
@@ -1152,7 +1155,7 @@ class GuiderImageAnalysis(object):
         if hdulist is None:
             self.cmd.warn('text=%s'%qstr('Failed to create processed flat file'))
         
-        return hdulist,gprobes,stamps
+        return hdulist,gprobes
 
     def analyzeFlat(self, flatFileName, gprobes, cmd=None, stamps=False, setPoint=None):
         """
@@ -1181,14 +1184,15 @@ class GuiderImageAnalysis(object):
 
         image,hdr,sat = self._pre_process(flatFileName,binning=1)
         self._check_ccd_temp(hdr)
-        
-        exptime = hdr.get('EXPTIME', 0)
-        
+       
         # NOTE: we are not dark-subtracting the flats,
         # because they are so short and have ~20k counts and are unbinned.
 
         if self.camera == 'gcamera':
-            hdulist,gprobes,stamps = self._find_fibers_in_flat(image)
+            hdulist,gprobes = self._find_fibers_in_flat(image)
+        elif self.camera == 'ecamera':
+            hdulist = self._get_basic_hdulist(hdr, None, None, None, None)
+            gprobes = None
 
         actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
         # Now read that file we just wrote...
