@@ -393,6 +393,8 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
     # Don't need to do anything else with ecam images.
     if camera == 'ecamera':
+        # No more processing needed, so just write the file.
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)        
         return frameInfo
 
     #
