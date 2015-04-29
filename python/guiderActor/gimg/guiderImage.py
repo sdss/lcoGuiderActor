@@ -319,6 +319,8 @@ class GuiderImageAnalysis(object):
     def fillPrimaryHDU(self, cmd, models, imageHDU, frameInfo, objectname):
         """ Add in all the site and environment keywords. """
         try:
+            imageHDU.header.update('SEEING', frameInfo.seeing if np.isfinite(frameInfo.seeing) else 0.0,
+                                   'Estimate of current seeing, arcsec fwhm')
             imageHDU.header.update('OBJECT', objectname, '')
             imageHDU.header.update('GCAMSCAL', frameInfo.guideCameraScale, 'guide camera plate scale (mm/pixel)')
             imageHDU.header.update('PLATSCAL', frameInfo.plugPlateScale, 'plug plate scale (mm/degree)')
@@ -558,19 +560,21 @@ class GuiderImageAnalysis(object):
         """
         Write a fits file containing the processed results for this exposure.
         """
-        if not self.fibers:
+        if not self.fibers and self.camera != 'ecamera':
             raise Exception('must call findStars() before writeFITS()')
-        gimg = self.guiderImage
+        image = self.guiderImage
         hdr = self.guiderHeader
 
         procpath = self.getProcessedOutputName(self.gimgfn)
         objectname = os.path.splitext(self.gimgfn)[0]
 
         try:
-            hdulist = self._getProcGimgHDUList(hdr, gprobes, self.fibers, gimg, self.maskImage)
+            if self.camera == 'gcamera':
+                hdulist = self._getProcGimgHDUList(hdr, gprobes, self.fibers, image, self.maskImage)
+            elif self.camera == 'ecamera':
+                bg = np.median(image)#TBD: this is a poor choice for star-filled ecam images!
+                hdulist = self._get_basic_hdulist(image, hdr, bg)
             imageHDU = hdulist[0]
-            imageHDU.header.update('SEEING', frameInfo.seeing if np.isfinite(frameInfo.seeing) else 0.0,
-                           'Estimate of current seeing, arcsec fwhm')
             self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, objectname)
             directory,filename = os.path.split(procpath)
             actorFits.writeFits(cmd, hdulist, directory, filename, doCompress=True, chmod=0644, checksum=True, output_verify=output_verify)
