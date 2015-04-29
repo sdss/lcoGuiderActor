@@ -370,7 +370,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
                 flatcart, gState.cartridge)))
 
     try:
-        setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
+        setPoint = actorState.models[camera].keyVarDict["cooler"][0]
         guideCmd.inform('text="guideStep GuiderImageAnalysis.findStars()..."')
         fibers = guiderImageAnalysis(cmd,inFile,gState.gprobes,setPoint=setPoint,bypassDark=actorState.bypassDark,camera=camera)
         guideCmd.inform("text='GuiderImageAnalysis.findStars() got %i fibers'" % len(fibers))
@@ -378,11 +378,11 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guideCmd.warn('text=%s' %qstr("Skipping badly formatted image."))
         return frameInfo
     except GuiderExceptions.FlatError as e:
-        guideCmd.fail('guideState="failed"; text=%s' %qstr("Error reading/processing guider flat."))
+        guideCmd.fail('guideState="failed"; text=%s' %qstr("Error reading/processing %s flat: %s"%(camera,e)))
         gState.setCmd(None)
         return frameInfo
     except GuiderExceptions.GuiderError as e:
-        guideCmd.fail('guideState="failed"; text=%s' %qstr("Error processing gcamera image."))
+        guideCmd.fail('guideState="failed"; text=%s' %qstr("Error processing %s image: %s"%(camera,e)))
         gState.setCmd(None)
         return frameInfo
     except Exception as e:
