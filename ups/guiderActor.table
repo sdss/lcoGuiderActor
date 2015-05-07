@@ -1,5 +1,6 @@
 setupRequired(sdss_python_module)
 setupRequired(actorcore)
+setupRequired(PyGuide)
 setupOptional(platelist)
 setupRequired(RO)
 
