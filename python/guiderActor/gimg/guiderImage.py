@@ -16,6 +16,8 @@ import numpy as np
 from scipy.ndimage.morphology import binary_closing, binary_dilation, binary_erosion
 from scipy.ndimage.measurements import label, center_of_mass
 
+import PyGuide
+
 import GuiderExceptions
 import actorcore.utility.fits as actorFits
 from opscore.utility.tback import tback
@@ -439,7 +441,7 @@ class GuiderImageAnalysis(object):
         return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
 
     def _get_basic_hdulist(self, image, primhdr, bg):
-        """Return an hdulist with the most basic header keywords filled in."""           
+        """Return an hdulist with the most basic header keywords filled in."""
         imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
         imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
         imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
@@ -451,8 +453,8 @@ class GuiderImageAnalysis(object):
         """Generate an HDU list to be inserted into the proc-file header."""
         if stampImage is None:
             stampImage = image
-        hdulist = self._get_basic_hdulist(image,primhdr,bg)
         bg = np.median(image[mask == 0])
+        hdulist = self._get_basic_hdulist(image,primhdr,bg)
 
         try:
             # List the fibers by fiber id.
@@ -650,6 +652,17 @@ class GuiderImageAnalysis(object):
         return image,hdr,sat
     #...
 
+    def _find_stars_ecam(self, image, mask):
+        """Find the stars in a processed ecamera image."""
+        # TBD: readnoise and ccd gain should be set in the config file,
+        # or even better, written by gcameraICC and read from the header.
+        readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
+        ccdGain = 1
+        ccdInfo = PyGuide.CCDInfo(self.imageBias,readNoise,ccdGain,)
+        result = PyGuide.findStars(image,mask,None,ccdInfo)
+        print result
+        return result[0]
+
     def findStars(self, gprobes):
         """
         Identify the centers of the stars in the fibers.
@@ -721,7 +734,10 @@ class GuiderImageAnalysis(object):
         img[mask > 0] = 0
 
         if self.camera == 'ecamera':
-            return []
+            stars = self._find_stars_ecam(image)
+            s0 = stars[0]
+            self.cmd.info('star=%f,%f,%f,%f,%f'%(s0.xyCtr[0],s0.xyCtr[1],))
+            return [] # no fibers to return
         else:
             # img16 = img.astype(np.int16)
             c_image = np_array_to_REGION(np.img16)
@@ -1117,6 +1133,18 @@ class GuiderImageAnalysis(object):
         
         return hdulist,gprobes
 
+    def _process_ecam_flat(self, image, flatFileName, hdr):
+        """
+        Process an engineering camera flat.
+        Determine the mask, check flux levels, normalize.
+        """
+        image = bin_image(image,self.binning)
+
+        # not a terrible choice to show the nominal flat level.
+        bg = np.median(image)
+        hdulist = self._get_basic_hdulist(image, hdr, bg)
+        return hdulist
+
     def analyzeFlat(self, flatFileName, gprobes, cmd=None, setPoint=None):
         """
         Return (flat,mask,fibers): with the processed flat, mask to apply
@@ -1154,9 +1182,7 @@ class GuiderImageAnalysis(object):
         if self.camera == 'gcamera':
             hdulist,gprobes = self._find_fibers_in_flat(image, flatFileName, gprobes, hdr)
         elif self.camera == 'ecamera':
-            bg = np.median(image)#TBD: this is a poor choice for star-filled ecam images!
-            image = bin_image(image,self.binning)
-            hdulist = self._get_basic_hdulist(image, hdr, bg)
+            hdulist = self._process_ecam_flat(image, flatFileName, hdr)
             gprobes = None
         
         actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
