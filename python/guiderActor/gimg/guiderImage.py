@@ -9,6 +9,7 @@ import os.path
 from operator import attrgetter
 import ctypes
 import datetime
+import re
 
 import pyfits
 import numpy as np
@@ -211,6 +212,8 @@ class GuiderImageAnalysis(object):
         'ecamera' to find the brightest star for a pointing model.
         """
         self.gimgfn = gimgfn
+        # don't like the re, but it works (stolen from masterThread.guideStep)
+        self.frameNo = int(re.search(r"([0-9]+)\.fits.*$", gimgfn).group(1))
         self.setPoint = setPoint
         self.bypassDark = bypassDark
         self.cmd = cmd
@@ -243,6 +246,8 @@ class GuiderImageAnalysis(object):
             # NOTE: The the "inner" portion of the bias region is most
             # representative of the rest of the chip.
             bias = np.median(image[:,(1024/binning):(1038/binning)])
+            # TBD: Which is correct here?
+            #bias = np.median(image[:,(1039/binning):])
         else:
             # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
             self.cmd.warn('text=%s'%qstr("Cheating with bais level! No overscan was found!"))
@@ -660,9 +665,14 @@ class GuiderImageAnalysis(object):
         ccdGain = 1
         ccdInfo = PyGuide.CCDInfo(self.imageBias,readNoise,ccdGain,)
         stars = PyGuide.findStars(image,mask,None,ccdInfo)
-        print stars
-        star = stars[0][0]
-        shape = PyGuide.StarShape.starShape(stars[0][0],mask,star.xyCtr,star.rad)
+        try:
+            star = stars[0][0]
+        except:
+            return None,None
+        try:
+            shape = PyGuide.StarShape.starShape(image,mask,star.xyCtr,100)
+        except:
+            shape = PyGuide.StarShape.StarShapeData(False,'failed to compute star shape')
         return star,shape
 
     def findStars(self, gprobes):
@@ -736,8 +746,17 @@ class GuiderImageAnalysis(object):
         img[mask > 0] = 0
 
         if self.camera == 'ecamera':
-            star,shape = self._find_stars_ecam(image)
-            self.cmd.info('star=%f,%f,%f,%f,%f'%(star.xyCtr[0],star.xyCtr[1],shape.fwhm,0,shape.ampl))
+            # mask the overscan too, since we're keeping it around for monitoring.
+            mask[:,(1039/self.binning):] |= GuiderImageAnalysis.mask_saturated
+            self.maskImage = mask
+            ecam_mask = mask == GuiderImageAnalysis.mask_saturated
+            star,shape = self._find_stars_ecam(image, ecam_mask)
+            if star is None:
+                return []
+                self.cmd.warn('text="ecam_star=None in exposure %d!"'%(self.frameNo))
+            if not shape.isOK:
+                self.cmd.warn('text="Could not determine star shape: %s"'%shape.msgStr)
+            self.cmd.inform('ecam_star=%d,%f,%f,%f,%f,%f'%(self.frameNo,star.xyCtr[0],star.xyCtr[1],shape.fwhm,shape.bkgnd,shape.ampl))
             return [] # no fibers to return
         else:
             # img16 = img.astype(np.int16)
@@ -872,7 +891,7 @@ class GuiderImageAnalysis(object):
         
         # Check if it's a good dark
         darkMean = image.mean()
-        if darkMean > 20:
+        if darkMean > 20: # TBD: if we change the bias region, this may have be increased to ~40
             self.cmd.warn('text=%s'%qstr('Much more signal in the dark than expected: %6.2f')%darkMean)
             raise GuiderExceptions.BadDarkError
         exptime = hdr['EXPTIME']
