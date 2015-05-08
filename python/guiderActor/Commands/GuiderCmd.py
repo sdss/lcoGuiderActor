@@ -108,7 +108,7 @@ class GuiderCmd(object):
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
             ('ecamOn', '[<time>] [<oneExposure>]', self.ecamOn),
             ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
-            ('centroid', '[<time>] [<bin>] [<center>] [<cradius>]', self.ecam_findstar)
+            ('centroid', '[<time>] [<bin>] [<center>] [<cradius>] [<file>]', self.reprocessFile)
             ]
     #
     # Define commands' callbacks

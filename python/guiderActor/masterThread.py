@@ -939,7 +939,7 @@ def ecam_on(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
 
     gState.setCmd(cmd)
     gState.cmd.respond("guideState=on")
-    gState.expTime = time
+    gState.expTime = expTime
     queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
                         oneExposure=oneExposure, expTime=gState.expTime, camera='ecamera'))
 
