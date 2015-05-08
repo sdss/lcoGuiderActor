@@ -394,7 +394,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     # Don't need to do anything else with ecam images.
     if camera == 'ecamera':
         # No more processing needed, so just write the file.
-        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)        
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
         return frameInfo
 
     #
@@ -920,8 +920,15 @@ def set_refraction(cmd, gState, corrRatio, plateType, surveyMode):
     elif plateType is not None:
         gState.setRefractionBalance(plateType,surveyMode)
 
-def ecam_on(cmd, gState, actorState, queues):
+def ecam_on(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
     """Start taking and processing exposures with the engineering camera."""
+
+    # TBD: better off here to make ecam just part of guider on/off, so it gets
+    # all of the regular stuff "for free".
+    # Either make it auto-use ecam when cart 19 is loaded, or have an ecam argument.
+    # That would also entail pulling the START_GUIDING nonsense into a function,
+    # which is a really good thing(tm).
+
     if gState.cmd:
         cmd.fail("text=The guider appears to already be running")
         return False
@@ -932,22 +939,9 @@ def ecam_on(cmd, gState, actorState, queues):
 
     gState.setCmd(cmd)
     gState.cmd.respond("guideState=on")
+    gState.expTime = time
     queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
-                        expTime=gState.expTime, camera='ecamera'))
-
-def ecam_off(cmd, gState, queues):
-    """Stop taking exposures with the engineering camera."""
-    if gState.cmd is None:
-        cmd.fail('text="ecam not currently exposing."')
-        return False
-    cmd.respond("guideState=stopping")
-    queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, cmd, quiet=True, priority=Msg.MEDIUM))
-
-    gState.cmd.finish("guideState=off")
-    gState.setCmd(None)
-    # If the off command came from a user, finish their command too.
-    if gState.cmd != cmd:
-        cmd.finish()
+                        oneExposure=oneExposure, expTime=gState.expTime, camera='ecamera'))
 
 
 def main(actor, queues):
@@ -1351,11 +1345,9 @@ def main(actor, queues):
                 set_decenter(msg.cmd, decenters, gState, enable)
             
             elif msg.type == Msg.ECAM_ON:
-                ecam_on(msg.cmd, gState, actorState, queues)
-                pass
-
-            elif msg.type == Msg.ECAM_OFF:
-                ecam_off(msg.cmd, gState, queues)
+                oneExposure = getattr(msg,'oneExposure',False)
+                expTime = getattr(msg,'expTime',5)
+                ecam_on(msg.cmd, gState, actorState, queues, expTime=expTime, oneExposure=oneExposure)
                 pass
 
             elif msg.type == Msg.STATUS:
