@@ -70,6 +70,9 @@ class GuiderCmd(object):
                                         keys.Key("movieMJD", types.String(), help="The MJD that we want to generate the movie for."),
                                         keys.Key("start",types.Int(),help="Guider frame number to start the movie at."),
                                         keys.Key("end",types.Int(),help="Guider frame number to end the movie at."),
+                                        keys.Key("bin",types.Int(),help="bin factor for exposure"),
+                                        keys.Key("center",types.Int()*2,help="search center location for ecam star centroiding"),
+                                        keys.Key("cradius",types.Int(),help="search radius for ecam star centroiding"),
                                        )
         #
         # Declare commands
@@ -103,8 +106,9 @@ class GuiderCmd(object):
             ('mangaDither', "<ditherPos>", self.mangaDither),
             ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
-            ('ecamOn', '[<time>]', self.ecamOn),
-            ('ecamOff', '', self.ecamOff)
+            ('ecamOn', '[<time>] [<oneExposure>]', self.ecamOn),
+            ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
+            ('centroid', '[<time>] [<bin>] [<center>] [<cradius>]', self.ecam_findstar)
             ]
     #
     # Define commands' callbacks
@@ -589,13 +593,21 @@ class GuiderCmd(object):
         Apply darks, flats, and tell STUI to display the result.
         """
         time = cmd.cmd.keywords['time'].values[0] if 'time' in cmd.cmd.keywords else 5
+        oneExposure = "oneExposure" in cmd.cmd.keywords
 
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
-        queue.put(Msg(Msg.ECAM_ON, cmd=cmd, time=time))
+        queue.put(Msg(Msg.ECAM_ON, cmd=cmd, expTime=time, oneExposure=oneExposure))
 
-    def ecamOff(self, cmd):
-        """Stop an ongoing ecamera exposure sequence."""
+
+    def ecam_findstar(self, cmd):
+        """
+        Take one ecam exposure, reduce it, and output the stars found therein.
+        """
+        time = cmd.cmd.keywords['time'].values[0] if 'time' in cmd.cmd.keywords else 5
+
+        # TBD: Can't change ecam binning yet!
+        bin = cmd.cmd.keywords['bin'].values[0] if 'bin' in cmd.cmd.keywords else 1
+
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
-        queue.put(Msg(Msg.ECAM_OFF, cmd=cmd))
+        queue.put(Msg(Msg.ECAM_ON, cmd=cmd, expTime=time, oneExposure=True, bin=bin))
 
-#...

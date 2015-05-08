@@ -124,16 +124,26 @@ class TestEcam(GuiderCmdTester,unittest.TestCase):
         queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('ecamOn %s'%(args),queue)
         self.assertEqual(msg.type, guiderActor.Msg.ECAM_ON)
-        self.assertEqual(msg.time, expect.get('time',5))
+        self.assertEqual(msg.expTime, expect.get('time',5))
+        self.assertEqual(msg.oneExposure, expect.get('oneExposure',False))
     def test_ecamOn(self):
         self._ecamOn('')
+    def test_ecamOn_oneExposure(self):
+        self._ecamOn('oneExposure',{'oneExposure':True})
     def test_ecamOn_time10(self):
         self._ecamOn('time=11', {'time':11})
 
-    def test_ecamOff(self):
+    def _findstar(self, args, expect={}):
         queue = self.queues[guiderActor.MASTER]
-        msg = self._run_cmd('ecamOff',queue)
-        self.assertEqual(msg.type, guiderActor.Msg.ECAM_OFF)
+        msg = self._run_cmd('findstar %s'%(args),queue)
+        self.assertEqual(msg.type, guiderActor.Msg.ECAM_ON)
+        self.assertEqual(msg.expTime, expect.get('time',5))
+        self.assertEqual(msg.bin, expect.get('bin',1))
+        self.assertEqual(msg.oneExposure, True)
+    def test_findstar(self):
+        self._findstar('')
+    def test_findstar_nondefault(self):
+        self._findstar('time=11 bin=2', {'time':11,'bin':2})
 
 if __name__ == '__main__':
     verbosity = 2

@@ -22,6 +22,8 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.outDarkFile = 'proc-'+self.inDarkFile
         self.inFlatFile = 'gimg-0003.fits.gz'
         self.outFlatFile = 'proc-'+self.inFlatFile
+        self.inFlatEcamFile = 'eimg-0003.fits.gz'
+        self.outFlatEcamFile = 'proc-'+self.inFlatFile
 
         # bad files
         self.saturatedFile = 'gimg-0004.fits.gz'
@@ -67,6 +69,17 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         for name,i in self.probeNames.items():
         #    #self.assertEqual(i,self.gi.flatFibers[i].fiberid)
             print i,self.gi.flatFibers[i].fiberid
+        self._check_overwriting(inFile,outFile,self.gi.analyzeFlat,[self.gState.gprobes])
+
+    def test_analyzeFlat_ecam(self):
+        """Test GuiderImageAnalysis.analyzeFlat()"""
+        inFile = self.path(self.inFlatEcamFile)
+        outFile = self.path(self.outFlatEcamFile)
+        self.gi.camera = 'ecamera'
+        self.gi.analyzeFlat(inFile,self.gState.gprobes,cmd=self.cmd)
+        self.assertTrue(os.path.exists(outFile),'analyzeFlat file write')
+        # TBD: best test is probably to check that the flat is median ~1.
+        self.assertFail('Need to create a test for this!')
         self._check_overwriting(inFile,outFile,self.gi.analyzeFlat,[self.gState.gprobes])
 
     def test_call(self):

@@ -659,9 +659,11 @@ class GuiderImageAnalysis(object):
         readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
         ccdGain = 1
         ccdInfo = PyGuide.CCDInfo(self.imageBias,readNoise,ccdGain,)
-        result = PyGuide.findStars(image,mask,None,ccdInfo)
-        print result
-        return result[0]
+        stars = PyGuide.findStars(image,mask,None,ccdInfo)
+        print stars
+        star = stars[0][0]
+        shape = PyGuide.StarShape.starShape(stars[0][0],mask,star.xyCtr,star.rad)
+        return star,shape
 
     def findStars(self, gprobes):
         """
@@ -734,9 +736,8 @@ class GuiderImageAnalysis(object):
         img[mask > 0] = 0
 
         if self.camera == 'ecamera':
-            stars = self._find_stars_ecam(image)
-            s0 = stars[0]
-            self.cmd.info('star=%f,%f,%f,%f,%f'%(s0.xyCtr[0],s0.xyCtr[1],))
+            star,shape = self._find_stars_ecam(image)
+            self.cmd.info('star=%f,%f,%f,%f,%f'%(star.xyCtr[0],star.xyCtr[1],shape.fwhm,0,shape.ampl))
             return [] # no fibers to return
         else:
             # img16 = img.astype(np.int16)
