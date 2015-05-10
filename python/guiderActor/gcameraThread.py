@@ -76,6 +76,8 @@ def main(actor, queues):
 
                 if cmdVar.didFail:
                     msg.cmd.warn('text="Failed to take exposure"')
+                    if "Timeout" in cmdVar.lastReply.keywords:
+                        msg.cmd.warn('text="gcamera exposure command exceeded time limit."')
                     msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, success=False))
                     continue
 
