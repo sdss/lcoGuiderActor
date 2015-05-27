@@ -955,7 +955,7 @@ def main(actor, queues):
     oneExposure = False                 # just take a single exposure
     startFrame = None                   # guider frame number to start movie at.
     frameInfo = None                    # to catch guideStep's return.
-    gState = GuiderState.GuiderState()
+    gState = actorState.gState
     # need to wait a couple seconds to let the models sync up.
     time.sleep(3)
     setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
@@ -1185,8 +1185,6 @@ def main(actor, queues):
                 load_cartridge(msg, queues, gState, actorState)
                     
             elif msg.type == Msg.SET_PID:
-                if getattr(msg,'initialize',False):
-                    gState.set_pid_defaults(msg.axis, Kp=msg.Kp, Ti=msg.Ti, Td=msg.Td, Imax=msg.Imax, nfilt=msg.nfilt)
                 gState.pid[msg.axis].setPID(Kp=msg.Kp, Ti=msg.Ti, Td=msg.Td, Imax=msg.Imax, nfilt=msg.nfilt)
 
                 if msg.cmd:

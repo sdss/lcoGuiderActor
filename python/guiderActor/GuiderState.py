@@ -302,11 +302,10 @@ class GuiderState(object):
             self.pid_defaults[axis] = {}
             self.pid_time[axis] = None
 
-        # The alt > alt_high ra/dec/rot I term for the PID.
-        # Smoothly change to this value from alt_low to alt_high.
-        self.Ti_highalt = 100.
-        self.alt_low = 60.
-        self.alt_high = 80.
+        # The min and max altitudes to scale PID terms between for the given axes.
+        self.axes_to_scale = []
+        self.alt_min = 90.
+        self.alt_max = 90.
 
         # reset the decenter positions.
         self.clearDecenter()
@@ -443,19 +442,17 @@ class GuiderState(object):
 
         old_Ti = self.pid['raDec'].Ti
 
-        # use .get() incase set_pid_defaults wasn't called.
-        Ti_low = self.pid_defaults['raDec'].get('Ti',200)
-        Ti_high = self.Ti_highalt
-        if alt < self.alt_low:
+        # use .get() with a reasonable value incase set_pid_defaults wasn't called.
+        Ti_low = self.pid_defaults['raDec'].get('Ti_min',200)
+        Ti_high = self.pid_defaults['raDec'].get('Ti_max',200)
+        if alt < self.alt_min:
             Ti = Ti_low
-        elif alt > self.alt_high:
+        elif alt > self.alt_max:
             Ti = Ti_high
         else:  # between low and high limits...
-            Ti = twoPointForm(self.alt_low, Ti_low, self.alt_high, Ti_high, alt)
-            # delta = (self.alt_high - self.alt_low)
-            # Ti = min(1, (1 - (self.alt_high - alt)/delta)) * self.Ti_highalt
+            Ti = twoPointForm(self.alt_min, Ti_low, self.alt_max, Ti_high, alt)
         if old_Ti != Ti:
-            for axis in ['raDec']:#, 'rot']:
+            for axis in self.axes_to_scale:
                 self.pid[axis].setPID(Ti=Ti)
             return True
         else:
