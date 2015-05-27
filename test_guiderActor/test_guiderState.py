@@ -145,6 +145,22 @@ class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
         for x in values:
             self.assertEqual(self.gState.pid_defaults['raDec'][x], values[x])
 
+    def test_reset_pid_terms_all(self):
+        for axis in ['raDec','rot','focus','scale']:
+            self.gState.pid[axis]._x = 10000000
+        self.gState.reset_pid_terms()
+        for axis in ['raDec','rot','focus','scale']:
+            self.assertIsNone(self.gState.pid[axis]._x, "%s was not reset"%axis)
+
+    def test_reset_pid_terms_rot(self):
+        for axis in ['raDec','rot','focus','scale']:
+            self.gState.pid[axis]._x = 10000000
+        axis = 'rot'
+        self.gState.reset_pid_terms([axis])
+        self.assertIsNone(self.gState.pid[axis]._x, "%s was not reset"%axis)
+        for axis in ['raDec','focus','scale']:
+            self.assertIsNotNone(self.gState.pid[axis]._x, "%s should not have reset"%axis)
+
     def _scale_pid_with_alt(self, alt, expect_Ti):
         result = self.gState.scale_pid_with_alt(alt)
         for axis in expect_Ti:

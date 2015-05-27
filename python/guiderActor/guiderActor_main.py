@@ -13,13 +13,9 @@ import gcameraThread
 import masterThread
 import movieThread
 
-from guiderActor import *
+from guiderActor import Msg
+import GuiderState
 import guiderActor.myGlobals
-#
-# Import sdss3logging before logging if you want to use it
-#
-import opscore.utility.sdss3logging as sdss3logging
-import logging
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -39,9 +35,20 @@ class State(object):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def getActorState():
-    print "RHL actorState", actorState
-    return guiderActor.myGlobals.actorState
+def set_default_pids(config, gState):
+    """Set the PID value defaults from the config file."""
+    axes = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")
+    for axis in config.options('PID'):
+        axis = axes[axis.upper()]
+        Kp, Ti_min, Ti_max, Td, Imax, nfilt = [float(v) for v in config.get('PID', axis).split()]        
+        gState.set_pid_defaults(axis, Kp=Kp, Ti_min=Ti_min, Ti_max=Ti_max, Td=Td, Imax=Imax, nfilt=int(nfilt))
+        gState.pid[axis].setPID(Kp=Kp, Ti=Ti_min, Td=Td, Imax=Imax, nfilt=nfilt)
+
+def set_pid_scaling(config, gState):
+    """Set the min/max altitude and the axes to scale the PID terms on."""
+    gState.axes_to_scale = config.get('PID_altitude_scale', 'axes').split()
+    gState.alt_min = float(config.get('PID_altitude_scale', 'min'))
+    gState.alt_max = float(config.get('PID_altitude_scale', 'max'))
 
 class Guider(actorcore.Actor.Actor):
     def __init__(self, name, configFile, debugLevel=30):
@@ -54,6 +61,7 @@ class Guider(actorcore.Actor.Actor):
 
         guiderActor.myGlobals.actorState = State(self)
         actorState = guiderActor.myGlobals.actorState
+        actorState.gState = GuiderState.GuiderState()
         #
         # Load other actor's models so we can send it commands
         # And ours: we use the models to generate the FITS cards.
@@ -87,11 +95,8 @@ class Guider(actorcore.Actor.Actor):
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, None, what=what,
                                                           enable=enable))
 
-        for axis in self.config.options('PID'):
-            axis = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")[axis.upper()]
-            Kp, Ti, Td, Imax, nfilt = [float(v) for v in self.config.get('PID', axis).split()]
-            actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, None, axis=axis, initialize=True,
-                                                          Kp=Kp, Ti=Ti, Td=Td, Imax=Imax, nfilt=int(nfilt)))
+        set_default_pids(self.config, actorState.gState)
+        set_pid_scaling(self.config, actorState.gState)
 
         #
         # Finally start the reactor
