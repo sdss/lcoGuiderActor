@@ -24,7 +24,6 @@ ugriz = np.array([13,13.5,14,14.5,15])
 class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
     def setUp(self):
         super(TestGuiderState,self).setUp()
-        self.gState = GuiderState.GuiderState()
         #myGlobals.actorState.models = {'tcc':Model('axePos',[20,30,40])}
         for k,v in gprobeKey.items():
             self.gState.gprobes[v[1]] = GuiderState.GProbe(gprobeKey=v)
@@ -156,11 +155,11 @@ class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
         result = self._scale_pid_with_alt(50, expect_Ti)
         self.assertFalse(result)
     def test_scale_pid_with_alt_mid(self):
-        expect_Ti = {'raDec':150, 'rot':250, 'scale':0, 'focus':0}
+        expect_Ti = {'raDec':175, 'rot':250, 'scale':0, 'focus':0}
         result = self._scale_pid_with_alt(70, expect_Ti)
         self.assertTrue(result)
     def test_scale_pid_with_alt_high(self):
-        expect_Ti = {'raDec':50, 'rot':250, 'scale':0, 'focus':0}
+        expect_Ti = {'raDec':100, 'rot':250, 'scale':0, 'focus':0}
         result = self._scale_pid_with_alt(85, expect_Ti)
         self.assertTrue(result)
 

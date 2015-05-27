@@ -304,7 +304,7 @@ class GuiderState(object):
 
         # The alt > alt_high ra/dec/rot I term for the PID.
         # Smoothly change to this value from alt_low to alt_high.
-        self.Ti_highalt = 50.
+        self.Ti_highalt = 100.
         self.alt_low = 60.
         self.alt_high = 80.
 
