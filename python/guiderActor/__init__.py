@@ -28,7 +28,6 @@ class Msg(object):
     class TAKE_DARK(): pass
     class DARK_FINISHED(): pass
     class ENABLE_FIBER(): pass
-    class FAIL(): pass
     class LOAD_CARTRIDGE(): pass
     class SET_GUIDE_MODE(): pass
     class STATUS(): pass
