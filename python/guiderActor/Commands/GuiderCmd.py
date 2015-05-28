@@ -334,6 +334,7 @@ class GuiderCmd(object):
             gState = actorState.gState
             gState.deleteAllGprobes()
             gState.cartridge = cartridge
+            gState.plate = 0
             gState.plateType = 'ecamera'
             gState.surveyMode = None
             queue.put(Msg(Msg.STATUS, msg.cmd, finish=True))

@@ -58,7 +58,7 @@ def processOneProcFile(gState, guiderFile, cartFile, plateFile, actor=None, queu
     if not guideCmd: guideCmd = FakeCommand()
     if not queues: queues = dict(MASTER=Queue.Queue())
 
-    gState.setCmd(guideCmd)
+    gState.cmd = guideCmd 
     guideStep(None, queues, cmd, gState, guiderFile, True)
 
 def send_decenter_status(cmd, gState, frameNo):
@@ -351,19 +351,19 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     darkfile = h.get('DARKFILE', None)
     if not flatfile:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("No flat image available"))
-        gState.setCmd(None)
+        gState.cmd = None
         return frameInfo
     
     if not darkfile:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("No dark image available"))
-        gState.setCmd(None)
+        gState.cmd = None
         return frameInfo
 
     if flatcart != gState.cartridge:
         if False:
             guideCmd.fail('guideState="failed"; text=%s' % qstr("Guider flat is for cartridge %d but %d is loaded" % (
                             flatcart, gState.cartridge)))
-            gState.setCmd(None)
+            gState.cmd = None
             return frameInfo
         else:
             guideCmd.warn("text=%s" % qstr("Guider flat is for cartridge %d but %d is loaded" % (
@@ -379,15 +379,15 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         return frameInfo
     except GuiderExceptions.FlatError as e:
         guideCmd.fail('guideState="failed"; text=%s' %qstr("Error reading/processing %s flat: %s"%(camera,e)))
-        gState.setCmd(None)
+        gState.cmd = None
         return frameInfo
     except GuiderExceptions.GuiderError as e:
         guideCmd.fail('guideState="failed"; text=%s' %qstr("Error processing %s image: %s"%(camera,e)))
-        gState.setCmd(None)
+        gState.cmd = None
         return frameInfo
     except Exception as e:
         guideCmd.fail('guideState="failed"; text=%s' % qstr("Unknown error in processing guide images: %s" % e))
-        gState.setCmd(None)
+        gState.cmd = None
         tback.tback("GuideTest", e)
         return frameInfo
 
@@ -457,7 +457,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
-            gState.setCmd(None)
+            gState.cmd = None
             return frameInfo
 
         #if guidingIsOK(cmd, actorState):
@@ -559,7 +559,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
-            gState.setCmd(None)
+            gState.cmd = None
         return frameInfo
 
     #
@@ -822,7 +822,7 @@ def cal_finished(msg, name, guiderImageAnalysis, actorState, gState):
     except GuiderExceptions.GuiderError as e:
         cmd.error("text=%s"%qstr(e))
         cmd.fail('guideState="failed"; text=%s' %qstr("%s failed. Error reading/processing guider %s."%(func,name)))
-        gState.setCmd(None)
+        gState.cmd = None
         return
     except Exception as e:
         tback.tback("cal_finished", e)
@@ -922,13 +922,6 @@ def set_refraction(cmd, gState, corrRatio, plateType, surveyMode):
 
 def ecam_on(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
     """Start taking and processing exposures with the engineering camera."""
-
-    # TBD: better off here to make ecam just part of guider on/off, so it gets
-    # all of the regular stuff "for free".
-    # Either make it auto-use ecam when cart 19 is loaded, or have an ecam argument.
-    # That would also entail pulling the START_GUIDING nonsense into a function,
-    # which is a really good thing(tm).
-
     if gState.cmd:
         cmd.fail("text=The guider appears to already be running")
         return False
@@ -937,14 +930,42 @@ def ecam_on(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
         queues[MASTER].put(Msg(Msg.FAIL, cmd, text="Not ok to guide in current state."))
         return False
 
-    gState.setCmd(cmd)
+    gState.cmd = cmd
     gState.cmd.respond("guideState=on")
     gState.expTime = expTime
     queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
                         oneExposure=oneExposure, expTime=gState.expTime, camera='ecamera'))
 
-def start_guider(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
-    return
+def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
+                 expTime=5, oneExposure=False, force=False):
+    """Start taking and processing exposures with either guider or engineering camera."""
+
+    if gState.cmd:
+        errMsg = "The guider appears to already be running"
+        if force:
+            cmd.warn('text="%s; restarting"' % (errMsg))
+        else:
+            cmd.fail('text="%s"' % (errMsg))
+            return
+
+    if gState.cartridge <= 0:
+        failMsg = "No cart/plate information: please load cartridge and try again."
+        cmd.fail('guideState=failed; text="%s"' % failMsg)
+        return
+    if not guidingIsOK(cmd, actorState, force=force):
+        failMsg = "Not ok to guide in current state."
+        cmd.fail('guideState=failed; text="%s"' % failMsg)
+        return
+
+    if (expTime is not None and gState.expTime != expTime):
+        gState.expTime = expTime
+    if (stack is not None and gState.stack != stack):
+        gState.stack = stack
+
+    queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=False))
+
+    gState.cmd = cmd
+
 
 def stop_guider(cmd, gState, actorState, queues, frameNo, success):
     """Stop current guider exposure and stop taking new exposures."""
@@ -968,14 +989,14 @@ def stop_guider(cmd, gState, actorState, queues, frameNo, success):
             cmd.finish("guideState=off")
         
         gState.cmd.finish("guideState=off")
-        gState.setCmd(None)
+        gState.cmd = None
     else:
         queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, cmd, quiet=True, priority=Msg.MEDIUM))
         if gState.cmd != cmd:
             cmd.fail("guideState=failed")
 
         gState.cmd.fail("guideState=failed")
-        gState.setCmd(None)
+        gState.cmd = None
 
 def main(actor, queues):
     """Main loop for master thread"""
@@ -1023,39 +1044,14 @@ def main(actor, queues):
                 stop_guider(msg.cmd, gState, actorState, queues, frameInfo.frameNo, success)
 
             elif msg.type == Msg.START_GUIDING:
-                try:
-                    expTime = msg.expTime
-                    stack = msg.stack
-                    
-                    if (expTime >= 0 and gState.expTime != expTime) or gState.stack != stack:
-                        gState.expTime = expTime
-                        gState.stack = stack
-                        queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=False))
-                except AttributeError:
-                    pass
-
-                force = msg.force
-                oneExposure = msg.oneExposure
+                expTime = getattr(msg,'expTime',None)
+                stack = getattr(msg,'stack',None)
+                force = getattr(msg,'force',False)
+                oneExposure = getattr(msg,'oneExposure',False)
+                camera = getattr(msg,'camera','gcamera')
                 
-                if gState.cmd:
-                    errMsg = "The guider appears to already be running"
-                    if force:
-                        msg.cmd.warn('text="%s; restarting"' % (errMsg))
-                    else:
-                        msg.cmd.fail('text="%s"' % (errMsg))
-                        continue
+                start_guider(msg.cmd, gState, actorState, queues, camera=camera, stack=stack, expTime=expTime, oneExposure=oneExposure, force=force)
 
-                if gState.plate < 0:
-                    queues[MASTER].put(Msg(Msg.FAIL, msg.cmd,
-                                           text="Please tell me about your cartridge and try again"))
-                    continue
-
-                if not guidingIsOK(msg.cmd, actorState, force=force):
-                    queues[MASTER].put(Msg(Msg.FAIL, msg.cmd, text="Not ok to guide in current state."))
-                    continue
-
-                cmd = msg.cmd
-                gState.setCmd(cmd)
                 
                 # if a start frame was already defined, don't re-define it
                 # e.g., make_movie hadn't been run.
@@ -1144,7 +1140,7 @@ def main(actor, queues):
                 #
                 if oneExposure:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
-                    gState.setCmd(None)
+                    gState.cmd = None
                 else:
                     queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
                                             expTime=gState.expTime, stack=gState.stack, camera=camera))
@@ -1171,9 +1167,6 @@ def main(actor, queues):
                     msg.cmd.fail('text="something went wrong when taking the flat"')
                     continue
                 flat_finished(msg,guiderImageAnalysis,actorState,gState)
-
-            elif msg.type == Msg.FAIL:
-                msg.cmd.fail('guideState="failed"; text="%s"' % msg.text);
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.startFrame = None # clear the start frame: don't need it any more!
@@ -1336,12 +1329,6 @@ def main(actor, queues):
                 decenters = getattr(msg,'decenters',{})
                 set_decenter(msg.cmd, decenters, gState, enable)
             
-            elif msg.type == Msg.ECAM_ON:
-                oneExposure = getattr(msg,'oneExposure',False)
-                expTime = getattr(msg,'expTime',5)
-                ecam_on(msg.cmd, gState, actorState, queues, expTime=expTime, oneExposure=oneExposure)
-                pass
-
             elif msg.type == Msg.STATUS:
                 # Try to generate status even after we have failed.
                 cmd = msg.cmd if msg.cmd.alive else actor.bcast
@@ -1400,7 +1387,7 @@ def main(actor, queues):
                 gState.cmd.error('text="%s"' % errMsg)
             else:
                 actor.bcast.error('text="%s"' % errMsg)
-            gState.setCmd(False)
+            gState.cmd = None
             # jkp NOTE: this gives a RunTimeError/max recurision depth if
             # guiderActor isn't built correctly (missing lib/libguide.so)
             tback.tback(errMsg, e)

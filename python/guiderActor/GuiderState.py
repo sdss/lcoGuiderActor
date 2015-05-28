@@ -351,9 +351,6 @@ class GuiderState(object):
             self.refractionBalance = 1
         else:
             self.refractionBalance = 0
-        
-    def setCmd(self, cmd=None):
-        self.cmd = cmd
     
     def setDecenter(self, decenters, cmd, enable):
         """
