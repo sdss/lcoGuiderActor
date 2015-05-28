@@ -937,7 +937,7 @@ def ecam_on(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
                         oneExposure=oneExposure, expTime=gState.expTime, camera='ecamera'))
 
 def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
-                 expTime=5, oneExposure=False, force=False):
+                 expTime=5, force=False):
     """Start taking and processing exposures with either guider or engineering camera."""
 
     if gState.cmd:
@@ -965,6 +965,34 @@ def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
     queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=False))
 
     gState.cmd = cmd
+
+    # if a start frame was already defined, don't re-define it
+    # e.g., make_movie hadn't run successfully.
+    if not gState.startFrame:
+        # Keep track of the first exposure number for generating movies.
+        # Take nextSeqNo+1 because the current value may still be the one
+        # issued from the gcamera flat command, which we don't want for this.
+        try:
+            gState.startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+            # If 'nextSeqno' hasn't been seen yet (e.g., guider was started after gcamera),
+            # we need to get gcamera status first.
+        except TypeError:
+            cmdVar = actorState.actor.cmdr.call(actor="gcamera", forUserCmd=cmd, cmdStr="status")
+            if cmdVar.didFail:
+                failMsg = "Cannot get gcamera status to determine nextSeqNo!"
+                cmd.fail('guideState=failed; text="%s"' % failMsg)
+                return
+            # now we can do this safely.
+            gState.startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+        # if we're in simulation mode, use that number instead.
+        simulating = actorState.models['gcamera'].keyVarDict['simulating']
+        if simulating[0]:
+            gState.startFrame = simulating[2]
+
+    gState.reset_pid_terms()
+    gState.cmd.respond("guideState=on")
+    queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
+                            expTime=gState.expTime, stack=gState.stack, camera=camera))
 
 
 def stop_guider(cmd, gState, actorState, queues, frameNo, success):
@@ -1047,41 +1075,9 @@ def main(actor, queues):
                 expTime = getattr(msg,'expTime',None)
                 stack = getattr(msg,'stack',None)
                 force = getattr(msg,'force',False)
-                oneExposure = getattr(msg,'oneExposure',False)
                 camera = getattr(msg,'camera','gcamera')
-                
-                start_guider(msg.cmd, gState, actorState, queues, camera=camera, stack=stack, expTime=expTime, oneExposure=oneExposure, force=force)
-
-                
-                # if a start frame was already defined, don't re-define it
-                # e.g., make_movie hadn't been run.
-                # jkp: TBD: when could this cause a problem?
-                if not gState.startFrame:
-                    # Keep track of the first exposure number for generating movies.
-                    # Take nextSeqNo+1 because the current value may still be the one
-                    # issued from the gcamera flat command, which we don't want for this.
-                    try:
-                        gState.startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
-                        # If 'nextSeqno' hasn't been seen yet (e.g., guider was started after gcamera),
-                        # we need to get gcamera status first.
-                    except TypeError:
-                        cmdVar = actorState.actor.cmdr.call(actor="gcamera", forUserCmd=msg.cmd, cmdStr="status")
-                        if cmdVar.didFail:
-                            queues[MASTER].put(Msg(Msg.FAIL, msg.cmd, text="Cannot get gcamera status!"))
-                            continue
-                        # now we can do this safely.
-                        gState.startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
-                    # if we're in simulation mode, use that number instead.
-                    simulating = actorState.models['gcamera'].keyVarDict['simulating']
-                    if simulating[0]:
-                        gState.startFrame = simulating[2]
-                
-                gState.reset_pid_terms()
-
-                gState.cmd.respond("guideState=on")
-
-                queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
-                                        expTime=gState.expTime, stack=gState.stack))
+                oneExposure = getattr(msg,'oneExposure',False)
+                start_guider(msg.cmd, gState, actorState, queues, camera=camera, stack=stack, expTime=expTime, force=force)
 
             elif msg.type == Msg.REPROCESS_FILE:
                 processOneProcFile(gState, msg.filename, actor, queues, cmd=msg.cmd)

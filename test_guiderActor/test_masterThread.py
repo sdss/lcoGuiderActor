@@ -175,15 +175,67 @@ class TestStartStopGuider(guiderTester.GuiderTester,unittest.TestCase):
         self.queues[guiderActor.MASTER] = Queue('master')
         myGlobals.actorState.queues = self.queues
 
-    def test_start_guider(self):
-        # guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
-        # guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        masterThread.start_guider(self.cmd,self.gState,self.actorState,self.actorState.queues)
+    def _start_guider(self, nWarn=0, **kwargs):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
+        self.gState.cartridge = self.actorState.models['guider'].keyVarDict['cartridgeLoaded'][0]
+
+        masterThread.start_guider(self.cmd,self.gState,self.actorState,self.actorState.queues,**kwargs)
+
+        msg = self.queues[guiderActor.MASTER].get(False)
+        self.assertEqual(msg.type, guiderActor.Msg.STATUS)
+        self.assertFalse(msg.finish)
+
+        self.assertEqual(self.gState.cmd, self.cmd)
+
+        startFrame = self.actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+        self.assertEqual(self.gState.startFrame, startFrame)
+
         msg = self.queues[guiderActor.GCAMERA].get(False)
         self.assertEqual(msg.type, guiderActor.Msg.EXPOSE)
-        self.assertEqual(msg.camera, 'gcamera')
-        self.assertEqual(msg.expTime, self.gState.expTime)
-        self._check_cmd(0,1,0,0,False)
+        self.assertEqual(msg.camera, kwargs.get('camera','gcamera'))
+        self.assertEqual(msg.expTime, kwargs.get('expTime',5))
+        self.assertEqual(msg.stack, kwargs.get('stack',1))
+        self._check_cmd(0,1,nWarn,0,False)
+    def test_start_guider(self):
+        self._start_guider()
+    def test_start_guider_stack_2(self):
+        self._start_guider(stack=2)
+    def test_start_guider_expTime_10(self):
+        self._start_guider(expTime=10)
+    def test_start_guider_already_running_force(self):
+        self.gState.cmd = TestHelper.Cmd()
+        self._start_guider(force=True, nWarn=1)
+    def test_start_guider_ecamera(self):
+        self._start_guider(camera='ecamera')
+
+    def test_start_guider_no_plate(self):
+        self.gState.cartridge = -1
+        masterThread.start_guider(self.cmd,self.gState,self.actorState,self.actorState.queues)
+        self.assertTrue(self.queues[guiderActor.GCAMERA].empty())
+        self.assertTrue(self.queues[guiderActor.MASTER].empty())
+        self.assertIsNone(self.gState.cmd)
+        self._check_cmd(0,0,0,0,True,True)
+
+    def test_start_guider_not_ok_to_guide(self):
+        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
+        guiderTester.updateModel('tcc',TestHelper.tccState['stopped'])
+        self.gState.cartridge = self.actorState.models['guider'].keyVarDict['cartridgeLoaded'][0]
+        masterThread.start_guider(self.cmd,self.gState,self.actorState,self.actorState.queues)
+        self.assertTrue(self.queues[guiderActor.GCAMERA].empty())
+        self.assertTrue(self.queues[guiderActor.MASTER].empty())
+        self.assertIsNone(self.gState.cmd)
+        self._check_cmd(0,0,1,0,True,True)
+
+    def test_start_guider_already_running(self):
+        oldCmd = TestHelper.Cmd()
+        self.gState.cmd = oldCmd
+        masterThread.start_guider(self.cmd,self.gState,self.actorState,self.actorState.queues)
+        self.assertTrue(self.queues[guiderActor.GCAMERA].empty())
+        self.assertTrue(self.queues[guiderActor.MASTER].empty())
+        self.assertEqual(self.gState.cmd, oldCmd)
+        self._check_cmd(0,0,0,0,True,True)
+
 
     def _stop_guider(self, success=True):
         self.gState.cmd = self.cmd
