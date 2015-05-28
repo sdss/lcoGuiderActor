@@ -920,22 +920,6 @@ def set_refraction(cmd, gState, corrRatio, plateType, surveyMode):
     elif plateType is not None:
         gState.setRefractionBalance(plateType,surveyMode)
 
-def ecam_on(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
-    """Start taking and processing exposures with the engineering camera."""
-    if gState.cmd:
-        cmd.fail("text=The guider appears to already be running")
-        return False
-
-    if not guidingIsOK(cmd, actorState):
-        queues[MASTER].put(Msg(Msg.FAIL, cmd, text="Not ok to guide in current state."))
-        return False
-
-    gState.cmd = cmd
-    gState.cmd.respond("guideState=on")
-    gState.expTime = expTime
-    queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
-                        oneExposure=oneExposure, expTime=gState.expTime, camera='ecamera'))
-
 def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
                  expTime=5, force=False):
     """Start taking and processing exposures with either guider or engineering camera."""

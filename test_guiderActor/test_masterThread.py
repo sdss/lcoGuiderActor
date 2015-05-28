@@ -260,53 +260,6 @@ class TestStartStopGuider(guiderTester.GuiderTester,unittest.TestCase):
         self._check_cmd(0,0,0,0,True,didFail=True)
 
 
-class TestEcam(guiderTester.GuiderTester,unittest.TestCase):
-    """Tests for turning ecam processing on and off."""
-    def setUp(self):
-        super(TestEcam,self).setUp()
-        # Do this after super setUp, as that's what creates actorState.
-        self.queues = {}
-        self.queues[guiderActor.GCAMERA] = Queue('gcamera')
-        self.queues[guiderActor.MASTER] = Queue('master')
-        myGlobals.actorState.queues = self.queues
-
-    def test_ecam_on(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self.gState.expTime = 10
-        masterThread.ecam_on(self.cmd,self.gState,self.actorState,self.actorState.queues)
-        msg = self.queues[guiderActor.GCAMERA].get()
-        self.assertEqual(msg.type, guiderActor.Msg.EXPOSE)
-        self.assertEqual(msg.camera, 'ecamera')
-        self.assertEqual(msg.expTime, self.gState.expTime)
-        self._check_cmd(0,1,0,0,False)
-    def test_ecam_on_oneExposure(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self.gState.expTime = 15
-        oneExposure = True
-        masterThread.ecam_on(self.cmd,self.gState,self.actorState,self.actorState.queues, oneExposure=oneExposure)
-        msg = self.queues[guiderActor.GCAMERA].get()
-        self.assertEqual(msg.type, guiderActor.Msg.EXPOSE)
-        self.assertEqual(msg.camera, 'ecamera')
-        self.assertEqual(msg.expTime, self.gState.expTime)
-        self.assertEqual(msg.oneExposure, oneExposure)
-        self._check_cmd(0,1,0,0,False)
-
-    def test_ecam_on_fail_not_ok_to_guide(self):
-        """Putting FAIL on the master queue will trigger the cmd failure and message."""
-        guiderTester.updateModel('mcp',TestHelper.mcpState['all_off'])
-        masterThread.ecam_on(self.cmd,self.gState,self.actorState,self.actorState.queues)
-        msg = self.queues[guiderActor.MASTER].get()
-        self.assertEqual(msg.type, guiderActor.Msg.FAIL)
-        self.assertTrue(self.queues[guiderActor.GCAMERA].empty())
-        self._check_cmd(0,0,1,0,False)
-    def test_ecam_on_fail_already_on(self):
-        self.gState.cmd = self.cmd
-        masterThread.ecam_on(self.cmd,self.gState,self.actorState,self.actorState.queues)
-        self.assertTrue(self.queues[guiderActor.GCAMERA].empty())
-        self._check_cmd(0,0,0,0,True,True)
-
 if __name__ == '__main__':
     verbosity = 2
     
