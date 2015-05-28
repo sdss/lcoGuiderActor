@@ -2,8 +2,7 @@
 
 """ Wrap top-level guider functions. """
 
-import logging
-import os, re, sys
+import os
 import threading
 
 import opscore.protocols.keys as keys
@@ -12,7 +11,7 @@ import opscore.protocols.types as types
 from opscore.utility.qstr import qstr
 import opscore.utility.YPF as YPF
 
-from guiderActor import *
+from guiderActor import Msg, GuiderState
 import guiderActor
 import guiderActor.myGlobals as myGlobals
 
@@ -70,6 +69,7 @@ class GuiderCmd(object):
                                         keys.Key("movieMJD", types.String(), help="The MJD that we want to generate the movie for."),
                                         keys.Key("start",types.Int(),help="Guider frame number to start the movie at."),
                                         keys.Key("end",types.Int(),help="Guider frame number to end the movie at."),
+                                        
                                         keys.Key("bin",types.Int(),help="bin factor for exposure"),
                                         keys.Key("center",types.Int()*2,help="search center location for ecam star centroiding"),
                                         keys.Key("cradius",types.Int(),help="search radius for ecam star centroiding"),
@@ -106,7 +106,6 @@ class GuiderCmd(object):
             ('mangaDither', "<ditherPos>", self.mangaDither),
             ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
-            ('ecamOn', '[<time>] [<oneExposure>]', self.ecamOn),
             ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
             ('centroid', '[<time>] [<bin>] [<center>] [<cradius>] [<file>]', self.reprocessFile)
             ]
@@ -148,7 +147,7 @@ class GuiderCmd(object):
         """Take, and process, a guider flat."""
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 0.5
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_FLAT, cmd=cmd,
-                                                                start=True, expTime=expTime))
+                                                                expTime=expTime))
 
     def dark(self, cmd):
         """
@@ -159,7 +158,7 @@ class GuiderCmd(object):
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 15
         stack = cmd.cmd.keywords["stack"].values[0] if "stack" in cmd.cmd.keywords else 3
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_DARK, cmd=cmd,
-                                                                start=True, expTime=expTime, stack=stack))
+                                                                expTime=expTime, stack=stack))
 
     def setPID(self, cmd):
         """Set something's PID coefficients"""
@@ -190,14 +189,15 @@ class GuiderCmd(object):
         oneExposure = "oneExposure" in cmd.cmd.keywords
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else None
         stack = cmd.cmd.keywords["stack"].values[0] if "stack" in cmd.cmd.keywords else 1
+        camera = 'ecamera' if myGlobals.actorState.gState.plateType == 'ecamera' else 'gcamera'
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd,
-                                                                start=True, expTime=expTime, stack=stack,
+                                                                expTime=expTime, stack=stack, camera=camera,
                                                                 force=force, oneExposure=oneExposure))
     def guideOff(self, cmd):
         """Turn guiding off"""
 
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=False))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STOP_GUIDING, cmd=cmd))
 
     def centerUp(self, cmd):
         """Force a single XY offset"""
@@ -215,7 +215,7 @@ class GuiderCmd(object):
         # Force up an image-only guide loop
         for what in ["scale", "focus", "axes"]:
             actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_GUIDE_MODE, cmd=cmd, what=what, enable=False))
-        actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=True, oneExposure=False,
+        actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, oneExposure=False,
                                                       expTime=expTime, stack=stack, force=True))
         if probe:
             cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
@@ -238,7 +238,6 @@ class GuiderCmd(object):
     def starInFiber(self, cmd):
         """ Put a star down a given probe """
 
-        actorState = guiderActor.myGlobals.actorState
         probe = cmd.cmd.keywords['probe'].values[0] if 'probe' in cmd.cmd.keywords else None
         gprobe = cmd.cmd.keywords['gprobe'].values[0] if 'gprobe' in cmd.cmd.keywords else None
         if (probe == None and gprobe == None) or (probe != None and gprobe != None) :
@@ -275,6 +274,8 @@ class GuiderCmd(object):
         Error if cartridge that isn't actually mounted is specified (unless force is also given).
         """
 
+        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+
         force = "force" in cmd.cmd.keywords
         cartridge = cmd.cmd.keywords["cartridge"].values[0] if "cartridge" in cmd.cmd.keywords else -1
         pointing = cmd.cmd.keywords["pointing"].values[0] if "pointing" in cmd.cmd.keywords else "A"
@@ -284,9 +285,8 @@ class GuiderCmd(object):
         plate = str(cmd.cmd.keywords["plate"].values[0]) if "plate" in cmd.cmd.keywords else None
         mjd = cmd.cmd.keywords["mjd"].values[0] if "mjd" in cmd.cmd.keywords else None
         fscanId = cmd.cmd.keywords["fscanId"].values[0] if "fscanId" in cmd.cmd.keywords else None
-                                                #
+
         # Cartridge ID of 0 means that no cartridge is loaded
-        #
         if cartridge == 0:
             gprobes = {}
             plate = 0
@@ -296,11 +296,11 @@ class GuiderCmd(object):
             #
             # Send that information off to the master thread
             #
-            myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
-                                                                    cartridge=cartridge, plate=plate, pointing=pointing,
-                                                                    boresight_ra=boresight_ra, boresight_dec=boresight_dec,
-                                                                    design_ha=design_ha,
-                                                                    gprobes=gprobes))
+            queue.put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
+                      cartridge=cartridge, plate=plate, pointing=pointing,
+                      boresight_ra=boresight_ra, boresight_dec=boresight_dec,
+                      design_ha=design_ha,
+                      gprobes=gprobes))
             return
         #
         # Check that the claimed cartridge is actually on the telescope
@@ -327,9 +327,18 @@ class GuiderCmd(object):
             else:
                 cmd.fail("text=\"%s\"" % msg)
                 return
-        #
+
+        # cart 18 is the engineering camera, and has no info in platedb.
+        if cartridge == 18:
+            # don't do anything but clear the gprobes and output status.
+            gState = actorState.gState
+            gState.deleteAllGprobes()
+            gState.cartridge = cartridge
+            gState.plateType = 'ecamera'
+            gState.surveyMode = None
+            queue.put(Msg(Msg.STATUS, msg.cmd, finish=True))
+
         # Get the plate from the plateDB
-        #
         pointingInfoKey = actorState.models["platedb"].keyVarDict["pointingInfo"]
         extraArgs = ""
         if plate: extraArgs += " plate=%s" % (plate)
@@ -417,13 +426,12 @@ class GuiderCmd(object):
 
         # Send that information off to the master thread
         #
-        myGlobals.actorState.queues[guiderActor.MASTER].put(
-            Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
-                cartridge=cartridge, plate=plate, pointing=pointing,
-                fscanMJD=fscanMJD, fscanID=fscanID,
-                boresight_ra=boresight_ra, boresight_dec=boresight_dec,
-                design_ha=design_ha, survey=survey, surveyMode=surveyMode,
-                gprobes=gprobes))
+        queue.put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
+                  cartridge=cartridge, plate=plate, pointing=pointing,
+                  fscanMJD=fscanMJD, fscanID=fscanID,
+                  boresight_ra=boresight_ra, boresight_dec=boresight_dec,
+                  design_ha=design_ha, survey=survey, surveyMode=surveyMode,
+                  gprobes=gprobes))
 
     def addGuideOffsets(self, cmd, plate, pointingID, gprobes):
         """
@@ -482,7 +490,7 @@ class GuiderCmd(object):
     def restart(self, cmd):
         """Restart the worker threads"""
 
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.START_GUIDING, cmd=cmd, start=None))
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.STOP_GUIDING, cmd=cmd))
 
         actorState = myGlobals.actorState
 
@@ -572,7 +580,7 @@ class GuiderCmd(object):
         try:
             decenters = dithers[ditherPos]
             decenters['mangaDither'] = ditherPos
-        except KeyError as e:
+        except KeyError:
             cmd.fail("text=%s" % qstr("Failed to parse manga dither position: %s"%ditherPos))
         else:
             masterQueue = myGlobals.actorState.queues[guiderActor.MASTER]
@@ -587,18 +595,6 @@ class GuiderCmd(object):
         movieQueue.put(Msg(Msg.MAKE_MOVIE, cmd=cmd,
                            mjd=mjd, start=start, end=end, finish=True))
 
-    def ecamOn(self, cmd):
-        """
-        Start taking exposures with the ecamera.
-        Apply darks, flats, and tell STUI to display the result.
-        """
-        time = cmd.cmd.keywords['time'].values[0] if 'time' in cmd.cmd.keywords else 5
-        oneExposure = "oneExposure" in cmd.cmd.keywords
-
-        queue = myGlobals.actorState.queues[guiderActor.MASTER]
-        queue.put(Msg(Msg.ECAM_ON, cmd=cmd, expTime=time, oneExposure=oneExposure))
-
-
     def ecam_findstar(self, cmd):
         """
         Take one ecam exposure, reduce it, and output the stars found therein.
@@ -609,5 +605,6 @@ class GuiderCmd(object):
         bin = cmd.cmd.keywords['bin'].values[0] if 'bin' in cmd.cmd.keywords else 1
 
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
-        queue.put(Msg(Msg.ECAM_ON, cmd=cmd, expTime=time, oneExposure=True, bin=bin))
+        queue.put(Msg(Msg.START_GUIDING, cmd=cmd, expTime=time, oneExposure=True,
+                  bin=bin, camera='ecamera'))
 

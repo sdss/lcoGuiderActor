@@ -61,6 +61,7 @@ class GuiderTester(TestHelper.ActorTester):
         self.setPoint_bad = -35
         self.gi = guiderImage.GuiderImageAnalysis(self.setPoint_good)
         gState = GuiderState.GuiderState()
+        myGlobals.actorState.gState = gState
 
         self.config = ConfigParser.ConfigParser()
         self.config.read('../etc/guider.cfg')

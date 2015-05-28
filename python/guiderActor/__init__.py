@@ -19,6 +19,7 @@ class Msg(object):
     
     # Command types; use classes so that the unique IDs are automatically generated
     class START_GUIDING(): pass
+    class STOP_GUIDING(): pass
     class EXIT(): pass
     class EXPOSE(): pass
     class EXPOSURE_FINISHED(): pass
@@ -44,8 +45,6 @@ class Msg(object):
     class SET_REFRACTION(): pass
     class STAR_IN_FIBER(): pass
     class MAKE_MOVIE(): pass
-    class ECAM_ON(): pass
-    class ECAM_OFF(): pass
     
     def __init__(self, type, cmd, **data):
         self.type = type
@@ -78,4 +77,4 @@ def flushQueue(queue):
         except Queue.Empty:
             return
 
-__all__ = ["MASTER", "GCAMERA", "MOVIE", "Msg", "GuiderState"]
+__all__ = ["MASTER", "GCAMERA", "MOVIE", "Msg"]
