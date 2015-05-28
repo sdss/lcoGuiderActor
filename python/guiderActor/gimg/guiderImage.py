@@ -607,7 +607,7 @@ class GuiderImageAnalysis(object):
             msg = 'unknown error when checking setPoint (%s) against exposure ccdtemp (%s).'%(self.setPoint,ccdtemp)
             # this problem sometimes occurs after the guider is restarted.
             if self.setPoint is None:
-                msg = 'setPoint is None: issue gcamera status and try again.'
+                msg = 'setPoint is None: issue e/gcamera status and try again.'
             raise GuiderExceptions.GuiderError(msg)
 
         # redundant for darks, irrelevant for flats (we don't dark subtract them)
@@ -735,7 +735,6 @@ class GuiderImageAnalysis(object):
         # PH..Kluge to conserve full dynamic range, scale image to fit into signed int in C code.
         # Have to scale up the outputs.
         img = image[:]/2.0     #
-        # The "img16" object must live until after gfindstars() !
 
         # Zero out parts of the image that are masked out.
         # In this mask convention, 0 = good, >0 is bad.
@@ -759,8 +758,9 @@ class GuiderImageAnalysis(object):
             self.cmd.inform('ecam_star=%d,%f,%f,%f,%f,%f'%(self.frameNo,star.xyCtr[0],star.xyCtr[1],shape.fwhm,shape.bkgnd,shape.ampl))
             return [] # no fibers to return
         else:
-            # img16 = img.astype(np.int16)
-            c_image = np_array_to_REGION(np.img16)
+            # The "img16" object must live until after gfindstars() !
+            img16 = img.astype(np.int16)
+            c_image = np_array_to_REGION(img16)
 
             goodfibers = [f for f in fibers if not f.is_fake()]
             c_fibers = self.libguide.fiberdata_new(len(goodfibers))
@@ -977,7 +977,7 @@ class GuiderImageAnalysis(object):
             # find pixels labelled as belonging to object i.
             obji = (fiber_labels == i)
             # ri,ci = nonzero(obji)
-            npix = sum(obji)
+            npix = obji.sum()
             # center_of_mass returns row,column... swap to x,y
             (yc,xc) = center_of_mass(obji)
             # x,y,radius / BIN because the flat is unbinned pixels, but we want
