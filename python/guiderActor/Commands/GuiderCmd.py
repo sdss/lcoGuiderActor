@@ -328,8 +328,8 @@ class GuiderCmd(object):
                 cmd.fail("text=\"%s\"" % msg)
                 return
 
-        # cart 18 is the engineering camera, and has no info in platedb.
-        if cartridge == 18:
+        # cart 19 is the engineering camera, and has no info in platedb.
+        if cartridge == 19:
             # don't do anything but clear the gprobes and output status.
             gState = actorState.gState
             gState.deleteAllGprobes()
