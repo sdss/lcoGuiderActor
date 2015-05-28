@@ -293,9 +293,7 @@ class GuiderCmd(object):
             boresight_ra = float("NaN")
             boresight_dec = float("NaN")
             design_ha = ("NaN")
-            #
             # Send that information off to the master thread
-            #
             queue.put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
                       cartridge=cartridge, plate=plate, pointing=pointing,
                       boresight_ra=boresight_ra, boresight_dec=boresight_dec,
@@ -337,7 +335,8 @@ class GuiderCmd(object):
             gState.plate = 0
             gState.plateType = 'ecamera'
             gState.surveyMode = None
-            queue.put(Msg(Msg.STATUS, msg.cmd, finish=True))
+            queue.put(Msg(Msg.STATUS, cmd, finish=True))
+            return
 
         # Get the plate from the plateDB
         pointingInfoKey = actorState.models["platedb"].keyVarDict["pointingInfo"]
