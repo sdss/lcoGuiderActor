@@ -210,7 +210,7 @@ class GProbe(object):
     @property
     def ugriz(self):
         '''
-        The 2" fiber magnitudes of the object in this fiber.        
+        The 2" fiber magnitudes of the object in this fiber.
         Computes the synthetic predicted reference magnitude (self.ref_mag) when set.
         '''
         return self._ugriz
@@ -275,6 +275,7 @@ class GuiderState(object):
         self.inMotion = False
         self.centerUp = False
         self.cmd = None
+        self.startFrame = None # guider frame number to start movie at.
 
         self.fscanMJD = self.fscanID = -1
         self.design_ha = numpy.nan

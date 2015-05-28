@@ -544,8 +544,8 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
             frameInfo.guideDecRMS = numpy.nan
 
         #FIXME PH ---Need to calculate Az and Alt RMS in arcsec
-        guideAzRMS  = numpy.nan
-        guideAltRMS = numpy.nan
+        # guideAzRMS  = numpy.nan
+        # guideAltRMS = numpy.nan
         #frameInfo.guideAzRMS = guideAzRMS
         #frameInfo.guideAltRMS = guideAltRMS
 
@@ -764,10 +764,10 @@ def loadTccBlock(cmd, actorState, gState):
         cmd.warn('text=%s' % (qstr("could not load a per-cartridge instrument block: %s" % (e))))
 #...
 
-def make_movie(actorState,msg,start):
+def make_movie(actorState, cmd, start):
     """Make a movie from guider frames, from start to the most recent."""
     if start is None or start <= 0:
-        msg.cmd.diag("text='No start frame defined for make_movie.'")
+        cmd.diag("text='No start frame defined for make_movie.'")
         # noone bothered to define the start, so we don't have anything to work with.
         return False
     
@@ -786,10 +786,10 @@ def make_movie(actorState,msg,start):
         end = int(endSearch.group(1))
     # Don't bother making the movie if we haven't been operating the guider for very long.
     if end - start < 5:
-        msg.cmd.diag("text='Too few exposures to bother making a movie out of.'")
+        cmd.diag("text='Too few exposures to bother making a movie out of.'")
         return False
     
-    # callCommand produces a movie ommand that is not connected to the current command.
+    # callCommand produces a movie command that is not connected to the current command.
     # This will prevent "This command has already finished" complaints.
     actorState.actor.callCommand("makeMovie start=%d end=%d"%(start,end))
     return True
@@ -800,7 +800,7 @@ def cal_finished(msg, name, guiderImageAnalysis, actorState, gState):
     cmd = msg.cmd
     cmd.respond("processing=%s" % msg.filename)
     # need ".*" in the regex, because we may or may not have gzipped files.
-    frameNo = int(re.search(r"([0-9]+)\.fits.*", msg.filename).group(1))
+    # frameNo = int(re.search(r"([0-9]+)\.fits.*", msg.filename).group(1))
     
     header = pyfits.getheader(msg.filename)
     exptype = header.get('IMAGETYP')
@@ -943,6 +943,39 @@ def ecam_on(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
     queues[GCAMERA].put(Msg(Msg.EXPOSE, gState.cmd, replyQueue=queues[MASTER],
                         oneExposure=oneExposure, expTime=gState.expTime, camera='ecamera'))
 
+def start_guider(cmd, gState, actorState, queues, expTime=5, oneExposure=False):
+    return
+
+def stop_guider(cmd, gState, actorState, queues, frameNo, success):
+    """Stop current guider exposure and stop taking new exposures."""
+
+    # Try to generate a movie out of the recent guider frames.
+    if make_movie(actorState,cmd,gState.startFrame):
+        gState.startFrame = None
+
+    if not gState.cmd:
+        cmd.fail('text="The guider is already off"')
+        return
+    
+    if success:
+        cmd.respond("guideState=stopping")
+        # cleanup any pending decenter commands (e.g. decenter off)
+        send_decenter_status(gState.cmd,gState,frameNo)
+        gState.finish_decenter()
+        
+        queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, cmd, quiet=True, priority=Msg.MEDIUM))
+        if gState.cmd != cmd:
+            cmd.finish("guideState=off")
+        
+        gState.cmd.finish("guideState=off")
+        gState.setCmd(None)
+    else:
+        queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, cmd, quiet=True, priority=Msg.MEDIUM))
+        if gState.cmd != cmd:
+            cmd.fail("guideState=failed")
+
+        gState.cmd.fail("guideState=failed")
+        gState.setCmd(None)
 
 def main(actor, queues):
     """Main loop for master thread"""
@@ -953,7 +986,6 @@ def main(actor, queues):
     timeout = actorState.timeout
     force = False                       # guide even if the petals are closed
     oneExposure = False                 # just take a single exposure
-    startFrame = None                   # guider frame number to start movie at.
     frameInfo = None                    # to catch guideStep's return.
     gState = actorState.gState
     # need to wait a couple seconds to let the models sync up.
@@ -986,48 +1018,11 @@ def main(actor, queues):
 
                 continue
 
+            elif msg.type == Msg.STOP_GUIDING:
+                success = getattr(msg,'success',True) # Succeed, unless told otherwise
+                stop_guider(msg.cmd, gState, actorState, queues, frameInfo.frameNo, success)
+
             elif msg.type == Msg.START_GUIDING:
-                if not msg.start:
-                    # Stop guiding
-                    try:
-                        success = msg.success
-                    except AttributeError:
-                        success = True
-                        
-                    # Try to generate a movie out of the recent guider frames.
-                    if make_movie(actorState,msg,startFrame):
-                        startFrame = None
-                    
-                    if msg.start is None:
-                        queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
-                        continue
-                    
-                    if not gState.cmd:
-                        msg.cmd.fail('text="The guider is already off"')
-                        continue
-                    
-                    if success:
-                        msg.cmd.respond("guideState=stopping")
-                        # cleanup any pending decenter commands (e.g. decenter off)
-                        send_decenter_status(gState.cmd,gState,frameInfo.frameNo)
-                        gState.finish_decenter()
-                        
-                        queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
-                        if gState.cmd != msg.cmd:
-                            msg.cmd.finish()
-                        
-                        gState.cmd.finish("guideState=off")
-                        gState.setCmd(None)
-                    else:
-                        queues[GCAMERA].put(Msg(Msg.ABORT_EXPOSURE, msg.cmd, quiet=True, priority=Msg.MEDIUM))
-                        msg.cmd.respond("guideState=failed")
-                        if gState.cmd != msg.cmd:
-                            msg.cmd.fail()
-
-                        gState.cmd.fail("guideState=failed")
-                        gState.setCmd(None)
-                    continue
-
                 try:
                     expTime = msg.expTime
                     stack = msg.stack
@@ -1065,12 +1060,12 @@ def main(actor, queues):
                 # if a start frame was already defined, don't re-define it
                 # e.g., make_movie hadn't been run.
                 # jkp: TBD: when could this cause a problem?
-                if not startFrame:
+                if not gState.startFrame:
                     # Keep track of the first exposure number for generating movies.
                     # Take nextSeqNo+1 because the current value may still be the one
                     # issued from the gcamera flat command, which we don't want for this.
                     try:
-                        startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+                        gState.startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
                         # If 'nextSeqno' hasn't been seen yet (e.g., guider was started after gcamera),
                         # we need to get gcamera status first.
                     except TypeError:
@@ -1079,11 +1074,11 @@ def main(actor, queues):
                             queues[MASTER].put(Msg(Msg.FAIL, msg.cmd, text="Cannot get gcamera status!"))
                             continue
                         # now we can do this safely.
-                        startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+                        gState.startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
                     # if we're in simulation mode, use that number instead.
                     simulating = actorState.models['gcamera'].keyVarDict['simulating']
                     if simulating[0]:
-                        startFrame = simulating[2]
+                        gState.startFrame = simulating[2]
                 
                 gState.reset_pid_terms()
 
@@ -1113,7 +1108,7 @@ def main(actor, queues):
 
                 if not msg.success:
                     gState.inMotion = False
-                    queues[MASTER].put(Msg(Msg.START_GUIDING, gState.cmd, start=False, success=False))
+                    queues[MASTER].put(Msg(Msg.STOP_GUIDING, gState.cmd, success=False))
                     continue
 
                 camera = getattr(msg,'camera','gcamera')
@@ -1142,7 +1137,7 @@ def main(actor, queues):
                 # Is there anything to indicate that we shouldn't be guiding?
                 #
                 if not guidingIsOK(msg.cmd, actorState, force=force):
-                    queues[MASTER].put(Msg(Msg.START_GUIDING, gState.cmd, start=False))
+                    queues[MASTER].put(Msg(Msg.STOP_GUIDING, gState.cmd))
                     continue
                 #
                 # Start the next exposure
@@ -1181,7 +1176,7 @@ def main(actor, queues):
                 msg.cmd.fail('guideState="failed"; text="%s"' % msg.text);
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
-                startFrame = None # clear the start frame: don't need it any more!
+                gState.startFrame = None # clear the start frame: don't need it any more!
                 load_cartridge(msg, queues, gState, actorState)
                     
             elif msg.type == Msg.SET_PID:
@@ -1249,8 +1244,7 @@ def main(actor, queues):
                 for axis in ('axes', 'focus', 'scale'):
                     gState.setGuideMode(axis, False)
                 if msg.gprobe:
-                    actorState.queues[MASTER].put(Msg(Msg.START_GUIDING, cmd=msg.cmd,
-                                                                  start=True, force=True))
+                    actorState.queues[MASTER].put(Msg(Msg.START_GUIDING, cmd=msg.cmd, force=True))
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=False))
 

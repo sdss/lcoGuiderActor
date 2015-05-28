@@ -119,27 +119,46 @@ class TestSetRefractionBalance(GuiderCmdTester,unittest.TestCase):
                   'surveyMode':'APOGEE lead'}
         self._setRefractionBalance(args,expect)
 
-class TestEcam(GuiderCmdTester,unittest.TestCase):
-    def _ecamOn(self, args, expect={}):
-        queue = self.queues[guiderActor.MASTER]
-        msg = self._run_cmd('ecamOn %s'%(args),queue)
-        self.assertEqual(msg.type, guiderActor.Msg.ECAM_ON)
-        self.assertEqual(msg.expTime, expect.get('time',5))
-        self.assertEqual(msg.oneExposure, expect.get('oneExposure',False))
-    def test_ecamOn(self):
-        self._ecamOn('')
-    def test_ecamOn_oneExposure(self):
-        self._ecamOn('oneExposure',{'oneExposure':True})
-    def test_ecamOn_time10(self):
-        self._ecamOn('time=11', {'time':11})
 
+class TestGuideOnOff(GuiderCmdTester,unittest.TestCase):
+    def _guideOn(self, args, expect={}):
+        queue = self.queues[guiderActor.MASTER]
+        msg = self._run_cmd('on %s'%(args),queue)
+        self.assertEqual(msg.type, guiderActor.Msg.START_GUIDING)
+        self.assertEqual(msg.expTime, expect.get('time',None))
+        self.assertEqual(msg.stack, expect.get('stack',1))
+        self.assertEqual(msg.oneExposure, expect.get('oneExposure',False))
+        self.assertEqual(msg.force, expect.get('force',False))
+        self.assertEqual(msg.camera, expect.get('camera','gcamera'))
+    def test_guideOn(self):
+        self._guideOn('')
+    def test_guideOn_force(self):
+        self._guideOn('force', {'force':True})
+    def test_guideOn_time(self):
+        self._guideOn('time=15', {'time':15})
+    def test_guideOn_oneExposure(self):
+        self._guideOn('oneExposure', {'oneExposure':True})
+    def test_guideOn_stack(self):
+        self._guideOn('stack=3', {'stack':3})
+    def test_guideOn_ecam(self):
+        self.gState.plateType = 'ecamera'
+        self._guideOn('', {'camera':'ecamera'})
+
+    def test_guideOff(self):
+        queue = self.queues[guiderActor.MASTER]
+        msg = self._run_cmd('off',queue)
+        self.assertEqual(msg.type, guiderActor.Msg.STOP_GUIDING)
+
+
+class TestEcam(GuiderCmdTester,unittest.TestCase):
     def _findstar(self, args, expect={}):
         queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('findstar %s'%(args),queue)
-        self.assertEqual(msg.type, guiderActor.Msg.ECAM_ON)
+        self.assertEqual(msg.type, guiderActor.Msg.START_GUIDING)
         self.assertEqual(msg.expTime, expect.get('time',5))
         self.assertEqual(msg.bin, expect.get('bin',1))
         self.assertEqual(msg.oneExposure, True)
+        self.assertEqual(msg.camera, 'ecamera')
     def test_findstar(self):
         self._findstar('')
     def test_findstar_nondefault(self):

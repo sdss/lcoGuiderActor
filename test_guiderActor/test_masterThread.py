@@ -165,6 +165,49 @@ class TestGuidingIsOK(guiderTester.GuiderTester,unittest.TestCase):
         self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['axes'])
         self._guidingIsOK(True, 1)
 
+
+class TestStartStopGuider(guiderTester.GuiderTester,unittest.TestCase):
+    def setUp(self):
+        super(TestStartStopGuider,self).setUp()
+        # Do this after super setUp, as that's what creates actorState.
+        self.queues = {}
+        self.queues[guiderActor.GCAMERA] = Queue('gcamera')
+        self.queues[guiderActor.MASTER] = Queue('master')
+        myGlobals.actorState.queues = self.queues
+
+    def test_start_guider(self):
+        # guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
+        # guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
+        masterThread.start_guider(self.cmd,self.gState,self.actorState,self.actorState.queues)
+        msg = self.queues[guiderActor.GCAMERA].get(False)
+        self.assertEqual(msg.type, guiderActor.Msg.EXPOSE)
+        self.assertEqual(msg.camera, 'gcamera')
+        self.assertEqual(msg.expTime, self.gState.expTime)
+        self._check_cmd(0,1,0,0,False)
+
+    def _stop_guider(self, success=True):
+        self.gState.cmd = self.cmd
+        masterThread.stop_guider(self.cmd,self.gState,self.actorState,self.actorState.queues, 1234, success)
+        msg = self.queues[guiderActor.GCAMERA].get(False)
+        self.assertEqual(msg.type, guiderActor.Msg.ABORT_EXPOSURE)
+        self.assertEqual(msg.quiet, True)
+        self.assertIsNone(self.gState.cmd)
+    def test_stop_guider(self):
+        self._stop_guider()
+        self._check_cmd(0,3,0,0,True,didFail=False)
+    def test_stop_guider_with_movie(self):
+        self.gState.startFrame = 10
+        self._stop_guider()
+        self._check_cmd(0,3,0,0,True,didFail=False)
+        self.assertIsNone(self.gState.startFrame)
+    def test_stop_guider_failed(self):
+        self._stop_guider(success=False)
+        self._check_cmd(0,0,0,0,True,didFail=True)
+    def test_stop_guider_already_off(self):
+        masterThread.stop_guider(self.cmd,self.gState,self.actorState,self.actorState.queues, 1234, True)
+        self._check_cmd(0,0,0,0,True,didFail=True)
+
+
 class TestEcam(guiderTester.GuiderTester,unittest.TestCase):
     """Tests for turning ecam processing on and off."""
     def setUp(self):
@@ -217,7 +260,7 @@ if __name__ == '__main__':
     
     suite = None
     # to test just one piece
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestEcam)
+    # suite = unittest.TestLoader().loadTestsFromTestCase(TestStartStopGuider)
     if suite:
         unittest.TextTestRunner(verbosity=verbosity).run(suite)
     else:
