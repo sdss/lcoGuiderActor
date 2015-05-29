@@ -751,8 +751,8 @@ class GuiderImageAnalysis(object):
             ecam_mask = mask == GuiderImageAnalysis.mask_saturated
             star,shape = self._find_stars_ecam(image, ecam_mask)
             if star is None:
-                return []
                 self.cmd.warn('text="ecam_star=None in exposure %d!"'%(self.frameNo))
+                return []
             if not shape.isOK:
                 self.cmd.warn('text="Could not determine star shape: %s"'%shape.msgStr)
             self.cmd.inform('ecam_star=%d,%f,%f,%f,%f,%f'%(self.frameNo,star.xyCtr[0],star.xyCtr[1],shape.fwhm,shape.bkgnd,shape.ampl))
