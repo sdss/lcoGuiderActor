@@ -69,10 +69,7 @@ class GuiderCmd(object):
                                         keys.Key("movieMJD", types.String(), help="The MJD that we want to generate the movie for."),
                                         keys.Key("start",types.Int(),help="Guider frame number to start the movie at."),
                                         keys.Key("end",types.Int(),help="Guider frame number to end the movie at."),
-                                        
                                         keys.Key("bin",types.Int(),help="bin factor for exposure"),
-                                        keys.Key("center",types.Int()*2,help="search center location for ecam star centroiding"),
-                                        keys.Key("cradius",types.Int(),help="search radius for ecam star centroiding"),
                                        )
         #
         # Declare commands
@@ -107,7 +104,6 @@ class GuiderCmd(object):
             ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
             ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
-            ('centroid', '[<time>] [<bin>] [<center>] [<cradius>] [<file>]', self.reprocessFile)
             ]
     #
     # Define commands' callbacks
