@@ -1053,7 +1053,8 @@ def main(actor, queues):
 
             elif msg.type == Msg.STOP_GUIDING:
                 success = getattr(msg,'success',True) # Succeed, unless told otherwise
-                stop_guider(msg.cmd, gState, actorState, queues, frameInfo.frameNo, success)
+                frameNo = getattr(frameInfo,'frameNo',None)
+                stop_guider(msg.cmd, gState, actorState, queues, frameNo, success)
 
             elif msg.type == Msg.START_GUIDING:
                 expTime = getattr(msg,'expTime',None)
