@@ -245,9 +245,11 @@ class GuiderImageAnalysis(object):
             # subtracting the overall median value should be good enough
             # NOTE: The the "inner" portion of the bias region is most
             # representative of the rest of the chip.
-            bias = np.median(image[:,(1024/binning):(1038/binning)])
             # TBD: Which is correct here?
-            #bias = np.median(image[:,(1039/binning):])
+            #bias = np.median(image[:,(1024/binning):(1038/binning)])
+            # TBD: The upper is what Renbin wanted,
+            # TBD: the lower is what makes sense from over-exposed flats and the ecam.
+            bias = np.median(image[:,(1039/binning):])
         else:
             # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
             self.cmd.warn('text=%s'%qstr("Cheating with bais level! No overscan was found!"))
@@ -581,6 +583,7 @@ class GuiderImageAnalysis(object):
             elif self.camera == 'ecamera':
                 bg = np.median(image)#TBD: this is a poor choice for star-filled ecam images!
                 hdulist = self._get_basic_hdulist(image, hdr, bg)
+                hdulist.append(pyfits.ImageHDU(self.maskImage))
             imageHDU = hdulist[0]
             self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, objectname)
             directory,filename = os.path.split(procpath)
@@ -696,7 +699,7 @@ class GuiderImageAnalysis(object):
         image,hdr,sat = self._pre_process(self.gimgfn,binning=self.binning)
 
         exptime = hdr.get('EXPTIME', 0)
-        
+
         (darkFileName, flatFileName) = self.findDarkAndFlat(self.gimgfn, hdr)
         image = self.applyDark(image,darkFileName,exptime)
 
@@ -747,7 +750,6 @@ class GuiderImageAnalysis(object):
         if self.camera == 'ecamera':
             # mask the overscan too, since we're keeping it around for monitoring.
             mask[:,(1039/self.binning):] |= GuiderImageAnalysis.mask_saturated
-            self.maskImage = mask
             ecam_mask = mask == GuiderImageAnalysis.mask_saturated
             star,shape = self._find_stars_ecam(image, ecam_mask)
             if star is None:
@@ -836,7 +838,7 @@ class GuiderImageAnalysis(object):
         if self.camera == 'ecamera':
             # TBD: eventually we'll actually compute a mask for the ecam flats
             # for now, just assume all pixels are good.
-            mask = np.zeros_like(flat,np.int8)
+            mask = np.zeros_like(flat,np.uint8)
             return flat, mask, []
         
         mask = flatfits[1].data
@@ -891,7 +893,9 @@ class GuiderImageAnalysis(object):
         
         # Check if it's a good dark
         darkMean = image.mean()
-        if darkMean > 20: # TBD: if we change the bias region, this may have be increased to ~40
+        # TBD: if we use the "outer" bias region (per the ecam data), we need
+        # ~40 for a bad dark; for Renbin's preferred valeus ~20 is fine.
+        if darkMean > 40:
             self.cmd.warn('text=%s'%qstr('Much more signal in the dark than expected: %6.2f')%darkMean)
             raise GuiderExceptions.BadDarkError
         exptime = hdr['EXPTIME']
@@ -1162,6 +1166,8 @@ class GuiderImageAnalysis(object):
 
         # not a terrible choice to show the nominal flat level.
         bg = np.median(image)
+        # normalize the flat to ~1.
+        image /= bg
         hdulist = self._get_basic_hdulist(image, hdr, bg)
         return hdulist
 
