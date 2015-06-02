@@ -667,7 +667,10 @@ class GuiderImageAnalysis(object):
         readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
         ccdGain = 1
         ccdInfo = PyGuide.CCDInfo(self.imageBias,readNoise,ccdGain,)
-        stars = PyGuide.findStars(image,mask,None,ccdInfo)
+        # set a high threshold, since we only care about obviously bright stars.
+        # TBD: this threshold could be a configurable parameter, so the observer
+        # can adjust it in the Pointing Data STUI script, and relax it when focusing.
+        stars = PyGuide.findStars(image,mask,None,ccdInfo,thresh=5)
         try:
             star = stars[0][0]
         except:
