@@ -39,6 +39,7 @@ src/gimg/attic.c -text
 src/gimg/gutils.c -text
 src/gimg/ipGguide.c -text
 src/gimg/shUtils.c -text
+test_guiderActor/cmd_calls/TestExpose.txt -text
 test_guiderActor/data/gimg-0001.fits.gz -text
 test_guiderActor/data/gimg-0003.fits.gz -text
 test_guiderActor/data/gimg-0004.fits.gz -text

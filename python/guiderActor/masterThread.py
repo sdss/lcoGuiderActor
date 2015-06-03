@@ -1130,12 +1130,16 @@ def main(actor, queues):
                 if gState.cartridge <= 0:
                     msg.cmd.fail('text="no valid cartridge is loaded"')
                     continue
+                camera = 'ecamera' if gState.plateType == 'ecamera' else 'gcamera'
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER],
-                                        expType="flat", expTime=msg.expTime, cartridge=gState.cartridge))
+                                        expType="flat", expTime=msg.expTime,
+                                        cartridge=gState.cartridge, camera=camera))
             
             elif msg.type == Msg.TAKE_DARK:
+                camera = 'ecamera' if gState.plateType == 'ecamera' else 'gcamera'
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER],
-                                        expType="dark", expTime=msg.expTime, stack=msg.stack))
+                                        expType="dark", expTime=msg.expTime,
+                                        stack=msg.stack, camera=camera))
             
             elif msg.type == Msg.DARK_FINISHED:
                 if not msg.success:

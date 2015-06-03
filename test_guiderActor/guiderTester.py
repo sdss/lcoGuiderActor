@@ -16,6 +16,7 @@ Example:
 
 import os
 import ConfigParser
+import unittest
 
 from actorcore import TestHelper
 
@@ -86,4 +87,18 @@ class GuiderTester(TestHelper.ActorTester):
     def _remove_file(self,filename):
         if os.path.exists(filename):
             os.remove(filename)
-    
+
+
+class GuiderThreadTester(GuiderTester,unittest.TestCase):
+    """
+    guiderActor Thread test suites should subclass this and unittest, in that order.
+    """
+    def __init__(self, *args, **kwargs):
+        """Load up the cmd calls for this test class, so _check_cmd will use them."""
+        unittest.TestCase.__init__(self, *args, **kwargs)
+        # -1 is the test function, -2 is test class, -3 (or 0) should be main
+        class_name = self.id().split('.')[-2]
+        self._load_cmd_calls(class_name)
+        # lets us see really long list/list diffs
+        self.maxDiff = None
+

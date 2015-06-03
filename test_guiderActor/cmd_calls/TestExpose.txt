@@ -1,0 +1,17 @@
+[test_expose_10]
+gcamera expose time=10 stack=1
+
+[test_expose_ecamera_10]
+ecamera expose time=10 stack=1
+
+[test_expose_10_stack_2]
+gcamera expose time=10 stack=2
+
+[test_flat_5]
+gcamera flat time=5 stack=1 cartridge=10
+
+[test_dark_10_stack_9]
+gcamera dark time=10 stack=9
+
+[test_expose_10_fails]
+gcamera expose time=10 stack=1
