@@ -90,6 +90,9 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         for name,i in self.probeNames.items():
             self.assertEqual(i,fibers[i].fiberid-1)
         self.assertFalse(True,'make a test!')
+
+    def test_findStars_ecam(self):
+        self.assertFalse(True,"make some tests for this!")
     
     def _temp_run(self,filename,errorText):
         """Help with temperature tests."""

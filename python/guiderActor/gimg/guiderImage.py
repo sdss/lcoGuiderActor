@@ -760,7 +760,7 @@ class GuiderImageAnalysis(object):
                 return []
             if not shape.isOK:
                 self.cmd.warn('text="Could not determine star shape: %s"'%shape.msgStr)
-            self.cmd.inform('ecam_star=%d,%f,%f,%f,%f,%f'%(self.frameNo,star.xyCtr[0],star.xyCtr[1],shape.fwhm,shape.bkgnd,shape.ampl))
+            self.cmd.inform('ecam_star={},{:.2f},{:.2f},{:.3f},{:.2f},{:.1f}'.format(self.frameNo,star.xyCtr[0],star.xyCtr[1],shape.fwhm,shape.bkgnd,shape.ampl))
             return [] # no fibers to return
         else:
             # The "img16" object must live until after gfindstars() !
