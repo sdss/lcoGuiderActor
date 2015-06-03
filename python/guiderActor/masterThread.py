@@ -812,7 +812,9 @@ def cal_finished(msg, name, guiderImageAnalysis, actorState, gState):
     try:
         func = ''.join(("analyze",name[0].upper(),name[1:]))
         # Always read the setPoint, so that it is as up-to-date as possible.
-        setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
+        camera = 'ecamera' if gState.plateType == 'ecamera' else 'gcamera'
+        guiderImageAnalysis.camera = camera
+        setPoint = actorState.models[camera].keyVarDict["cooler"][0]
         if name == 'flat':
             guiderImageAnalysis.analyzeFlat(msg.filename,gState.gprobes,cmd,setPoint)
         elif name == 'dark':
