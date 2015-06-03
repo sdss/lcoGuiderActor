@@ -8,13 +8,50 @@ time, so they'll never conflict with each other.
 
 import Queue, threading
 
-from guiderActor import *
-import guiderActor.myGlobals
+import guiderActor
+from guiderActor import Msg, GCAMERA
+from guiderActor import myGlobals
+
+def expose(cmd, actorState, replyQueue, expTime, stack=1, cartridge=None, expType='expose', camera='gcamera'):
+    """Take an exposure with the e/gcamera, and succeed/fail as appropriate."""
+    cmd.respond('text="starting %s exposure"'%camera)
+    filenameKey = actorState.models[camera].keyVarDict["filename"]
+
+    cmdStr="{0} time={1} stack={2}".format(expType, expTime, stack)
+    if expType == "flat":
+        cmdStr += " cartridge={0}".format(cartridge)
+        responseMsg = Msg.FLAT_FINISHED
+    elif expType == "dark":
+        responseMsg = Msg.DARK_FINISHED
+    else:
+        responseMsg = Msg.EXPOSURE_FINISHED
+
+    # Allow for readout time for each exposure in the stack, plus a bit extra.
+    timeLim = stack*expTime + stack*5 + 15
+
+    cmd.diag('text="{0} {1} with timeLim={2}"'.format(camera, cmdStr, timeLim))
+    try:
+        cmdVar = actorState.actor.cmdr.call(actor=camera, cmdStr=cmdStr,
+                                            keyVars=[filenameKey], timeLim=timeLim, forUserCmd=cmd)
+        cmd.diag('text="{0} {1} didFail={2}"'.format(camera, cmdStr, cmdVar.didFail))
+    except Exception, e:
+        cmd.warn('text="{0} {1} raised {2}"'.format(camera, cmdStr, e))
+        return
+
+    if cmdVar.didFail:
+        cmd.warn('text="Failed to take {0} exposure"'.format(camera))
+        if cmdVar.lastReply and "Timeout" in cmdVar.lastReply.keywords:
+            cmd.warn('text="{0} expose command exceeded time limit: {1}."'.format(camera, timeLim))
+        replyQueue.put(Msg(responseMsg, cmd=cmd, success=False))
+        return
+
+    filename = cmdVar.getLastKeyVarData(filenameKey)[0]
+    replyQueue.put(Msg(responseMsg, cmd=cmd, filename=filename, camera=camera, success=True))
 
 def main(actor, queues):
     """Main look for thread to talk to gcamera"""
 
-    timeout = guiderActor.myGlobals.actorState.timeout
+    timeout = myGlobals.actorState.timeout
 
     while True:
         try:
@@ -30,60 +67,12 @@ def main(actor, queues):
                 return
             
             elif msg.type == Msg.EXPOSE:
-                try:
-                    camera = msg.camera
-                except:
-                    camera = "gcamera"
-
-                msg.cmd.respond('text="starting exposure"')
-                #
-                # Take exposure
-                #
-                try:
-                    expType = msg.expType
-                except:
-                    expType = "expose"
-
-                filenameKey = guiderActor.myGlobals.actorState.models[camera].keyVarDict["filename"]
-                    
-                cmdStr="%s time=%f" % (expType, msg.expTime)
-                if expType == "flat":
-                    cmdStr += " cartridge=%s" % (msg.cartridge)
-                    responseMsg = Msg.FLAT_FINISHED
-                elif expType == "dark":
-                    responseMsg = Msg.DARK_FINISHED
-                else:
-                    responseMsg = Msg.EXPOSURE_FINISHED
-                
-                try:
-                    stack = msg.stack
-                    cmdStr += " stack=%d" % (stack)
-                except:
-                    stack = 1
-                
-                # Allow for readout time, plus a bit more
-                # readout is short, but adds up for each exposure in a stack.
-                timeLim = stack*msg.expTime + stack*5 + 15
-                
-                actor.bcast.diag('text="%s %s with timeLim=%s"' % (camera, cmdStr, timeLim))
-                try:
-                    cmdVar = actor.cmdr.call(actor=camera, cmdStr=cmdStr,
-                                             keyVars=[filenameKey], timeLim=timeLim, forUserCmd=msg.cmd)
-                    actor.bcast.diag('text="%s %s didFail=%s"' % (camera, cmdStr, cmdVar.didFail))
-                except Exception, e:
-                    actor.bcast.diag('text="%s %s raised %s"' % (camera, cmdStr, e))
-                    continue
-
-                if cmdVar.didFail:
-                    msg.cmd.warn('text="Failed to take exposure"')
-                    if "Timeout" in cmdVar.lastReply.keywords:
-                        msg.cmd.warn('text="gcamera exposure command exceeded time limit."')
-                    msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, success=False))
-                    continue
-
-                filename = cmdVar.getLastKeyVarData(filenameKey)[0]
-
-                msg.replyQueue.put(Msg(responseMsg, cmd=msg.cmd, filename=filename, camera=camera, success=True))
+                camera = getattr(msg,'camera','gcamera')
+                expType = getattr(msg,'expType','expose')
+                cartridge = getattr(msg,'cartridge',None)
+                stack = getattr(msg,'stack',1)
+                expose(msg.cmd, myGlobals.actorState, msg.replyQueue, msg.expTime, stack=stack,
+                       cartridge=cartridge, expType=expType, camera=camera)
 
             elif msg.type == Msg.ABORT_EXPOSURE:
                 if not msg.quiet:
