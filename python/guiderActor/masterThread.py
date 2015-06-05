@@ -900,7 +900,7 @@ def load_cartridge(msg, queues, gState, actorState):
     gState.setRefractionBalance(gState.plateType, gState.surveyMode)
     
     # Report the cartridge status
-    queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
+    queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True, loadedNewCartridge=True))
 #...
 
 def set_decenter(cmd, decenters, gState, enable):
@@ -1323,7 +1323,10 @@ def main(actor, queues):
                 cmd.respond("cartridgeLoaded=%d, %d, %s, %d, %d" % (
                     gState.cartridge, gState.plate, gState.pointing, gState.fscanMJD, gState.fscanID))
                 cmd.respond("survey=%s, %s"%(qstr(gState.plateType), qstr(gState.surveyMode)))
-                
+                # Announce that a this is was a requested cartridge load.
+                if getattr(msg, 'loadedNewCartridge', False):
+                    cmd.respond('loadedNewCartridge')
+
                 try:
                     if not msg.full:
                         if msg.finish:
