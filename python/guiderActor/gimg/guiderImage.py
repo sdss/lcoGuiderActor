@@ -450,12 +450,9 @@ class GuiderImageAnalysis(object):
     def _get_basic_hdulist(self, image, primhdr, bg):
         """Return an hdulist with the most basic header keywords filled in."""
         imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
-        imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For displays.')
+        imageHDU.header.update('IMGBACK', bg, 'crude background for entire image. For STUI.')
         imageHDU.header.update('OVERSCAN', self.imageBias, 'Bias level of this image.')
-        # TBD: sdssfmt should go away, but having it missing breaks the current STUI's 
-        # ability to show plateview. putting it back for now, just to solve
-        # that without releasing a new STUI.
-        imageHDU.header.update('SDSSFMT', 'GPROC 1 4', 'type major minor version for this file')
+        imageHDU.header.update('SDSSFMT', '{}PROC 1 4'.format(self.camera[0].upper()), 'guider file version for STUI: v1 has 7 HDUs.')
         hdulist = pyfits.HDUList()
         hdulist.append(imageHDU)
         return hdulist
