@@ -8,8 +8,11 @@ bin/guider_movie.py -text
 bin/open_shutter_search.py -text
 bin/xferBlock.py -text
 doc/ProcessedGuiderImages.html -text
-etc/gcamFiberInfo.par -text
+etc/gcamFiberInfo_APO.par -text
+etc/gcamFiberInfo_LCO.par -text
 etc/guider.cfg -text
+etc/guider_APO.cfg -text
+etc/guider_LCO.cfg -text
 include/ipGguide.h -text
 include/shLegacy.h -text
 python/guiderActor/Commands/GuiderCmd.py -text
