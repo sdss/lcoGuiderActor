@@ -1,4 +1,4 @@
-import Queue
+import actorcore.Actor
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
@@ -10,7 +10,7 @@ MOVIE = 2
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-class Msg(object):
+class Msg(actorcore.Actor.Msg):
     # Priorities
     CRITICAL = 0
     HIGH = 2
@@ -20,7 +20,6 @@ class Msg(object):
     # Command types; use classes so that the unique IDs are automatically generated
     class START_GUIDING(): pass
     class STOP_GUIDING(): pass
-    class EXIT(): pass
     class EXPOSE(): pass
     class EXPOSURE_FINISHED(): pass
     class TAKE_FLAT(): pass
@@ -66,14 +65,5 @@ class Msg(object):
     def __cmp__(self, rhs):
         """Used when sorting the messages in a priority queue"""
         return self.priority - rhs.priority
-
-def flushQueue(queue):
-    """flush queue"""
-    
-    while True:
-        try:
-            msg = queue.get(timeout=0)
-        except Queue.Empty:
-            return
 
 __all__ = ["MASTER", "GCAMERA", "MOVIE", "Msg"]

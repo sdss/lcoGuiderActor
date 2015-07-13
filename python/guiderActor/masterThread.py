@@ -922,6 +922,30 @@ def set_refraction(cmd, gState, corrRatio, plateType, surveyMode):
     elif plateType is not None:
         gState.setRefractionBalance(plateType,surveyMode)
 
+def set_time(gState, expTime, stack=None, readTime=None):
+    """
+    Set the exposure time, stacking, and read time, and reconfigure the PID loop delta-t.
+
+    Args:
+        expTime (float): exposure time to use with the gcamera.
+
+    Kwargs:
+        stack (int): number of exposures to stack before doing guiding calculations.
+        readTime (float): time between exposure end and us having the complete image.
+    """
+    gState.expTime = expTime
+    if stack is not None:
+        gState.stack = stack
+    # this should be set once at thread start in guiderActor_main()
+    if readTime is not None:
+        gState.readTime = readTime
+
+    for k in gState.pid.keys():
+        # camera read time happens for each frame in a stack.
+        # "+ 5" to allow for some overhead: while guiding we actually set the exact
+        # dt after every frame, so this only applies to the first one.
+        gState.pid[k].setPID(dt=((gState.expTime+gState.readTime)*gState.stack + 5))
+
 def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
                  expTime=5, force=False):
     """Start taking and processing exposures with either guider or engineering camera."""
@@ -1246,9 +1270,7 @@ def main(actor, queues):
                 
             elif msg.type == Msg.SET_GUIDE_MODE:
                 gState.setGuideMode(msg.what, msg.enable)
-                #
-                # Report the cartridge status
-                #
+
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
@@ -1289,28 +1311,27 @@ def main(actor, queues):
                     cmd.finish('text="scale change completed"')
 
             elif msg.type == Msg.SET_SCALE:
-                gState.setScales(plugPlateScale=msg.plugPlateScale,
-                                 gcameraMagnification=msg.gcameraMagnification,
-                                 gcameraPixelSize=msg.gcameraPixelSize,
-                                 dSecondary_dmm=msg.dSecondary_dmm)
-                
+                if msg.plugPlateScale != None:
+                    gState.plugPlateScale = msg.plugPlateScale
+                if msg.dSecondary_dmm != None:
+                    gState.dSecondary_dmm = msg.dSecondary_dmm
+                if msg.gcameraPixelSize != None:
+                    gState.gcameraPixelSize = msg.gcameraPixelSize
+                if msg.gcameraMagnification != None:
+                    gState.gcameraMagnification = msg.gcameraMagnification
+    
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
 
             elif msg.type == Msg.SET_TIME:
-                gState.expTime = msg.expTime
-                gState.stack = getattr(msg,'stack',1)
-                # this should be set once at thread start in guiderActor_main()
-                if hasattr(msg,'readTime'):
-                    gState.readTime = msg.readTime
+                expTime = msg.expTime
+                stack = getattr(msg,'stack',1)
+                readTime = getattr(msg,'readTime',None)
+                set_time(gState, expTime, stack, readTime, msg.cmd, queues)
 
-                for k in gState.pid.keys():
-                    # camera read time happens for each frame in a stack.
-                    gState.pid[k].setPID(dt=((gState.expTime+gState.readTime)*gState.stack + 5)) # "+ 5" to allow for overhead
-
-                if msg.cmd:
+                if msg.cmd is not None:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
-                
+
             elif msg.type == Msg.DECENTER:
                 enable = getattr(msg,'enable',None)
                 decenters = getattr(msg,'decenters',{})

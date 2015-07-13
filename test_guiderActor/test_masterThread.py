@@ -260,12 +260,26 @@ class TestStartStopGuider(guiderTester.GuiderTester,unittest.TestCase):
         self._check_cmd(0,0,0,0,True,didFail=True)
 
 
+class TestSetTime(guiderTester.GuiderTester,unittest.TestCase):
+    def test_set_time(self):
+        expTime=5
+        stack=1
+        readTime=1
+        masterThread.set_time(self.gState,expTime,stack=stack,readTime=readTime)
+        self.assertEqual(self.gState.expTime,expTime)
+        self.assertEqual(self.gState.stack,stack)
+        self.assertEqual(self.gState.readTime,readTime)
+        for pid in self.gState.pid.values():
+            self.assertEqual(pid.dt,(expTime+readTime)*stack + 5)
+
+
 if __name__ == '__main__':
     verbosity = 2
     
     suite = None
     # to test just one piece
     # suite = unittest.TestLoader().loadTestsFromTestCase(TestStartStopGuider)
+    # suite = unittest.TestLoader().loadTestsFromTestCase(TestSetTime)
     if suite:
         unittest.TextTestRunner(verbosity=verbosity).run(suite)
     else:
