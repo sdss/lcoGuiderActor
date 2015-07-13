@@ -23,7 +23,7 @@ from actorcore import TestHelper
 from guiderActor.gimg import guiderImage
 from guiderActor import GuiderState
 import guiderActor.myGlobals as myGlobals
-from guiderActor.guiderActor_main import set_default_pids, set_pid_scaling
+from guiderActor.GuiderActor import set_default_pids, set_pid_scaling
 
 gprobeKey = {}
 guideInfoKey = {}

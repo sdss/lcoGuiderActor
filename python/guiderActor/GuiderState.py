@@ -402,20 +402,6 @@ class GuiderState(object):
         self.decenterFocus = numpy.nan
         self.decenterScale = numpy.nan
 
-    def setScales(self, plugPlateScale=None,
-                  dSecondary_dmm=None,
-                  gcameraPixelSize=None,
-                  gcameraMagnification=None):
-
-        if plugPlateScale != None:
-            self.plugPlateScale = plugPlateScale
-        if dSecondary_dmm != None:
-            self.dSecondary_dmm = dSecondary_dmm
-        if gcameraPixelSize != None:
-            self.gcameraPixelSize = gcameraPixelSize
-        if gcameraMagnification != None:
-            self.gcameraMagnification = gcameraMagnification
-
     def set_pid_defaults(self, axis, **kwargs):
         """Set the default pid values for axis."""
         for key in kwargs:

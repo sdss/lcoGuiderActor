@@ -17,6 +17,7 @@ include/ipGguide.h -text
 include/shLegacy.h -text
 python/guiderActor/Commands/GuiderCmd.py -text
 python/guiderActor/Commands/__init__.py -text
+python/guiderActor/GuiderActor.py -text
 python/guiderActor/GuiderState.py -text
 python/guiderActor/PID.py -text
 python/guiderActor/__init__.py -text
