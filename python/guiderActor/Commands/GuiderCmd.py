@@ -4,6 +4,8 @@
 
 import os
 import threading
+import itertools
+
 import numpy
 
 import opscore.protocols.keys as keys
@@ -16,9 +18,6 @@ import opscore.utility.YPF as YPF
 from guiderActor import Msg, GuiderState
 import guiderActor
 import guiderActor.myGlobals as myGlobals
-
-prodDir = os.environ['GUIDERACTOR_DIR']
-gprobesGlobal = yanny.yanny(os.path.join(prodDir, 'etc/gcamFiberInfo_LCO.par', np=True))['GPROBE']
 
 def getGprobeKeys():
     """Output a list of gprobeKey where gprobeKey itself is also a list
@@ -38,12 +37,19 @@ def getGprobeKeys():
         self.focusOffset = gprobeKey[9]
         self.fiber_type = gprobeKey[10]
     """
+    prodDir = os.environ['GUIDERACTOR_DIR']
+    gprobes = yanny.yanny(os.path.join(prodDir, 'etc/gcamFiberInfo_LCO.par'), np=True)['GPROBE']
     gprobeFields = ["cartridgeId","gProbeId","exists","xcen","ycen","radius","rot","xferruleOffset","yferruleOffset","focusOffset","fiberType"] # order matters
-    gprobeKeys = numpy.asarray([gprobesGlobal[key] for key in gprobeFields]).T
+    gprobeKeys = numpy.asarray([gprobes[key][:-1] for key in gprobeFields]).T # throw out last value (we don't want tritium source)
+    assert gprobeKeys.shape == (16, len(gprobeFields))
     return gprobeKeys
 
-def getGuideInfoKeys():
+def getGuideInfoKey(gProbeId, guideNumber, plYanny):
     """
+    gProbeId: int 1-16 (17 not uesd)
+    guideNumber: fiberNumber corresponding to this gProbeId in the plYanny
+    plYanny: a yanny-parsed plPlugMap file
+
     Output a list of guideInfoKey (list of list):
     guideInfoKey looks like this:
         self._check_id(guideInfoKey[0],'platedb.guideInfo')
@@ -54,43 +60,33 @@ def getGuideInfoKeys():
         self.phi = guideInfoKey[5]
         self.throughput = guideInfoKey[6]
 
+    note throughput value is divided by 65535.0 and phi always = 0
+    in PlatedbCmd.py so I will do the same here
+
+    list output = [gprobId, ra, dec, xFocal, yFocal, phi, throughput]
     """
-
-
-#     def getPointingInfo(self):
-#         """Format and return platePointing keyword
-#         """
-#         return "pointingInfo=%d, %d, %s, %.04f, %.04f, %g, %.1f, %.0f, %s, %s" % (self.plateID,
-#                                                                                        self.cartridge_id,
-#                                                                                        self.pointing,
-#                                                                                        self.raCen, # same as self.boresight_ra,?
-#                                                                                        self.decCen, # same as self.boresight_dec,?
-#                                                                                        self.haMin, # same as self.hour_angle,?
-#                                                                                        self.temp,
-#                                                                                        # self.wavelength, where to get wavelength?
-#                                                                                        qstr(self.survey),
-#                                                                                        qstr(self.surveyMode))
-
-#     def getGprobesInUse(self):
-#         """Format and return gProbesInUse keyword
-#         """
-#         return "gprobesInUse=%s" % ", ".join(["\"(%d=0x%x)\"" % (id, flags) for id, flags in self.gprobes.items()])
-
-#     def getGprobes(self):
-#         """output gprobe keyword for each gprobe.
-
-#         make it look like this:
-#             "gprobe=%d, %d, %s,   %.2f, %.2f, %.2f, %.2f,  %.2f, %.2f,  %.2f, %s" % (
-#                 cartridgeId, gp.gprobe_id, bool(gp.exists),
-#                 gp.x_center, gp.y_center, gp.radius, gp.rotation,
-#                 gp.x_ferrule_offset, gp.y_ferrule_offset,
-#                 gp.focus_offset, gp.fiber_type))
-#         """
-#         pass
+    assert gProbeId in range(1,17)
+    guideInfo = [gProbeId]
+    # find the values corresponding to guideNumber in the yanny file
+    # search the file for object holeType=GUIDE and fiberID = guideNumber
+    # Truck's jacked up flat bills flipped back you can find us where the party's at.
+    objs = plYanny["PLUGMAPOBJ"]
+    index = numpy.where((objs["holeType"]=="GUIDE") & (objs["fiberId"]==guideNumber))
+    attrList = ["ra", "dec", "xFocal", "yFocal", "phi", "throughput"] # order matters
+    for attr in attrList:
+        if attr == "phi":
+            guideInfo.append(0.0) # PlatedbCmd always enteres 0 here
+        elif attr == "throughput":
+            guideInfo.append(objs[attr][index]/65535.0)
+        else:
+            guideInfo.append(objs[attr][index])
+    return guideInfo
 
 class GuiderCmd(object):
     """ Wrap commands to the guider actor"""
-
+    # globals here, only need definition once
+    gprobekeys = getGprobeKeys()
+    validpointings = ["A", "B", "C", "D"]
     def __init__(self, actor):
         """
         Declares keys that this actor uses, and available commands that can be sent to it.
@@ -113,6 +109,7 @@ class GuiderCmd(object):
                                         keys.Key("fromGprobe", types.Int(), help="A probe ID, 1-indexed"),
                                         keys.Key("pointing", types.String(),
                                                  help="A pointing for the given plugplate"),
+                                        keys.Key("fiberPos", types.Int(), help="A fiber position, 1-indexed"),
                                         keys.Key("time", types.Float(), help="Exposure time for guider"),
                                         keys.Key("force", help="Force requested action to happen"),
                                         keys.Key("gprobes", types.Enum("acquire", "guide"), help="Type of gprobe"),
@@ -155,7 +152,7 @@ class GuiderCmd(object):
             ("disable", "<fibers>|<gprobes>", self.disableFibers),
             ("enable", "<fibers>|<gprobes>", self.enableFibers),
             ("loadCartridge", "[<cartridge>] [<pointing>] [<plate>] [<mjd>] [<fscanId>] [force]", self.loadCartridge), # fake this, get info directly from plPlugMap file
-            ("loadCartridgeFake", "<plate> [<fiberPos>] [<pointing>]", self.loadCartridgeFake), # fake this, get info directly from plPlugMap file
+            ("fakeCartridge", "<plate> [<fiberPos>] [<pointing>]", self.fakeCartridge), # fake this, get info directly from plPlugMap file
             ("showCartridge", "", self.showCartridge),
             ("loadPlateFiles", "<cartfile> <plugfile>", self.loadPlateFiles),
             ("reprocessFile", "<file>", self.reprocessFile),
@@ -506,137 +503,67 @@ class GuiderCmd(object):
                   gprobes=gprobes))
 
 
-    def loadCartridgeFake(self, cmd):
+    def fakeCartridge(self, cmd):
         """
-        Load a cartridge but grab all info from plPlugMap file on disk (rather than from the db)
-
-        If the cartridge ID is omitted the currently-mounted cartridge is used.
-        Error if cartridge that isn't actually mounted is specified (unless force is also given).
+        Load a cartridge but grab all info from plPlugMap and gcamFiberInfo_LCO files on disk (rather than from the db)
         """
         plate = int(cmd.cmd.keywords["plate"].values[0])
         fiberPos = int(cmd.cmd.keywords["fiberPos"].values[0]) if "fiberPos" in cmd.cmd.keywords else 1
         if fiberPos not in [1,2,3]:
-            cmd.fail("text=\"fiberPos parameter must be 1, 2 or 3 in loadCartridgeFake\"")
+            cmd.fail("text=\"fiberPos parameter must be 1, 2 or 3 in fakeCartridge\"")
             return
-        pointing = int(cmd.cmd.keywords["pointing"].values[0]) if "pointing" in cmd.cmd.keywords else 1
-        if pointing not in [1,2,3,4]:
-            cmd.fail("text=\"pointing parameter must be 1, 2, 3 or 4 in loadCartridgeFake\"")
+        pointing = cmd.cmd.keywords["pointing"].values[0] if "pointing" in cmd.cmd.keywords else "A"
+        if pointing not in self.validpointings:
+            cmd.fail("text=\"pointing parameter must be one of %s in fakeCartridge\""%", ".join(self.validpointings))
             return
         plPlugMapDir = cmd.cmd.keywords["pmDir"].values[0] if "pmDir" in cmd.cmd.keywords else "/data/plPlugMap/"
-        #
-        # If they specify a plate explicitly, we'll bypass the active table and give them what they want
-        #
 
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
 
         # get the path to the plPlugMap file
-        pointingMap = {1 : "", 2 : "B", 3 : "C", 4 : "D"} # different plPlugMapP file for each pointing
-        pmFilePath = os.path.join(plPlugMapDir, "plPlugMapP-%i%s.par"%(plate, pointingMap[pointing]))
+        pmFilePath = os.path.join(plPlugMapDir, "plPlugMapP-%i%s.par"%(plate, "" if pointing == "A" else pointing))
         # parse the plPlugMapFile
-        plYanny = yanny(pmFilePath)
+        plYanny = yanny.yanny(pmFilePath)
         # may use plPlugMap.getPointingInfo() to return updated keyword
-
-        plate = int(plYanny["plateId"])
+        pointingIndex = self.validpointings.index(pointing)
         boresight_ra = float(plYanny["raCen"])
         boresight_dec = float(plYanny["decCen"])
-        design_ha = float(plYanny["ha"][pointing-1])
+        # design_ha = float(plYanny["ha"][pointingIndex])
+        design_ha = 0.0
         survey = "APOGEE-2"
         surveyMode = "APOGEE lead"
         if design_ha < 0:
             design_ha += 360
 
         # Lookup the valid gprobes
-        # the correct gprobe number corresponds to which of 3 possible holes
+        # the correct gprobe number corresponds to one of 3 possible holes
         # we have chosen to plug for each fiber
-        # 1-12 correspond to pointing 1 fiberPos 1
-        # 13-24 pointing 1 fiberPos 2
+        # 1-16 correspond to pointing 1 fiberPos 1
+        # 13-32 pointing 1 fiberPos 2
         # ...
         # ...
-        # 49 - 58 pointing 2 ...
+        # 49 - 64 pointing 2 fiberPos 1...
+        # 65 - 80 pointing 2 fiberPos 2 ... you get the picture
         # determine the starting guide number
-        # these are listed under guidenums1, guidenums2, guidenums3, etc in plPlugMapP file
         #
-        guideStartNum = 48*(pointing-1) + 12*(fiberPos-1) + 1
-        guideNums = numpy.arange(guideStartNum, guideStartNum+12) # 12 guide fibers
-
-
-        # deal with gprobe stuff
-        # largely copied from PlatedbCmd.getGprobes
-        #
-        # See which guide fibers are defined for this plate, both whether they exist
-        # (from the gprobes table) and whether they are used for this pointing
-        #
-        self.gprobes = {}
-        for gp in gprobesGlobal:
-            self.gprobes[gp["gProbeId"]] = GuiderState.GOOD if int(gp["exists"]) else GuiderState.BROKEN
-        #
-        # set the NOSTAR bit if *not* present in the plPlugMapM file
-        #
-        for k in self.gprobes.keys():
-            # k is gProbeId (read from gcamFiberInfo_LCO.par) 1 - 17
-            # why is k not int(k) here?
-            self.gprobes[k] |= GuiderState.NOSTAR
-
-        for k in guideNums:
-            # k may be large
-            self.gprobes[int(k)] &= ~GuiderState.NOSTAR
-
-        # extraArgs = ""
-        # if plate: extraArgs += "plate=%s" % (plate)
-        # gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
-        # gprobesInUseKey = actorState.models["platedb"].keyVarDict["gprobesInUse"]
-        # cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-        #                                     cmdStr="getGprobes cartridge=%d pointing=%s %s" % \
-        #                                         (cartridge, pointing, extraArgs),
-        #                                     keyVars=[gprobeKey, gprobesInUseKey])
-        # if cmdVar.didFail:
-        #     cmd.fail("text=\"Failed to lookup gprobes for cartridge %d\"" % (cartridge))
-        #     return
-
-        # Unpack the various platedb guider keys into a Probe instance for each probe
-        # NOTE: ordered so that we first set the gprobebits, then fill in the rest of the values.
-        # as otherwise the gprobebits would overwrite some of the state we set.
+        guideStartNum = 48*(pointingIndex) + 16*(fiberPos-1) + 1
+        guideNums = numpy.arange(guideStartNum, guideStartNum+16) # 16 guide fibers
         gprobes = {}
-        for probeId,flags in self.gprobes.itervalues():
-            gprobes[int(probeId)] = GuiderState.GProbe(int(probeId))
-            gprobes[int(probeId)].gprobebits = int(flags,16)
+        for guideNum, gProbeKey in itertools.izip(guideNums, self.gprobekeys):
+            gprobeId = int(gProbeKey[1]) # index 0 is cart 1 is gProbeId
+            guideInfoKey = getGuideInfoKey(gprobeId, guideNum, plYanny)
+            gProbe = GuiderState.GProbe(id=int(gprobeId), gprobeKey=gProbeKey, guideInfoKey=guideInfoKey)
+            # need to explicitly set the gprobebits
+            flag = GuiderState.GOOD if bool(gProbeKey[2]) else GuiderState.BROKEN
+            # note only 16 should be broken, here's some paranoia for you
+            if gprobeId != 16:
+                assert flag == GuiderState.BROKEN
+            else:
+                assert gprobeId == 16
+                assert flag == GuiderState.GOOD
+            gProbe.gprobebits(int(flag,16))
+            gprobes[gprobeId] = gProbe
 
-        for key in getGprobeKeys():
-            try:
-                gprobes[key[1]].from_platedb_gprobe(key)
-            except (KeyError,ValueError),e:
-                cmd.warn('text=%s'%e)
-                cmd.warn('text="Unknown probeId %s from platedb.gprobe. %s"'%(probeId,str(key)))
-                continue
-
-
-
-        # Add in the plate/fibre geometry from plPlugMapM
-        # plPlugMapMKey = actorState.models["platedb"].keyVarDict["plPlugMapM"]
-        # guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
-
-        # cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-        #                                     cmdStr="getGprobesPlateGeom cartridge=%d %s" % (cartridge, extraArgs),
-        #                                     keyVars=[guideInfoKey, plPlugMapMKey])
-        # if cmdVar.didFail:
-        #     cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
-        #     return
-        # assert int(cmdVar.getLastKeyVarData(plPlugMapMKey)[0]) == plate
-
-        # fscanMJD = cmdVar.getLastKeyVarData(plPlugMapMKey)[1]
-        # fscanID = cmdVar.getLastKeyVarData(plPlugMapMKey)[2]
-
-        # unpack the platedb guideInfo keys into the probe
-
-        # for key in cmdVar.getKeyVarData(guideInfoKey):
-        #     try:
-        #         gprobes[key[0]].from_platedb_guideInfo(key)
-        #     except (KeyError,ValueError),e:
-        #         cmd.warn('text=%s'%e)
-        #         cmd.warn('text="Unknown probeId %d from plugmap file. %s"'%(key[0],str(key)))
-        #         continue
-
-        # Add in the refraction functions from plateGeomCoeffs
         #
         # I'm not sure how to get numeric pointing IDs, but it turns out that
         # shared plates will only ever have one pointing.
@@ -650,47 +577,10 @@ class GuiderCmd(object):
         #
         queue.put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
                   cartridge=1, plate=plate, pointing=pointing,
-                  fscanMJD=1, fscanID=1,
+                  fscanMJD=-1, fscanID=-1,
                   boresight_ra=boresight_ra, boresight_dec=boresight_dec,
                   design_ha=design_ha, survey=survey, surveyMode=surveyMode,
                   gprobes=gprobes))
-
-    def _loadCartridge(self, cartridge, pointing="A"):
-        """Load what we need to know about the given cartridge.  This is an LCO replacement
-        for PlatedbCmd.loadCartridge (because we don't have platedb here!)
-
-        needs to supply "pointingInfo=%d, %d, %s, %.04f, %.04f, %g, %.1f, %.0f, %s, %s" % (self.plate_id,
-                                                                                       self.cartridge_id,
-                                                                                       self.pointing_id,
-                                                                                       self.boresight_ra,
-                                                                                       self.boresight_dec,
-                                                                                       self.hour_angle,
-                                                                                       self.temperature,
-                                                                                       self.wavelength,
-                                                                                       qstr(self.survey),
-                                                                                       qstr(self.surveyMode)
-                                                                                      )
-        """
-        pass
-
-    def _getGprobesPlateGeom(self):
-        """
-        Load gprob plate geometry directly from a file (rather than getting from platedb)
-        Basically copy the functionality from the getGprobesPlateGeom command for the platedb
-        actor.
-
-        for now grab the plPlugMapFile from disk:
-
-        needs to supply:
-        'plPlugMapM=%d, %d, %d' % (plateId, pm.mjd, pm.id)
-
-        and for each guide key
-        "guideInfo=%d, %.4f, %.4f,   %.4f, %.4f, %g,  %.2f" % (
-                    id, pm.guide[id].ra, pm.guide[id].dec,
-                    pm.guide[id].xFocal, pm.guide[id].yFocal, pm.guide[id].phi,  pm.guide[id].throughput/65535.0))
-
-        """
-        pass
 
     def addGuideOffsets(self, cmd, plate, pointingID, gprobes):
         """
