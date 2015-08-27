@@ -284,7 +284,9 @@ class GuiderState(object):
         self.dSecondary_dmm = numpy.nan
         self.gcameraPixelSize = numpy.nan
         self.gcameraMagnification = numpy.nan
-        
+        self.longitude = numpy.nan
+        self.focalRatio = numpy.nan
+
         # Start with all fibers 
         self.setGuideMode("axes")
         self.setGuideMode("focus")

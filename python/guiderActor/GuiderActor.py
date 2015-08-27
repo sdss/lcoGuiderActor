@@ -75,6 +75,8 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
         gState.plugPlateScale = float(self.config.get('telescope', "scale"))
         gState.dSecondary_dmm = float(self.config.get('telescope', "dSecondary_dmm"))
+        gState.longitude = float(self.config.get('telescope', "longitude"))
+        gState.focalRatio = float(self.config.get('telescope', "focalRatio"))
         gState.gcameraPixelSize = float(self.config.get('gcamera', "pixelSize"))
         gState.gcameraMagnification = float(self.config.get('gcamera', "magnification"))
 
