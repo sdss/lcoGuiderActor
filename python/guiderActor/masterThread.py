@@ -889,12 +889,14 @@ def load_cartridge(msg, queues, gState, actorState):
     #if cmdVar.didFail:
     #    msg.cmd.fail('text="Failed to set inst!"')
     
-    loadAllProbes(msg.cmd, gState)
-    for id,gProbe in gState.gprobes.items():
-        test = (gState.allProbes.fiberId == id) & (gState.allProbes.holeType == 'GUIDE')
-        if test.any(): # should only be one
-            gProbe.ugriz = gState.allProbes.mag[test][0]
-    
+    # NOTE: TBD: for initial LCO testing, we don't have magnitudes or platedb!
+    if (actorState.actor.location).lower() != 'lco':
+        loadAllProbes(msg.cmd, gState)
+        for id,gProbe in gState.gprobes.items():
+            test = (gState.allProbes.fiberId == id) & (gState.allProbes.holeType == 'GUIDE')
+            if test.any(): # should only be one
+                gProbe.ugriz = gState.allProbes.mag[test][0]
+
     # TBD: SDSS4: We may have to twiddle with this for coobserved plates.
     # What to do with APOGEEMANGA? Also use the surveyMode?
     gState.setRefractionBalance(gState.plateType, gState.surveyMode)
