@@ -3,6 +3,7 @@ setupRequired(actorcore)
 setupRequired(PyGuide)
 setupOptional(platelist)
 setupRequired(RO)
+setupOptional(ffmpeg)
 
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
