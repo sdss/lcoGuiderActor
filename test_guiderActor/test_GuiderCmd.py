@@ -120,8 +120,31 @@ class TestSetRefractionBalance(GuiderCmdTester,unittest.TestCase):
         self._setRefractionBalance(args,expect)
 
 
+class TestFakeCartridge(GuiderCmdTester,unittest.TestCase):
+    def _fakeCartridge(self, args, expect=None):
+        if expect is None:
+            expect = {}
+        queue = self.queues[guiderActor.MASTER]
+        msg = self._run_cmd('fakeCartridge %s'%(args),queue)
+        self.assertEqual(msg.type, guiderActor.Msg.LOAD_CARTRIDGE)
+        self.assertEqual(msg.plate, expect.get('plate',None))
+        self.assertEqual(msg.pointing, expect.get('plate',None))
+        self.assertEqual(msg.gprobes, expect.get('gprobes',None))
+    def test_fakeCartridge_8451(self):
+        gprobes = {somegprobestuff}
+        expect = {'plate':8451,pointing:'A','fiberPos':1,
+                  'gprobes':SOMETHING}
+        self._fakeCartridge('plate=8451 pointing=A fiberPos=1',expect)
+    def test_fakeCartridge_8451(self):
+        gprobes = {otherGprobeStuff}
+        expect = {'plate':8451,pointing:'A','fiberPos':2,
+                  'gprobes':SOMETHING}
+        self._fakeCartridge('plate=8451 pointing=A fiberPos=2',expect)
+
 class TestGuideOnOff(GuiderCmdTester,unittest.TestCase):
-    def _guideOn(self, args, expect={}):
+    def _guideOn(self, args, expect=None):
+        if expect is None:
+            expect = {}
         queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('on %s'%(args),queue)
         self.assertEqual(msg.type, guiderActor.Msg.START_GUIDING)
