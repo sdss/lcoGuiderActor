@@ -406,7 +406,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     #
 
     # Grab some times for refraction correction
-    longitude = -105.82045
+    longitude = gState.longitude
     UTC = RO.Astro.Tm.utcFromPySec(time.time() +
                                    actorState.models["tcc"].keyVarDict["utc_TAI"][0])
     LST = RO.Astro.Tm.lastFromUT1(UTC, longitude)
@@ -629,7 +629,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     # radius of the doughnut is d/(2 f) so
     # RMS^2 = 5/(32 f^2) d^2, i.e. C = 5/(32 f^2)
     #
-    focalRatio = 5.0
+    focalRatio = gState.focalRatio
     C = 5/(32.0*focalRatio*focalRatio)
 
     A = numpy.matrix(numpy.zeros(2*2).reshape([2,2]))
