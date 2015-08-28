@@ -63,7 +63,7 @@ class TestDecentering(GuiderCmdTester,unittest.TestCase):
                   'decenterRot':0,
                   'mangaDither':'E'}
         self._mangaDither(expect,'ditherPos=E')
-    
+
     def _decenter(self,expect,args):
         queue = self.queues[guiderActor.MASTER]
         msg = self._run_cmd('decenter %s'%(args),queue)
@@ -121,6 +121,7 @@ class TestSetRefractionBalance(GuiderCmdTester,unittest.TestCase):
 
 
 class TestFakeCartridge(GuiderCmdTester,unittest.TestCase):
+    testAttrs = ["ra", "dec", "xFocal", "yFocal", "xCenter", "yCenter", "radius", "rotation", "xFerruleOffset", "yFerruleOffset", "focusOffset", "fiber_type"]
     def _fakeCartridge(self, args, expect=None):
         if expect is None:
             expect = {}
@@ -128,18 +129,66 @@ class TestFakeCartridge(GuiderCmdTester,unittest.TestCase):
         msg = self._run_cmd('fakeCartridge %s'%(args),queue)
         self.assertEqual(msg.type, guiderActor.Msg.LOAD_CARTRIDGE)
         self.assertEqual(msg.plate, expect.get('plate',None))
-        self.assertEqual(msg.pointing, expect.get('plate',None))
-        self.assertEqual(msg.gprobes, expect.get('gprobes',None))
-    def test_fakeCartridge_8451(self):
-        gprobes = {somegprobestuff}
-        expect = {'plate':8451,pointing:'A','fiberPos':1,
-                  'gprobes':SOMETHING}
-        self._fakeCartridge('plate=8451 pointing=A fiberPos=1',expect)
-    def test_fakeCartridge_8451(self):
-        gprobes = {otherGprobeStuff}
-        expect = {'plate':8451,pointing:'A','fiberPos':2,
-                  'gprobes':SOMETHING}
-        self._fakeCartridge('plate=8451 pointing=A fiberPos=2',expect)
+        self.assertEqual(msg.pointing, expect.get('pointing',None))
+        for gprobeGot in msg.gprobes.itervalues():
+            print "gprobeGot", gprobeGot.id
+            for gprobeId, gprobeExpect in expect["gprobes"].iteritems():
+                print "gprobeID", gprobeId
+                if gprobeGot.id == gprobeId:
+                    for attr in self.testAttrs:
+                        if attr in gprobeExpect:
+                            self.assertEqual(getattr(gprobeGot, attr), gprobeExpect.get(attr, None), "gprobeId: %i"%gprobeId)
+                    # self.assertEqual(gprobeGot.ra, gprobeExpect["ra"], "gprobeId: %i"%gprobeId)
+                    # self.assertEqual(gprobeGot.dec, gprobeExpect["dec"], "gprobeId: %i"%gprobeId)
+                    # self.assertEqual(gprobeGot.xCenter, gprobeExpect["xCenter"], "gprobeId: %i"%gprobeId)
+                    # self.assertEqual(gprobeGot.yCenter, gprobeExpect["yCenter"], "gprobeId: %i"%gprobeId)
+    def test_fakeCartridge_8641(self):
+        # gProbe1 = guiderActor.GuiderState.GProbe(
+        #     gprobeKey = [1, 1, 1, 216.0, 428.0, 8.5, 272.0, -4.5, 3.20000004768, 400.0, 'GUIDE'],
+        #     guideInfoKey = [1, 282.49004, -41.867939, -120.56083, 287.07792, 0.0, 0.0]
+        #     )
+        gprobes = {
+            1: {"xCenter": 216.0, "yCenter": 428.0, "ra": 282.49004, "dec":-41.867939},
+        }
+        expect = {
+            'plate':8641,
+            'pointing':'A',
+            'fiberPos':1,
+            'gprobes':gprobes}
+        self._fakeCartridge('plate=8641 pointing=A fiberPos=1',expect)
+
+    def test_fakeCartridge_8646(self):
+        gprobes = {
+            1: {"ra": 7.713199, "dec": -29.765444, "xFocal": -61.316109, "yFocal":253.6546, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            2: {"ra": 7.865471, "dec":-29.11857, "xFocal": -105.42248, "yFocal":39.318875, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            3: {"ra": 7.7258693, "dec":-28.697817, "xFocal": -65.42454, "yFocal":-99.718591, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            4: {"ra": 7.9546143, "dec":-28.722066, "xFocal": -131.74361, "yFocal":-91.585178, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            5: {"ra": 7.563513, "dec":-28.37965, "xFocal": -18.484631, "yFocal":-205.19272, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            6: {"ra": 8.091459, "dec":-29.331564, "xFocal": -170.55195, "yFocal":110.10227, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            7: {"ra": 8.109592, "dec":-29.023161, "xFocal": -176.20022, "yFocal":8.1160002, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            8: {"ra": 8.0936182, "dec":-28.763194,"xFocal": -172.06145, "yFocal":-77.863252, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            9: {"ra": 7.0428383, "dec":-28.166214, "xFocal": 133.73854, "yFocal":-276.40956, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            10: {"ra": 6.955436, "dec":-28.951372, "xFocal": 157.45553, "yFocal":-15.700456, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            11: {"ra": 7.1099969, "dec":-29.118803, "xFocal": 112.50913, "yFocal":39.422145, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            12: {"ra": 7.1206053, "dec":-29.200405, "xFocal": 109.37635, "yFocal":66.367385, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            13: {"ra": 7.1268997, "dec":-29.703818, "xFocal": 107.35518, "yFocal":233.32247, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            14: {"ra": 6.524485, "dec":-28.842894, "xFocal": 283.34771, "yFocal":-50.92314, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            15: {"ra": 6.444669, "dec":-28.884399, "xFocal": 306.63774, "yFocal":-36.988933, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+            16: {"ra": 6.4775823, "dec":-29.128048, "xFocal": 296.27414, "yFocal":43.766755, "xCenter": 216.0, "yCenter": 428.0, "radius": 8.5, "rotation": 272.0, "xFerruleOffset": -4.5, "yFerruleOffset": 3.20000004768, "focusOffset": 400.0, "fiber_type": 'GUIDE'},
+        }
+        expect = {
+            'plate':8646,
+            'pointing':'D',
+            'fiberPos':3,
+            'gprobes':gprobes}
+        self._fakeCartridge('plate=8646 pointing=D fiberPos=3',expect)
+
+
+    # def test_fakeCartridge_8451(self):
+    #     gprobes = {otherGprobeStuff}
+    #     expect = {'plate':8451,pointing:'A','fiberPos':2,
+    #               'gprobes':SOMETHING}
+    #     self._fakeCartridge('plate=8451 pointing=A fiberPos=2',expect)
 
 class TestGuideOnOff(GuiderCmdTester,unittest.TestCase):
     def _guideOn(self, args, expect=None):
@@ -189,7 +238,7 @@ class TestEcam(GuiderCmdTester,unittest.TestCase):
 
 if __name__ == '__main__':
     verbosity = 2
-    
+
     suite = None
     # to test just one piece
     #suite = unittest.TestLoader().loadTestsFromTestCase(TestClassifyCartridge)

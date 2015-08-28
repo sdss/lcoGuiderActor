@@ -40,21 +40,22 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
         location = GuiderActor._determine_location(location)
         if location == 'apo':
-            return GuiderActorAPO('guider',productName='guiderActor',**kwargs)
+            return GuiderActorAPO('guider',**kwargs)
         elif location == 'lco':
-            return GuiderActorLCO('guider',productName='guiderActor',**kwargs)
+            return GuiderActorLCO('guider',**kwargs)
         else:
             raise KeyError("Don't know my location: cannot return a working Actor!")
 
-    def __init__(self, name, configFile, debugLevel=30):
-        actorcore.Actor.Actor.__init__(self, name, configFile)
+    def __init__(self, name, debugLevel=30):
+        actorcore.Actor.Actor.__init__(self, name, productName='guiderActor')
 
         self.headURL = "$HeadURL: svn+ssh://sdss3svn@sdss3.org/repo/ops/actors/guiderActor/branches/lco/python/guiderActor/guiderActor_main.py $"
 
         self.logger.setLevel(debugLevel)
 
-        guiderActor.myGlobals.actorState = actorcore.Actor.State(self)
+        guiderActor.myGlobals.actorState = actorcore.Actor.ActorState(self)
         actorState = guiderActor.myGlobals.actorState
+        self.actorState = actorState
         actorState.gState = GuiderState.GuiderState()
         gState = actorState.gState
 
