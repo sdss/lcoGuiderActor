@@ -54,6 +54,7 @@ test_guiderActor/data/linear_uniform_dt.txt -text
 test_guiderActor/guiderTester.py -text
 test_guiderActor/profile_guider.py -text
 test_guiderActor/test_GuiderCmd.py -text
+test_guiderActor/test_guiderActor.py -text
 test_guiderActor/test_guiderImage.py -text
 test_guiderActor/test_guiderState.py -text
 test_guiderActor/test_masterThread.py -text
