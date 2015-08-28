@@ -72,7 +72,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
         expTime = float(self.config.get('gcamera', "exposureTime"))
         readTime = float(self.config.get('gcamera', "binnedReadTime"))
-        masterThread.set_time(gState,expTime,readTime=readTime)
+        masterThread.set_time(gState,expTime,readTime,1)
 
         gState.plugPlateScale = float(self.config.get('telescope', "scale"))
         gState.dSecondary_dmm = float(self.config.get('telescope', "dSecondary_dmm"))
@@ -93,6 +93,86 @@ class GuiderActorAPO(GuiderActor):
     """APO version of this actor."""
     location='APO'
 
+    def guidingIsOK(self, cmd, actorState, force=False):
+        """Is it OK to be guiding?"""
+
+        if force:
+            return True
+
+        bypassedNames = actorState.models["sop"].keyVarDict["bypassedNames"]
+
+        ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
+        open, closed = 0, 0
+        for s in ffsStatus:
+            if s == None:
+                cmd.warn('text="Failed to get state of flat field screen from MCP"')
+                break
+
+            open += int(s[0])
+            closed += int(s[1])
+
+        if open != 8:
+            msg = "FF petals aren\'t all open"
+            if 'ffs' in bypassedNames:
+                cmd.warn('text="%s; guidingIsOk failed, but ffs is bypassed in sop"' % msg)
+            else:
+                cmd.warn('text="%s; aborting guiding"' % msg)
+                return False
+
+        # This lets guiderImageAnalysis know to ignore dark frames.
+        actorState.bypassDark = 'guider_dark' in bypassedNames
+
+    #   should we allow guiding with lamps on if axes are disabled
+    #   check if lamps are actually ON
+        ffLamp = actorState.models["mcp"].keyVarDict["ffLamp"]
+        hgCdLamp = actorState.models["mcp"].keyVarDict["hgCdLamp"]
+        neLamp = actorState.models["mcp"].keyVarDict["neLamp"]
+        if (any(ffLamp) and 'lamp_ff' not in bypassedNames) or \
+           (any(hgCdLamp) and 'lamp_hgcd' not in bypassedNames) or \
+           (any(neLamp) and 'lamp_ne' not in bypassedNames):
+            cmd.warn('text="Calibration lamp on; aborting guiding"')
+            return False
+
+    #   check if non sensed lamps are commanded ON
+        uvLamp = actorState.models["mcp"].keyVarDict["uvLampCommandedOn"]
+        whtLamp = actorState.models["mcp"].keyVarDict["whtLampCommandedOn"]
+        if uvLamp.getValue() or whtLamp.getValue():
+            cmd.warn('text="Calibration lamp commanded on; aborting guiding"')
+            return False
+
+        tccModel = actorState.models['tcc']
+        axisCmdState = tccModel.keyVarDict['axisCmdState']
+        if any(x.lower() != 'tracking' for x in axisCmdState):
+            if 'axes' in bypassedNames:
+                cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
+            else:
+                cmd.warn('text="TCC motion aborted guiding"')
+                return False
+
+        return True
+
 class GuiderActorLCO(GuiderActor):
     """LCO version of this actor."""
     location='LCO'
+
+    def guidingIsOK(self, cmd, actorState, force=False):
+        """Is it OK to be guiding?"""
+
+        if force:
+            return True
+
+        bypassedNames = actorState.models["sop"].keyVarDict["bypassedNames"]
+        # This lets guiderImageAnalysis know to ignore dark frames.
+        actorState.bypassDark = 'guider_dark' in bypassedNames
+
+        # tccModel = actorState.models['tcc']
+        # axisCmdState = tccModel.keyVarDict['axisCmdState']
+        # if any(x.lower() != 'tracking' for x in axisCmdState):
+        #     if 'axes' in bypassedNames:
+        #         cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
+        #     else:
+        #         cmd.warn('text="TCC motion aborted guiding"')
+        #         return False
+
+        return True
+

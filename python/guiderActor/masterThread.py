@@ -407,8 +407,10 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
     # Grab some times for refraction correction
     longitude = gState.longitude
-    UTC = RO.Astro.Tm.utcFromPySec(time.time() +
-                                   actorState.models["tcc"].keyVarDict["utc_TAI"][0])
+    #LCOHACK!
+    UTC = RO.Astro.Tm.utcFromPySec(time.time() + 36)
+    # UTC = RO.Astro.Tm.utcFromPySec(time.time() +
+    #                                actorState.models["tcc"].keyVarDict["utc_TAI"][0])
     LST = RO.Astro.Tm.lastFromUT1(UTC, longitude)
 
     try:
@@ -460,9 +462,9 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
             gState.cmd = None
             return frameInfo
 
-        #if guidingIsOK(cmd, actorState):
-        #    queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
-        #                            expTime=gState.expTime))
+        if actorState.actor.guidingIsOK(cmd, actorState):
+           queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
+                                   expTime=gState.expTime))
         return frameInfo
 
     frameInfo.A[2, 0] = frameInfo.A[0, 2]
@@ -924,7 +926,7 @@ def set_refraction(cmd, gState, corrRatio, plateType, surveyMode):
     elif plateType is not None:
         gState.setRefractionBalance(plateType,surveyMode)
 
-def set_time(gState, expTime, stack=None, readTime=None):
+def set_time(gState, expTime, stack, readTime):
     """
     Set the exposure time, stacking, and read time, and reconfigure the PID loop delta-t.
 
@@ -964,7 +966,7 @@ def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
         failMsg = "No cart/plate information: please load cartridge and try again."
         cmd.fail('guideState=failed; text="%s"' % failMsg)
         return
-    if not guidingIsOK(cmd, actorState, force=force):
+    if not actorState.actor.guidingIsOK(cmd, actorState, force=force):
         failMsg = "Not ok to guide in current state."
         cmd.fail('guideState=failed; text="%s"' % failMsg)
         return
@@ -1141,7 +1143,7 @@ def main(actor, queues):
                 #
                 # Is there anything to indicate that we shouldn't be guiding?
                 #
-                if not guidingIsOK(msg.cmd, actorState, force=force):
+                if not actorState.actor.guidingIsOK(msg.cmd, actorState, force=force):
                     queues[MASTER].put(Msg(Msg.STOP_GUIDING, gState.cmd))
                     continue
                 #
@@ -1261,7 +1263,7 @@ def main(actor, queues):
                     cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=msg.cmd,
                                                         cmdStr="offset bore %g,%g /pabs/computed" % (dx, dy))
                     if cmdVar.didFail:
-                        if guidingIsOK(msg.cmd, actorState):
+                        if actorState.actor.guidingIsOK(msg.cmd, actorState):
                             msg.cmd.warn('text="Failed to offset, but axes are bypassed"')
                         else:
                             gState.inMotion = False
@@ -1329,7 +1331,7 @@ def main(actor, queues):
                 expTime = msg.expTime
                 stack = getattr(msg,'stack',1)
                 readTime = getattr(msg,'readTime',None)
-                set_time(gState, expTime, stack, readTime, msg.cmd, queues)
+                set_time(gState, expTime, stack, readTime)
 
                 if msg.cmd is not None:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))
@@ -1415,61 +1417,3 @@ def main(actor, queues):
                 msg.replyQueue.put(Msg.EXIT, cmd=msg.cmd, success=False)
             except Exception as e:
                 pass
-
-def guidingIsOK(cmd, actorState, force=False):
-    """Is it OK to be guiding?"""
-
-    if force:
-        return True
-
-    bypassedNames = actorState.models["sop"].keyVarDict["bypassedNames"]
-
-    ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
-    open, closed = 0, 0
-    for s in ffsStatus:
-        if s == None:
-            cmd.warn('text="Failed to get state of flat field screen from MCP"')
-            break
-
-        open += int(s[0])
-        closed += int(s[1])
-
-    if open != 8:
-        msg = "FF petals aren\'t all open"
-        if 'ffs' in bypassedNames:
-            cmd.warn('text="%s; guidingIsOk failed, but ffs is bypassed in sop"' % msg)
-        else:
-            cmd.warn('text="%s; aborting guiding"' % msg)
-            return False
-
-    # This lets guiderImageAnalysis know to ignore dark frames.
-    actorState.bypassDark = 'guider_dark' in bypassedNames
-
-#   should we allow guiding with lamps on if axes are disabled
-#   check if lamps are actually ON
-    ffLamp = actorState.models["mcp"].keyVarDict["ffLamp"]
-    hgCdLamp = actorState.models["mcp"].keyVarDict["hgCdLamp"]
-    neLamp = actorState.models["mcp"].keyVarDict["neLamp"]
-    if (any(ffLamp) and 'lamp_ff' not in bypassedNames) or \
-       (any(hgCdLamp) and 'lamp_hgcd' not in bypassedNames) or \
-       (any(neLamp) and 'lamp_ne' not in bypassedNames):
-        cmd.warn('text="Calibration lamp on; aborting guiding"')
-        return False
-
-#   check if non sensed lamps are commanded ON
-    uvLamp = actorState.models["mcp"].keyVarDict["uvLampCommandedOn"]
-    whtLamp = actorState.models["mcp"].keyVarDict["whtLampCommandedOn"]
-    if uvLamp.getValue() or whtLamp.getValue():
-        cmd.warn('text="Calibration lamp commanded on; aborting guiding"')
-        return False
-
-    tccModel = actorState.models['tcc']
-    axisCmdState = tccModel.keyVarDict['axisCmdState']
-    if any(x.lower() != 'tracking' for x in axisCmdState):
-        if 'axes' in bypassedNames:
-            cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
-        else:
-            cmd.warn('text="TCC motion aborted guiding"')
-            return False
-
-    return True
