@@ -187,7 +187,9 @@ class GuiderImageAnalysis(object):
         # The factor by which guider images are binned down.
         # That is, unbinned (flat) images are this factor bigger in
         # each dimension.
-        self.binning = 2
+        #LCOHACK
+        # self.binning = 2
+        self.binning = 1
 
         # The pixel scale of the guider camera, when binned by "binning"
         # In arcsec/pixel
