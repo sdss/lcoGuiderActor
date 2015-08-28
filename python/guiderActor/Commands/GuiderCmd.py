@@ -19,6 +19,12 @@ from guiderActor import Msg, GuiderState
 import guiderActor
 import guiderActor.myGlobals as myGlobals
 
+def hardingRotation(apoMeasuredRot):
+    """Convert Dan Long's measured rotation angle
+    To the angle that Paul Harding determined
+    """
+    return 180. - apoMeasuredRot - 18.
+
 def getGprobeKeys():
     """Output a list of gprobeKey where gprobeKey itself is also a list
     gprobeKey needs specific ordering for use by GuiderState, here's code
@@ -54,7 +60,7 @@ def getGprobeKeys():
     ] # order matters
     # throw out last value (we don't want tritium source),
     #warning!!! remove the [:-1] if the tritium source gets removed from the gcamFiberInfo file!!!
-    castMap = (int,)*3 + (float,)*7 + (str,)
+    castMap = (int,)*3 + (float,)*3 +(hardingRotation,) +(float,)*3 + (str,)
     gprobeKeysNumpy = numpy.asarray([gprobes[key][:-1] for key in gprobeFields]).T
     assert gprobeKeysNumpy.shape == (16, len(gprobeFields))
     # convert to list of mixed types (numpy got messy here)
