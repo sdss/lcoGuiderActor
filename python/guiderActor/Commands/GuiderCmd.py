@@ -39,9 +39,28 @@ def getGprobeKeys():
     """
     prodDir = os.environ['GUIDERACTOR_DIR']
     gprobes = yanny.yanny(os.path.join(prodDir, 'etc/gcamFiberInfo_LCO.par'), np=True)['GPROBE']
-    gprobeFields = ["cartridgeId","gProbeId","exists","xcen","ycen","radius","rot","xferruleOffset","yferruleOffset","focusOffset","fiberType"] # order matters
-    gprobeKeys = numpy.asarray([gprobes[key][:-1] for key in gprobeFields]).T # throw out last value (we don't want tritium source)
-    assert gprobeKeys.shape == (16, len(gprobeFields))
+    gprobeFields = [
+        "cartridgeId",
+        "gProbeId",
+        "exists",
+        "xcen",
+        "ycen",
+        "radius",
+        "rot",
+        "xferruleOffset",
+        "yferruleOffset",
+        "focusOffset",
+        "fiberType",
+    ] # order matters
+    # throw out last value (we don't want tritium source),
+    #warning!!! remove the [:-1] if the tritium source gets removed from the gcamFiberInfo file!!!
+    castMap = (int,)*3 + (float,)*7 + (str,)
+    gprobeKeysNumpy = numpy.asarray([gprobes[key][:-1] for key in gprobeFields]).T
+    assert gprobeKeysNumpy.shape == (16, len(gprobeFields))
+    # convert to list of mixed types (numpy got messy here)
+    gprobeKeys = []
+    for gProbeKey in gprobeKeysNumpy:
+        gprobeKeys.append([castFunc(val) for val, castFunc in itertools.izip(gProbeKey, castMap)])
     return gprobeKeys
 
 def getGuideInfoKey(gProbeId, guideNumber, plYanny):
@@ -77,9 +96,9 @@ def getGuideInfoKey(gProbeId, guideNumber, plYanny):
         if attr == "phi":
             guideInfo.append(0.0) # PlatedbCmd always enteres 0 here
         elif attr == "throughput":
-            guideInfo.append(objs[attr][index]/65535.0)
+            guideInfo.append(float(objs[attr][index]/65535.0))
         else:
-            guideInfo.append(objs[attr][index])
+            guideInfo.append(float(objs[attr][index]))
     return guideInfo
 
 class GuiderCmd(object):
@@ -523,7 +542,7 @@ class GuiderCmd(object):
         # get the path to the plPlugMap file
         pmFilePath = os.path.join(plPlugMapDir, "plPlugMapP-%i%s.par"%(plate, "" if pointing == "A" else pointing))
         # parse the plPlugMapFile
-        plYanny = yanny.yanny(pmFilePath)
+        plYanny = yanny.yanny(pmFilePath, np=True)
         # may use plPlugMap.getPointingInfo() to return updated keyword
         pointingIndex = self.validpointings.index(pointing)
         boresight_ra = float(plYanny["raCen"])
@@ -552,16 +571,13 @@ class GuiderCmd(object):
         for guideNum, gProbeKey in itertools.izip(guideNums, self.gprobekeys):
             gprobeId = int(gProbeKey[1]) # index 0 is cart 1 is gProbeId
             guideInfoKey = getGuideInfoKey(gprobeId, guideNum, plYanny)
-            gProbe = GuiderState.GProbe(id=int(gprobeId), gprobeKey=gProbeKey, guideInfoKey=guideInfoKey)
+            print "guideNum", guideNum, "gProbeKey", gProbeKey
+            gProbe = GuiderState.GProbe(id=gprobeId, gprobeKey=gProbeKey, guideInfoKey=guideInfoKey)
             # need to explicitly set the gprobebits
-            flag = GuiderState.GOOD if bool(gProbeKey[2]) else GuiderState.BROKEN
-            # note only 16 should be broken, here's some paranoia for you
-            if gprobeId != 16:
-                assert flag == GuiderState.BROKEN
-            else:
-                assert gprobeId == 16
-                assert flag == GuiderState.GOOD
-            gProbe.gprobebits(int(flag,16))
+            if not bool(gProbeKey[2]):
+                # set flag to bad (defaults to good)
+                # gProbeKey[2] is exists
+                gProbe.broken = True
             gprobes[gprobeId] = gProbe
 
         #
@@ -590,11 +606,15 @@ class GuiderCmd(object):
         # Get .par file name in the platelist product.
         # plates/0046XX/004671/plateGuideOffsets-004671-p1-l16600.par
         for wavelength in (16600,):
-            path = os.path.join(os.environ['PLATELIST_DIR'],
-                                'plates',
-                                '%04dXX' % (int(plate/100)),
-                                '%06d' % (plate),
-                                'plateGuideOffsets-%06d-p%d-l%05d.par' % (plate, pointingID, wavelength))
+            try:
+                path = os.path.join(os.environ['PLATELIST_DIR'],
+                                    'plates',
+                                    '%04dXX' % (int(plate/100)),
+                                    '%06d' % (plate),
+                                    'plateGuideOffsets-%06d-p%d-l%05d.par' % (plate, pointingID, wavelength))
+            except:
+                cmd.warn('text="no refraction corrections for plate %d at %dA, could not locate PLATELIST_DIR"' % (plate, wavelength))
+                continue
             if not os.path.exists(path):
                 cmd.warn('text="no refraction corrections for plate %d at %dA"' % (plate, wavelength))
                 continue
