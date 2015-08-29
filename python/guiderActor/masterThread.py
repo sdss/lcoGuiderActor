@@ -125,13 +125,14 @@ def _do_one_fiber(fiber, gState, cmd, frameInfo, haLimWarn):
                           fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, gProbe.xCenter, gProbe.yCenter)))
         return
 
-    if fiber.flux < frameInfo.minStarFlux:
-        cmd.warn("text=%s" %
-                      qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
-                          fiber.fiberid, fiber.flux, frameInfo.minStarFlux)))
-        gProbe.tooFaint = True
-    else:
-        gProbe.tooFaint = False
+    #LCOHACK: libguide doesn't work on unbinned images...
+    # if fiber.flux < frameInfo.minStarFlux:
+    #     cmd.warn("text=%s" %
+    #                   qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
+    #                       fiber.fiberid, fiber.flux, frameInfo.minStarFlux)))
+    #     gProbe.tooFaint = True
+    # else:
+    gProbe.tooFaint = False
 
     if poserr == 0:
         cmd.warn("text=%s" %
@@ -407,7 +408,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
     # Grab some times for refraction correction
     longitude = gState.longitude
-    #LCOHACK!
+    #LCOHACK! LCO's tccActor does not output utc_TAI yet...
     UTC = RO.Astro.Tm.utcFromPySec(time.time() + 36)
     # UTC = RO.Astro.Tm.utcFromPySec(time.time() +
     #                                actorState.models["tcc"].keyVarDict["utc_TAI"][0])
@@ -1012,8 +1013,9 @@ def stop_guider(cmd, gState, actorState, queues, frameNo, success):
     """Stop current guider exposure and stop taking new exposures."""
 
     # Try to generate a movie out of the recent guider frames.
-    if make_movie(actorState,cmd,gState.startFrame):
-        gState.startFrame = None
+    #LCOHACK: movies don't work anyway!
+    # if make_movie(actorState,cmd,gState.startFrame):
+        # gState.startFrame = None
 
     if not gState.cmd:
         cmd.fail('text="The guider is already off"')
