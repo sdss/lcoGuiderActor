@@ -8,7 +8,6 @@ time, so they'll never conflict with each other.
 
 import Queue, threading
 
-import guiderActor
 from guiderActor import Msg, GCAMERA
 from guiderActor import myGlobals
 
@@ -77,7 +76,9 @@ def main(actor, queues):
             elif msg.type == Msg.ABORT_EXPOSURE:
                 if not msg.quiet:
                     msg.cmd.respond('text="Request to abort an exposure when none are in progress"')
-                guiderActor.flushQueue(queues[GCAMERA])
+                with queues[GCAMERA].mutex:
+                    queues[GCAMERA].queue.clear()
+                
             else:
                 raise ValueError, ("Unknown message type %s" % msg.type)
 
