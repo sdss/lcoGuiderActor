@@ -5,6 +5,7 @@
 import os
 import threading
 import itertools
+import math
 
 import numpy
 
@@ -90,21 +91,34 @@ def getGuideInfoKey(gProbeId, guideNumber, plYanny):
 
     list output = [gprobId, ra, dec, xFocal, yFocal, phi, throughput]
     """
+    print gProbeId, guideNumber
     assert gProbeId in range(1,17)
     guideInfo = [gProbeId]
+    alignXYpos = []
     # find the values corresponding to guideNumber in the yanny file
     # search the file for object holeType=GUIDE and fiberID = guideNumber
     # Truck's jacked up flat bills flipped back you can find us where the party's at.
     objs = plYanny["PLUGMAPOBJ"]
-    index = numpy.where((objs["holeType"]=="GUIDE") & (objs["fiberId"]==guideNumber))
+    indexGuide = numpy.where((objs["holeType"]=="GUIDE") & (objs["fiberId"]==guideNumber))
+    indexAlign = numpy.where((objs["holeType"]=="ALIGNMENT") & (objs["fiberId"]==guideNumber))
     attrList = ["ra", "dec", "xFocal", "yFocal", "phi", "throughput"] # order matters
     for attr in attrList:
         if attr == "phi":
-            guideInfo.append(0.0) # PlatedbCmd always enteres 0 here
+            assert len(alignXYpos)==2 # paranoia
+            alignX, alignY = alignXYpos
+            guideX = guideInfo[3]
+            guideY = guideInfo[4]
+            phi = 90. - math.atan2(float(alignY) - float(guideY) , float(alignX) - float(guideX))*180/math.pi
+            guideInfo.append(phi)
+            # guideInfo.append(0.0) # PlatedbCmd always enteres 0 here
         elif attr == "throughput":
-            guideInfo.append(float(objs[attr][index]/65535.0))
+            guideInfo.append(float(objs[attr][indexGuide]/65535.0))
         else:
-            guideInfo.append(float(objs[attr][index]))
+            guideInfo.append(float(objs[attr][indexGuide]))
+        # tag on alignment x/yFocal
+        if attr in ["xFocal", "yFocal"]:
+            #xfocal comes first always
+            alignXYpos.append(float(objs[attr][indexAlign]))
     return guideInfo
 
 class GuiderCmd(object):
@@ -576,8 +590,8 @@ class GuiderCmd(object):
         gprobes = {}
         for guideNum, gProbeKey in itertools.izip(guideNums, self.gprobekeys):
             gprobeId = int(gProbeKey[1]) # index 0 is cart 1 is gProbeId
-            guideInfoKey = getGuideInfoKey(gprobeId, guideNum, plYanny)
-            print "guideNum", guideNum, "gProbeKey", gProbeKey
+            # alignmentPos is [xFocal, yFocal]
+            guideInfoKey, alignmentPos = getGuideInfoKey(gprobeId, guideNum, plYanny)
             gProbe = GuiderState.GProbe(id=gprobeId, gprobeKey=gProbeKey, guideInfoKey=guideInfoKey)
             # need to explicitly set the gprobebits
             if not bool(gProbeKey[2]):
