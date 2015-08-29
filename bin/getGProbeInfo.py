@@ -28,11 +28,12 @@ def getGprobes(plate, pointing, fiberPos):
     return gprobes, guideNums
 
 if __name__ == "__main__":
-    plate = 8645
-    pointing = "B"
+    plate = 8641
+    pointing = "C"
     fiberPos = 3
     guideNumber = 11
     gprobes, guideNums = getGprobes(plate, pointing, fiberPos)
     print "plate=%i, pointing=%s, fiberPos=%i"%(plate, pointing, fiberPos)
     print "guideNumber: %i, expandedNumber: %i"%(guideNumber, guideNums[guideNumber-1])
+    print "ra: %.4f, dec: %.4f"%(gprobes[guideNumber].ra, gprobes[guideNumber].dec)
     print "xFocal: %.6f  yFocal: %.6f"%(gprobes[guideNumber].xFocal, gprobes[guideNumber].yFocal)
