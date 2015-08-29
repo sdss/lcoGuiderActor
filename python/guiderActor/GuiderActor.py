@@ -72,7 +72,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
         expTime = float(self.config.get('gcamera', "exposureTime"))
         readTime = float(self.config.get('gcamera', "binnedReadTime"))
-        masterThread.set_time(gState,expTime,readTime,1)
+        masterThread.set_time(gState,expTime,1,readTime)
 
         gState.plugPlateScale = float(self.config.get('telescope', "scale"))
         gState.dSecondary_dmm = float(self.config.get('telescope', "dSecondary_dmm"))

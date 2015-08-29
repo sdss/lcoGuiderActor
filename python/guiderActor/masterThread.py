@@ -931,11 +931,10 @@ def set_time(gState, expTime, stack, readTime):
     Set the exposure time, stacking, and read time, and reconfigure the PID loop delta-t.
 
     Args:
+        gState (GuideState): class instance to store things in.
         expTime (float): exposure time to use with the gcamera.
-
-    Kwargs:
         stack (int): number of exposures to stack before doing guiding calculations.
-        readTime (float): time between exposure end and us having the complete image.
+        readTime (float): time between exposure end and us having the complete image (i.e. readout+download).
     """
     gState.expTime = expTime
     if stack is not None:
@@ -1055,7 +1054,7 @@ def main(actor, queues):
     time.sleep(3)
     setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
     print 'Initial gcamera setPoint:',setPoint
-    guiderImageAnalysis = GuiderImageAnalysis(setPoint)
+    guiderImageAnalysis = GuiderImageAnalysis(setPoint, actorState.actor.location)
 
     while True:
         try:

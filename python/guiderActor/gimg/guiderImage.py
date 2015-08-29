@@ -136,12 +136,17 @@ class GuiderImageAnalysis(object):
     mask_badpixels = 2
     mask_masked    = 4 # ie, outside the guide fiber
 
-    def __init__(self,setPoint):
+    def __init__(self, setPoint, location):
         """
         New GuiderImageAnalysis instances are ready to accept files for processing.
-        setPoint is the current gcamera temperature set point.
+
+        Args:
+            setPoint (float): the current gcamera temperature set point.
+            location (str): LCO or APO, so we know what header keywords to use.
         """
         self.setPoint = setPoint
+        self.location = location
+
         self.outputDir = ''
         self.camera = 'gcamera'
         # set during findStars():
@@ -344,8 +349,10 @@ class GuiderImageAnalysis(object):
             actorFits.extendHeader(cmd, imageHDU.header, plateCards)
             guiderCards = actorFits.guiderCards(models, cmd=cmd)
             actorFits.extendHeader(cmd, imageHDU.header, guiderCards)
-            apoCards = actorFits.apoCards(models, cmd=cmd)
-            actorFits.extendHeader(cmd, imageHDU.header, apoCards)
+
+            if self.location == 'APO':
+                apoCards = actorFits.apoCards(models, cmd=cmd)
+                actorFits.extendHeader(cmd, imageHDU.header, apoCards)
 
         except Exception as e:
             self.cmd.error('text=%s'%qstr('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e)))
