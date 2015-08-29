@@ -591,7 +591,7 @@ class GuiderCmd(object):
         for guideNum, gProbeKey in itertools.izip(guideNums, self.gprobekeys):
             gprobeId = int(gProbeKey[1]) # index 0 is cart 1 is gProbeId
             # alignmentPos is [xFocal, yFocal]
-            guideInfoKey, alignmentPos = getGuideInfoKey(gprobeId, guideNum, plYanny)
+            guideInfoKey = getGuideInfoKey(gprobeId, guideNum, plYanny)
             gProbe = GuiderState.GProbe(id=gprobeId, gprobeKey=gProbeKey, guideInfoKey=guideInfoKey)
             # need to explicitly set the gprobebits
             if not bool(gProbeKey[2]):
