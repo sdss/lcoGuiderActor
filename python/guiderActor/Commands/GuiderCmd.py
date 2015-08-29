@@ -60,7 +60,7 @@ def getGprobeKeys():
         "fiberType",
     ] # order matters
     # throw out last value (we don't want tritium source),
-    #warning!!! remove the [:-1] if the tritium source gets removed from the gcamFiberInfo file!!!
+    #LCOHACK: warning!!! remove the [:-1] if the tritium source gets removed from the gcamFiberInfo file!!!
     castMap = (int,)*3 + (float,)*3 +(hardingRotation,) +(float,)*3 + (str,)
     gprobeKeysNumpy = numpy.asarray([gprobes[key][:-1] for key in gprobeFields]).T
     assert gprobeKeysNumpy.shape == (16, len(gprobeFields))
@@ -97,7 +97,6 @@ def getGuideInfoKey(gProbeId, guideNumber, plYanny):
     alignXYpos = []
     # find the values corresponding to guideNumber in the yanny file
     # search the file for object holeType=GUIDE and fiberID = guideNumber
-    # Truck's jacked up flat bills flipped back you can find us where the party's at.
     objs = plYanny["PLUGMAPOBJ"]
     indexGuide = numpy.where((objs["holeType"]=="GUIDE") & (objs["fiberId"]==guideNumber))
     indexAlign = numpy.where((objs["holeType"]=="ALIGNMENT") & (objs["fiberId"]==guideNumber))
@@ -110,7 +109,6 @@ def getGuideInfoKey(gProbeId, guideNumber, plYanny):
             guideY = guideInfo[4]
             phi = 90. - math.atan2(float(alignY) - float(guideY) , float(alignX) - float(guideX))*180/math.pi
             guideInfo.append(phi)
-            # guideInfo.append(0.0) # PlatedbCmd always enteres 0 here
         elif attr == "throughput":
             guideInfo.append(float(objs[attr][indexGuide]/65535.0))
         else:
