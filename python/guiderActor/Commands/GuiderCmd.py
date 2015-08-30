@@ -24,7 +24,7 @@ def hardingRotation(apoMeasuredRot):
     """Convert Dan Long's measured rotation angle
     To the angle that Paul Harding determined
     """
-    return 180. - float(apoMeasuredRot) - 18.
+    return float(apoMeasuredRot) + 18.
 
 def getGprobeKeys():
     """Output a list of gprobeKey where gprobeKey itself is also a list
