@@ -125,14 +125,13 @@ def _do_one_fiber(fiber, gState, cmd, frameInfo, haLimWarn):
                           fiber.fiberid, fiber.xs, fiber.ys, fiber.xcen, fiber.ycen, gProbe.xCenter, gProbe.yCenter)))
         return
 
-    #LCOHACK: libguide doesn't work on unbinned images...
-    # if fiber.flux < frameInfo.minStarFlux:
-    #     cmd.warn("text=%s" %
-    #                   qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
-    #                       fiber.fiberid, fiber.flux, frameInfo.minStarFlux)))
-    #     gProbe.tooFaint = True
-    # else:
-    gProbe.tooFaint = False
+    if fiber.flux < frameInfo.minStarFlux:
+        cmd.warn("text=%s" %
+                      qstr("Star in gprobe %d too faint for guiding flux %g < %g minimum flux" % (
+                          fiber.fiberid, fiber.flux, frameInfo.minStarFlux)))
+        gProbe.tooFaint = True
+    else:
+        gProbe.tooFaint = False
 
     if poserr == 0:
         cmd.warn("text=%s" %
@@ -179,7 +178,9 @@ def _do_one_fiber(fiber, gState, cmd, frameInfo, haLimWarn):
                 yRefractCorr = gState.refractionBalance * yInterp(haTime)
             else:
                 # JKP: TODO: these warnings might be excessive?
-                cmd.warn('text="No HA Offset Time available for probe %d at wavelength %d. No refraction offset calculated."'%(gProbe.id,frameInfo.wavelength))
+                # cmd.warn('text="No HA Offset Time available for probe %d at wavelength %d. No refraction offset calculated."'%(gProbe.id,frameInfo.wavelength))
+                #LCOHACK: this is excessively verbose
+                pass
         else:
             # Don't do anything if the refraction balance is 0.
             pass
@@ -1013,9 +1014,8 @@ def stop_guider(cmd, gState, actorState, queues, frameNo, success):
     """Stop current guider exposure and stop taking new exposures."""
 
     # Try to generate a movie out of the recent guider frames.
-    #LCOHACK: movies don't work anyway!
-    # if make_movie(actorState,cmd,gState.startFrame):
-        # gState.startFrame = None
+    if make_movie(actorState,cmd,gState.startFrame):
+        gState.startFrame = None
 
     if not gState.cmd:
         cmd.fail('text="The guider is already off"')
