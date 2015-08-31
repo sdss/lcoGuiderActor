@@ -13,7 +13,6 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import cm
-import matplotlib.gridspec as gridspec
 import numpy as np
 
 from opscore.utility import assembleImage
@@ -71,9 +70,9 @@ class ImageMaker(object):
         self.cmap2 = 'gist_ncar'
         self.aspect = 'auto' # normal vs. equal?
         
-        ErrPixPerArcSec = 40 # pixels per arcsec of error on the plug plate 
-        scale_min = 5.
-        scale_max = 30000.
+        # ErrPixPerArcSec = 40 # pixels per arcsec of error on the plug plate
+        # scale_min = 5.
+        self.scale_max = 30000.
         
         self.width = 512*2. # 10px buffer
         self.height = 512.
@@ -87,17 +86,16 @@ class ImageMaker(object):
         self.cart =  data[0].header.get('CARTID')
             
         
-        self.guiderView = asinh(data[0].data,scale_min=5.,scale_max=scale_max,non_linear=10.)
+        self.guiderView = asinh(data[0].data,scale_min=5.,scale_max=self.scale_max,non_linear=10.)
         self.guiderSat = np.nonzero(data[1].data == 1)
         self.guiderBad = np.nonzero(data[1].data == 2)
-        
-        self.plateInfo = self.assembler(data)
-        plateView = self.plateInfo.plateImageArr
-        zeros = plateView == 0
-        self.plateView = asinh(plateView,scale_min=-5.,scale_max=scale_max,non_linear=10.)
-        self.plateView[zeros] = -999
-        mask = self.plateInfo.plateMaskArr
-        self.plateView = np.ma.masked_array(self.plateView, mask == 4)
+
+        try:
+            self.plateInfo = self.assembler(data)
+            self._config_plateView()
+        except assembleImage.NoPlateInfo:
+            # just try to continue if we have no plate info.
+            self.plateInfo = None
         
         hdr = data[0].header
         self.seeing = hdr.get('seeing')
@@ -113,6 +111,15 @@ class ImageMaker(object):
         self._labels(self.plateInfo.stampList)
     #...
     
+    def _config_plateView(self):
+        """Configure the plateView from an assembleImage plateInfo."""
+        plateView = self.plateInfo.plateImageArr
+        zeros = plateView == 0
+        self.plateView = asinh(plateView,scale_min=-5.,scale_max=self.scale_max,non_linear=10.)
+        self.plateView[zeros] = -999
+        mask = self.plateInfo.plateMaskArr
+        self.plateView = np.ma.masked_array(self.plateView, mask == 4)
+
     def _labels(self,stampList):
         """Make the labels for each guide probe for both plots."""
         self.guideLabels = {}
@@ -185,7 +192,7 @@ class ImageMaker(object):
             self.guiderLocations[x] = np.array(self.guiderLocations[x])
     
     def __call__(self,outfile,cmap_name=None):
-        """Save an image to outfile."""        
+        """Save an image to outfile."""
         if not cmap_name:
             cmap_name = self.cmap2
         cmap = cm.cmap_d[self.cmap1]
@@ -197,6 +204,15 @@ class ImageMaker(object):
         
         fig = plt.figure(figsize=(self.width/self.dpi,self.height/self.dpi),dpi=self.dpi,frameon=False)
 
+        self._make_guide_view(fig,cmap)
+        if self.plateView is not None:
+            self._make_plate_view(fig,cmap2)
+
+        fig.set_size_inches(self.width/self.dpi,self.height/self.dpi)
+        plt.savefig(outfile,pad_inches=0,dpi=self.dpi)
+        plt.close() # close it, so we don't eat too much RAM.
+
+    def _make_guide_view(self, fig, cmap):
         ax1 = plt.Axes(fig,(0,0,.5,1),frame_on=False)
         ax1.set_axis_off()
         fig.add_axes(ax1)
@@ -221,13 +237,14 @@ class ImageMaker(object):
             if label[4] != None:
                 ax1.plot(label[4][0][0],label[4][0][1],color='red')
                 ax1.plot(label[4][1][0],label[4][1][1],color='red')
-                
+
+    def _make_plate_view(self, fig, cmap):
         # Be careful: Axes takes: [left,bottom,width,height]!
         # Note those last two are *not* "right","top"!
         ax2 = plt.Axes(fig,(.5,0,.5,1),frame_on=False)
         ax2.set_axis_off()
         fig.add_axes(ax2)
-        ax2.imshow(self.plateView,aspect=self.aspect,origin='lower',cmap=cmap2,interpolation='nearest',vmin=0,vmax=1)
+        ax2.imshow(self.plateView,aspect=self.aspect,origin='lower',cmap=cmap,interpolation='nearest',vmin=0,vmax=1)
         ax2.quiver(self.vectors[0],self.vectors[1],self.vectors[2],self.vectors[3],color=(0,1,0),width=0.003,edgecolor='none',headwidth=0,units='width',scale=self.qscale)
         ax2.text(10,490,'offset=%4.3f", %4.3f", %4.3f"'%self.offset,color='white')
         ax2.text(10,470,'focus=%4.2f$\mu$m'%self.focus,color='white')
@@ -255,12 +272,6 @@ class ImageMaker(object):
                     ax2.plot(label[4][1][0],label[4][1][1],color='red')
             except IndexError:
                 continue
-
-        fig.set_size_inches(self.width/self.dpi,self.height/self.dpi)
-        plt.savefig(outfile,pad_inches=0,dpi=self.dpi)
-        plt.close() # close it, so we don't eat too much RAM.
-    #...
-#...
 
 def make_images(gimgdir,start,end,tempdir,cmap=None,verbose=False):
     """Generate all jpegs from the processed guider files in gimgdir from start to end."""
@@ -386,7 +397,7 @@ def main(argv=None):
         gimgdir = args[0]
         start = int(args[1])
         end = int(args[2])
-    except IndexError,ValueError:
+    except (IndexError,ValueError):
         parser.error('Need DIR STARTNUM ENDNUM. Pass -h or --help for more information.')
         return -1
 	
