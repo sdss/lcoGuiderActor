@@ -462,11 +462,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.cmd = None
-            return frameInfo
 
-        if actorState.actor.guidingIsOK(cmd, actorState):
-           queues[GCAMERA].put(Msg(Msg.EXPOSE, guideCmd, replyQueue=queues[MASTER],
-                                   expTime=gState.expTime))
         return frameInfo
 
     frameInfo.A[2, 0] = frameInfo.A[0, 2]
