@@ -7,37 +7,39 @@ import os
 import sys
 
 import fitsio
-#from astropy.io import fits
-import pyfits
 import numpy as np
+from astropy.table import Table
 
 class Headers(object):
     def __init__(self, verbose=False):
         self.verbose = verbose
-        self.keys = ['AZ',
-                     'ALT',
-                     'IPA',
-                     'SPA',
-                     'ARCOFFX',
-                     'ARCOFFY',
-                     'GUIDOFFR',
-                     'DRA',
-                     'DDEC',
-                     'DROT',
-                     'DFOCUS',
-                     'DSCALE',
-                     'OFFRA',
-                     'OFFDEC',
-                     'OFFROT',
-                     'OFFFOCUS',
-                     'OFFSCALE',
-                     'GDRMS',
-                     'NGDRMS',
-                     'GDXRMS',
-                     'GDYRMS',
-                     'FILENAME',
-                     'DATE-OBS',
-                     'PLATEID']
+        self.keys = [['AZ',float],
+                     ['ALT',float],
+                     ['IPA',float],
+                     ['SPA',float],
+                     ['RA',float],
+                     ['DEC',float],
+                     ['FOCUS',float],
+                     ['ARCOFFX',float],
+                     ['ARCOFFY',float],
+                     ['GUIDOFFR',float],
+                     ['DRA',float],
+                     ['DDEC',float],
+                     ['DROT',float],
+                     ['DFOCUS',float],
+                     ['DSCALE',float],
+                     ['OFFRA',float],
+                     ['OFFDEC',float],
+                     ['OFFROT',float],
+                     ['OFFFOCUS',float],
+                     ['OFFSCALE',float],
+                     ['GDRMS',float],
+                     ['NGDRMS',float],
+                     ['GDXRMS',float],
+                     ['GDYRMS',float],
+                     ['FILENAME',str],
+                     ['DATE-OBS',str],
+                     ['PLATEID',int],]
 
     def __call__(self, files, outfilename):
         """Extract the headers defined in init, and write the result as FITS."""
@@ -46,15 +48,13 @@ class Headers(object):
 
     def get_one(self, header):
         """Return the requested values from one file header."""
-        result = []
-        for key in self.keys:
-            result.append(header[key])
-        return result
+        return [type(header.get(key,np.nan)) for key,type in self.keys]
 
     def get_all(self, files):
         """Get the headers from all requested files."""
         result = []
         for f in files:
+            frameno = int(f.split('-')[-1].split('.')[0])
             header = fitsio.read_header(f, 0)
             #header = pyfits.getheader(f)
             # don't want darks or flats
@@ -62,17 +62,29 @@ class Headers(object):
                 if self.verbose:
                     print "Extracting:", f
                 line = self.get_one(header)
+                line.insert(0,frameno)
                 result.append(line)
             else:
                 if self.verbose:
                     print "Ignoring:", f
-        self.data = np.rec.fromrecords(result,names=self.keys)
+            del header
+        names = [k[0] for k in self.keys]
+        types = [k[1] for k in self.keys]
+        for i,t in enumerate(types):
+            if t == str:
+                types[i] = '|S40'
+        names.insert(0,'FRAMENO')
+        types.insert(0,int)
+        # self.data = np.rec.fromrecords(result,dtype=np.dtype(zip(names,types)))
+        # self.data = np.array(result,dtype=np.dtype(zip(names,types)))
+        self.data = Table(rows=result,names=names,dtype=types)
 
     def write(self, filename):
         """Write the result to a fits file."""
-        #hdu = pyfits.BinTableHDU(self.data)
-        #hdu.writeto(filename, clobber=True)
-        hdu = fitsio.write(filename, self.data, clobber=True)
+        # hdu = fits.BinTableHDU(self.data)
+        # hdu.writeto(filename, clobber=True)
+        # hdu = fitsio.write(filename, self.data, clobber=True)
+        self.data.write(filename,format='fits')
         if self.verbose:
             print "Wrote to:", filename
 
