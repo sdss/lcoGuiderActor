@@ -46,8 +46,8 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         else:
             raise KeyError("Don't know my location: cannot return a working Actor!")
 
-    def __init__(self, name, debugLevel=30):
-        actorcore.Actor.Actor.__init__(self, name, productName='guiderActor')
+    def __init__(self, name, debugLevel=30, makeCmdrConnection=True):
+        actorcore.Actor.Actor.__init__(self, name, productName='guiderActor', makeCmdrConnection=makeCmdrConnection)
 
         self.headURL = "$HeadURL: svn+ssh://sdss3svn@sdss3.org/repo/ops/actors/guiderActor/branches/lco/python/guiderActor/guiderActor_main.py $"
 
