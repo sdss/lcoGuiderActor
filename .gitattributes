@@ -16,6 +16,7 @@ etc/guider_LCO.cfg -text
 include/ipGguide.h -text
 include/shLegacy.h -text
 python/guiderActor/Commands/GuiderCmd.py -text
+python/guiderActor/Commands/GuiderCmd_LCO.py -text
 python/guiderActor/Commands/__init__.py -text
 python/guiderActor/GuiderActor.py -text
 python/guiderActor/GuiderState.py -text
@@ -51,6 +52,8 @@ test_guiderActor/data/gimg-0040.fits.gz -text
 test_guiderActor/data/gimg-0519.fits.gz -text
 test_guiderActor/data/gimg-0859.fits.gz -text
 test_guiderActor/data/linear_uniform_dt.txt -text
+test_guiderActor/data/plPlugMapP-8641.par -text
+test_guiderActor/data/plPlugMapP-8646D.par -text
 test_guiderActor/guiderTester.py -text
 test_guiderActor/profile_guider.py -text
 test_guiderActor/test_GuiderCmd.py -text

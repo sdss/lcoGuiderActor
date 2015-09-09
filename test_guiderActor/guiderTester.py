@@ -60,7 +60,7 @@ class GuiderTester(TestHelper.ActorTester):
         myGlobals.actorState = self.actorState
         self.setPoint_good = -40
         self.setPoint_bad = -35
-        self.gi = guiderImage.GuiderImageAnalysis(self.setPoint_good)
+        self.gi = guiderImage.GuiderImageAnalysis(self.setPoint_good,self.actorState.actor.location)
         gState = GuiderState.GuiderState()
         myGlobals.actorState.gState = gState
 
