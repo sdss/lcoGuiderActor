@@ -529,7 +529,16 @@ class FrameInfo(object):
         self.A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
         self.b = numpy.matrix(numpy.zeros(3).reshape([3,1]))
         self.b3 = 0
+        self.guideAxes = False
+        self.guideFocus = False
+        self.guideScale = False
     
+    def setGuideMode(self,gState=None):
+        """Save the guide* values from gState, or reset them to False."""
+        self.guideAxes = gState.guideAxes
+        self.guideFocus = gState.guideFocus
+        self.guideScale = gState.guideScale
+
     def setDecenter(self,gState=None):
         """Fill the decenter values from gState, or reset them to 0."""
         if gState:
