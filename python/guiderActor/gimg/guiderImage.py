@@ -357,7 +357,10 @@ class GuiderImageAnalysis(object):
 
             raise e
     def getGuideloopCards(self, cmd, frameInfo):
-        defs = (('dRA', 'DRA', 'measured offset in RA, deg'),
+        defs = (('guideAxes','guideAxe','guiding on Ra/Dec/Rot?'),
+                ('guideFocus','guideFoc','guiding on Focus?'),
+                ('guideScale','guideScl','guiding on Scale?'),
+                ('dRA', 'DRA', 'measured offset in RA, deg'),
                 ('dDec', 'DDec', 'measured offset in Dec, deg'),
                 ('dRot', 'DRot', 'measured rotator offset, deg'),
                 ('dFocus', 'DFocus', 'measured focus offset, um '),

@@ -450,6 +450,8 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         if _check_fiber(fiber, gState, guideCmd):
             _do_one_fiber(fiber, gState, guideCmd, frameInfo, haLimWarn)
 
+    frameInfo.guideMode(gState)
+
     nStar = frameInfo.A[0, 0]
     if nStar == 0 or gState.inMotion:
         if nStar == 0:
