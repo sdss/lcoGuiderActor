@@ -13,16 +13,19 @@ import guiderTester
 from guiderActor import GuiderState
 from guiderActor.gimg import GuiderExceptions
 
+def _inout_names(dir,file):
+    """Return the infile and outfile associated with this filename."""
+    infile = os.path.join(dir,file)
+    outfile = os.path.join(dir,'proc-'+file)
+    return infile,outfile
+
 class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
     def setUp(self):
         self.verbose = True
         # calibration files
-        self.inDarkFile = 'gcam/gimg-0001.fits.gz'
-        self.outDarkFile = 'gcam/proc-'+self.inDarkFile
-        self.inFlatFile = 'gcam/gimg-0003.fits.gz'
-        self.outFlatFile = 'gcam/proc-'+self.inFlatFile
-        self.inFlatEcamFile = 'ecam/gimg-0003.fits.gz'
-        self.outFlatEcamFile = 'ecam/proc-'+self.inFlatFile
+        self.inDarkFile,self.outDarkFile = _inout_names('gcam','gimg-0001.fits.gz')
+        self.inFlatFile,self.outFlatFile = _inout_names('gcam','gimg-0003.fits.gz')
+        self.inFlatEcamFile,self.outFlatEcamFile = _inout_names('ecam','gimg-0003.fits.gz')
 
         # bad files
         self.saturatedFile = 'gcam/gimg-0004.fits.gz'
@@ -30,8 +33,7 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self.badReadFile2 = 'gcam/gimg-0519.fits.gz'
 
         # good data files
-        self.inDataFile = 'gcam/gimg-0040.fits.gz'
-        self.outDataFile = 'gcam/proc-'+self.inFlatFile
+        self.inDataFile,self.outDataFile = _inout_names('gcam','gimg-0040.fits.gz')
 
         # values for comparison after processing good data files.
         self.inDataResults = 'something.fits'
@@ -52,7 +54,7 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         inFile = self.inDarkFile
         outFile = self.outDarkFile
         self.gi.analyzeDark(inFile, cmd=self.cmd)
-        self.assertTrue(os.path.exists(outFile),'analyzeDark file write')
+        self.assertTrue(os.path.exists(outFile),'analyzeDark file write: %s'%outFile)
         self._check_overwriting(inFile,outFile,self.gi.analyzeDark)
     
     def test_analyzeFlat(self):
@@ -60,7 +62,7 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         inFile = self.inFlatFile
         outFile = self.outFlatFile
         self.gi.analyzeFlat(inFile,self.gState.gprobes,cmd=self.cmd)
-        self.assertTrue(os.path.exists(outFile),'analyzeFlat file write')
+        self.assertTrue(os.path.exists(outFile),'analyzeFlat file write: %s'%outFile)
         # TBD: some way to test that the correct fibers are identified?
         for name,i in self.probeNames.items():
         #    #self.assertEqual(i,self.gi.flatFibers[i].fiberid)
@@ -73,15 +75,16 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         outFile = self.outFlatEcamFile
         self.gi.camera = 'ecamera'
         self.gi.analyzeFlat(inFile,self.gState.gprobes,cmd=self.cmd)
-        self.assertTrue(os.path.exists(outFile),'analyzeFlat file write')
+        self.assertTrue(os.path.exists(outFile),'analyzeFlat_ecam file write: %s'%outFile)
         # TBD: best test is probably to check that the flat is median ~1.
-        self.assertFail('Need to create a test for this!')
+        self.assertFalse('Need to create a test for this!')
         self._check_overwriting(inFile,outFile,self.gi.analyzeFlat,[self.gState.gprobes])
 
     def test_call(self):
         """Test GuiderImageAnalysis.__call__()"""
+        frameInfo = GuiderState.FrameInfo(-1,1,2,3)
         fibers = self._call_gi(self.inDataFile)
-
+        self.gi.writeFITS(self.actorState.models, self.cmd, frameInfo, self.gState.gprobes)
 
         for name,i in self.probeNames.items():
             self.assertEqual(i,fibers[i].fiberid-1)
@@ -116,7 +119,7 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         self._temp_run(self.inDataFile,'CCD temp signifcantly different (>3.0) from dark temp: -40.1, expected -35.0')
 
     def test_no_setPoint(self):
-        """Test what happens when the setPoint `is None."""
+        """Test what happens when the setPoint is None."""
         #self.gi.darkTemperature = self.setPoint_bad
         self.gi.setPoint = None
         header = pyfits.getheader(self.inDataFile)
@@ -148,5 +151,16 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
 #...
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    verbosity = 2
+
+    suite = None
+    # to test just one piece
+    # suite = unittest.TestLoader().loadTestsFromName('test_guiderImage.TestGuiderImage.test_call')
+    # suite = unittest.TestLoader().loadTestsFromName('test_guiderImage.TestGuiderImage.test_analyzeFlat')
+    # suite = unittest.TestLoader().loadTestsFromName('test_guiderImage.TestGuiderImage.test_analyzeFlat_ecam')
+    # suite = unittest.TestLoader().loadTestsFromTestCase(TestGuiderImage)
+    if suite:
+        unittest.TextTestRunner(verbosity=verbosity).run(suite)
+    else:
+        unittest.main(verbosity=verbosity)
 

@@ -16,6 +16,7 @@ import numpy as np
 
 from scipy.ndimage.morphology import binary_closing, binary_dilation, binary_erosion
 from scipy.ndimage.measurements import label, center_of_mass
+from scipy.ndimage import interpolation
 
 import PyGuide
 
@@ -421,29 +422,34 @@ class GuiderImageAnalysis(object):
             yc = int(f.ycen + 0.5)
             rot = -f.gProbe.rotStar2Sky
             self.cmd.diag('text=%s'%qstr("rotating fiber %d at (%d,%d) by %0.1f degrees" % (f.fiberid, xc, yc, rot)))
-            # Rotate the fiber image...
-            stamp = image[yc-r:yc+r+1, xc-r:xc+r+1].astype(np.int16)
-            rstamp = np.zeros_like(stamp)
-            self.libguide.rotate_region(np_array_to_REGION(stamp),
-                                        np_array_to_REGION(rstamp),
-                                        rot)
+            # Rotate the fiber image
+            stamp_slice = np.s_[yc-r:yc+r+1, xc-r:xc+r+1]
+            rstamp = interpolation.rotate(image[stamp_slice],rot)
             stamps.append(np.flipud(rstamp))
-            # Rotate the mask image...
-            stamp = mask[yc-r:yc+r+1, xc-r:xc+r+1].astype(np.uint8)
-            #print 'stamp values:', unique(stamp.ravel())
-            # Replace zeros by 255 so that after rotate_region (which puts
-            # zeroes in the "blank" regions) we can replace them.
-            stamp[stamp == 0] = 255
-            rstamp = np.zeros_like(stamp)
-            self.libguide.rotate_mask(np_array_to_MASK(stamp),
-                                      np_array_to_MASK(rstamp),
-                                      rot)
-            # "blank" regions become masked-out pixels.
-            rstamp[rstamp == 0] = GuiderImageAnalysis.mask_masked
-            # Reinstate the zeroes.
-            rstamp[rstamp == 255] = 0
-            #print 'rotated stamp values:', unique(rstamp.ravel())
+            # Now rotate the mask, filling with the masked value.
+            rstamp = interpolation.rotate(mask[stamp_slice],rot,cval=self.mask_masked)
             maskstamps.append(np.flipud(rstamp))
+
+            # stamp = image[yc-r:yc+r+1, xc-r:xc+r+1].astype(np.int16)
+            # rstamp = np.zeros_like(stamp)
+            # self.libguide.rotate_region(np_array_to_REGION(stamp),
+            #                             np_array_to_REGION(rstamp),
+            #                             rot)
+            # stamps.append(np.flipud(rstamp))
+            # # Rotate the mask image...
+            # stamp = mask[yc-r:yc+r+1, xc-r:xc+r+1].astype(np.uint8)
+            # # Replace zeros by 255 so that after rotate_region (which puts
+            # # zeroes in the "blank" regions) we can replace them.
+            # stamp[stamp == 0] = 255
+            # rstamp = np.zeros_like(stamp)
+            # self.libguide.rotate_mask(np_array_to_MASK(stamp),
+            #                           np_array_to_MASK(rstamp),
+            #                           rot)
+            # # "blank" regions become masked-out pixels.
+            # rstamp[rstamp == 0] = GuiderImageAnalysis.mask_masked
+            # # Reinstate the zeroes.
+            # rstamp[rstamp == 255] = 0
+            # maskstamps.append(np.flipud(rstamp))
 
         # Stack the stamps into one image.
         stamps = np.vstack(stamps)
@@ -692,6 +698,52 @@ class GuiderImageAnalysis(object):
             shape = PyGuide.StarShape.StarShapeData(False,'failed to compute star shape')
         return star,shape
 
+    def _find_stars_gcam(self, image, mask, fibers, exptime):
+        """Find the stars in a processed gcamera image."""
+        # The "img16" object must live until after gfindstars() !
+        img16 = image.astype(np.int16)
+        c_image = np_array_to_REGION(img16)
+
+        goodfibers = [f for f in fibers if not f.is_fake()]
+        c_fibers = self.libguide.fiberdata_new(len(goodfibers))
+
+        for i,f in enumerate(goodfibers):
+            c_fibers[0].g_fid[i] = f.fiberid
+            c_fibers[0].g_xcen[i] = f.xcen
+            c_fibers[0].g_ycen[i] = f.ycen
+            c_fibers[0].g_fibrad[i] = f.radius
+            # FIXME ??
+            c_fibers[0].g_illrad[i] = f.radius
+        # TBD: FIXME --
+        #c_fibers.readnoise = ...
+
+        # mode=1: data frame; 0=spot frame
+        mode = 1
+        res = self.libguide.gfindstars(ctypes.byref(c_image), c_fibers, mode)
+        # SH_SUCCESS is this following nutty number...
+        if np.uint32(res) == np.uint32(0x8001c009):
+            self.cmd.diag('text=%s'%qstr('gfindstars returned successfully.'))
+        else:
+            self.cmd.warn('text=%s'%qstr('gfindstars() returned an error code: %08x (%08x; success=%08x)' % (res, np.uint32(res), np.uint32(0x8001c009))))
+
+        # pull star positions out of c_fibers, stuff outputs...
+        for i,f in enumerate(goodfibers):
+            f.xs     = c_fibers[0].g_xs[i]
+            f.ys     = c_fibers[0].g_ys[i]
+            f.xyserr = c_fibers[0].poserr[i]
+            fwhm     = c_fibers[0].fwhm[i]
+            if fwhm != FWHM_BAD:
+                f.fwhm = self.pixels2arcsec(fwhm)
+            # else leave fwhm = nan.
+            # TBD: FIXME -- figure out good units -- mag/(pix^2)?
+            f.sky = (c_fibers[0].sky[i])*2.0    #correct for image div by 2 for Ggcode
+            f.flux = (c_fibers[0].flux[i])*2.0
+            if f.flux > 0:
+                f.mag = self.flux2mag(f.flux, exptime)
+            # else leave f.mag = nan.
+        self.libguide.fiberdata_free(c_fibers)
+        self.fibers = fibers
+
     def findStars(self, gprobes):
         """
         Identify the centers of the stars in the fibers.
@@ -730,7 +782,7 @@ class GuiderImageAnalysis(object):
         fibers = [f for f in self.flatFibers if not f.is_fake()]
         # mask the saturated pixels with the appropriate value.
         mask = self.flatMask.copy()
-        mask[sat] |= GuiderImageAnalysis.mask_saturated
+        mask[sat] |= self.mask_saturated
 
         # Divide by the flat (avoiding NaN where the flat is zero)
         image /= (self.flatImage + (self.flatImage == 0)*1)
@@ -739,7 +791,7 @@ class GuiderImageAnalysis(object):
         # NOTE: jkp: post-flat fielding, we need to re-check for saturated pixels and remask them
         sat_flat = (image.astype(int) >= self.saturationLevel)
         image[sat_flat] = self.saturationReplacement
-        mask[sat_flat] |= GuiderImageAnalysis.mask_saturated
+        mask[sat_flat] |= self.mask_saturated
 
         # Save the processed image
         self.guiderImage = image/2.0  #PH***quick Kluge needs to be corrected
@@ -757,14 +809,14 @@ class GuiderImageAnalysis(object):
         # In this mask convention, 0 = good, >0 is bad.
         # Mark negative pixels
         badpixels = (img < 0) & (mask == 0)
-        mask[badpixels] |= GuiderImageAnalysis.mask_badpixels
+        mask[badpixels] |= self.mask_badpixels
         # Blank out masked pixels.
         img[mask > 0] = 0
 
         if self.camera == 'ecamera':
             # mask the overscan too, since we're keeping it around for monitoring.
-            mask[:,(1039/self.binning):] |= GuiderImageAnalysis.mask_saturated
-            ecam_mask = mask == GuiderImageAnalysis.mask_saturated
+            mask[:,(1039/self.binning):] |= self.mask_saturated
+            ecam_mask = mask == self.mask_saturated
             star,shape = self._find_stars_ecam(image, ecam_mask)
             if star is None:
                 self.cmd.warn('text="ecam_star=None in exposure %d!"'%(self.frameNo))
@@ -774,51 +826,8 @@ class GuiderImageAnalysis(object):
             self.cmd.inform('ecam_star={},{:.2f},{:.2f},{:.3f},{:.2f},{:.1f}'.format(self.frameNo,star.xyCtr[0],star.xyCtr[1],shape.fwhm,shape.bkgnd,shape.ampl))
             return [] # no fibers to return
         else:
-            # The "img16" object must live until after gfindstars() !
-            img16 = img.astype(np.int16)
-            c_image = np_array_to_REGION(img16)
-
-            goodfibers = [f for f in fibers if not f.is_fake()]
-            c_fibers = self.libguide.fiberdata_new(len(goodfibers))
-
-            for i,f in enumerate(goodfibers):
-                c_fibers[0].g_fid[i] = f.fiberid
-                c_fibers[0].g_xcen[i] = f.xcen
-                c_fibers[0].g_ycen[i] = f.ycen
-                c_fibers[0].g_fibrad[i] = f.radius
-                # FIXME ??
-                c_fibers[0].g_illrad[i] = f.radius
-            # TBD: FIXME --
-            #c_fibers.readnoise = ...
-
-            # mode=1: data frame; 0=spot frame
-            mode = 1
-            res = self.libguide.gfindstars(ctypes.byref(c_image), c_fibers, mode)
-            # SH_SUCCESS is this following nutty number...
-            if np.uint32(res) == np.uint32(0x8001c009):
-                self.cmd.diag('text=%s'%qstr('gfindstars returned successfully.'))
-            else:
-                self.cmd.warn('text=%s'%qstr('gfindstars() returned an error code: %08x (%08x; success=%08x)' % (res, np.uint32(res), np.uint32(0x8001c009))))
-
-            # pull star positions out of c_fibers, stuff outputs...
-            for i,f in enumerate(goodfibers):
-                f.xs     = c_fibers[0].g_xs[i]
-                f.ys     = c_fibers[0].g_ys[i]
-                f.xyserr = c_fibers[0].poserr[i]
-                fwhm     = c_fibers[0].fwhm[i]
-                if fwhm != FWHM_BAD:
-                    f.fwhm = self.pixels2arcsec(fwhm)
-                # else leave fwhm = nan.
-                # TBD: FIXME -- figure out good units -- mag/(pix^2)?
-                f.sky = (c_fibers[0].sky[i])*2.0    #correct for image div by 2 for Ggcode
-                f.flux = (c_fibers[0].flux[i])*2.0
-                if f.flux > 0:
-                    f.mag = self.flux2mag(f.flux, exptime)
-                # else leave f.mag = nan.
-            self.libguide.fiberdata_free(c_fibers)
-
-            self.fibers = fibers
-            return fibers
+            self._find_stars_gcam(image, mask, fibers, exptime)
+            return self.fibers
     
     def applyBias(self,image,binning):
         """Apply a bias correction to the image, and return the image and bias level."""
@@ -1143,7 +1152,7 @@ class GuiderImageAnalysis(object):
                 bmask = np.logical_or(bmask, mask[i::BIN,j::BIN] > 0)
 
         # Use the mask conventions of ipGguide.c...
-        mask = np.where(bmask, 0, GuiderImageAnalysis.mask_masked)
+        mask = np.where(bmask, 0, self.mask_masked)
         mask = mask.astype(np.uint8)
 
         flat = bin_image(flat, BIN)
@@ -1200,8 +1209,8 @@ class GuiderImageAnalysis(object):
             self.setPoint = setPoint
 
         flatout = self.getProcessedOutputName(flatFileName)
-        if self.camera == 'ecamera':
-            #TBD: kludge, since we don't gzip unprocessed ecam files, because IRAF.
+        if self.camera == 'ecamera' and '.gz' not in flatout:
+            #TBD: kludge, since we currently don't gzip unprocessed ecam files, because IRAF.
             flatout = flatout + '.gz'
         directory,filename = os.path.split(flatout)
         
