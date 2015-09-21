@@ -5,6 +5,8 @@ Test the behavior of the various guider master thread commands.
 import unittest
 from Queue import Queue
 
+from actorcore import Actor
+from opscore.actor import Model, KeyVarDispatcher
 from actorcore import TestHelper
 import guiderTester
 
@@ -112,63 +114,32 @@ class TestSetRefraction(guiderTester.GuiderTester,unittest.TestCase):
         self._set_refraction(None, 'eBOSS', None, 0)
 
 
-class TestGuidingIsOK(guiderTester.GuiderTester,unittest.TestCase):
-    def _guidingIsOK(self, expect, nWarn=0, force=False):
-        result = masterThread.guidingIsOK(self.cmd, self.actorState, force=force)
-        self.assertEqual(result, expect)
-        self._check_levels(0, 0, nWarn, 0)
-
-    def test_force(self):
-        self._guidingIsOK(True, force=True)
-
-    def test_boss_science(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self._guidingIsOK(True)
-
-    def test_ffs_closed(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['all_off'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self._guidingIsOK(False, 1)
-    def test_ffs_closed_bypassed(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['all_off'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs'])
-        self._guidingIsOK(True, 1)
-
-    def test_fflamp_on(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['flats'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self._guidingIsOK(False, 1)
-    def test_fflamp_on_bypassed(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['flats'])
-        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs','lamp_ff'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self._guidingIsOK(True, 1)
-    def test_arclamps_on(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['arcs'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self._guidingIsOK(False, 1)
-    def test_arclamps_on_bypassed(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['arcs'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['tracking'])
-        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs','lamp_hgcd','lamp_ne'])
-        self._guidingIsOK(True, 1)
-
-    def test_tcc_halted(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['halted'])
-        self._guidingIsOK(False, 1)
-    def test_tcc_motion_bypassed(self):
-        guiderTester.updateModel('mcp',TestHelper.mcpState['boss_science'])
-        guiderTester.updateModel('tcc',TestHelper.tccState['halted'])
-        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['axes'])
-        self._guidingIsOK(True, 1)
-
-
 class TestStartStopGuider(guiderTester.GuiderTester,unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # can only configure the dispatcher once.
+        if Model.dispatcher is None:
+            Model.setDispatcher(KeyVarDispatcher())
+        Actor.setupRootLogger = TestHelper.setupRootLogger
+
+    def _close_port(self):
+        """
+        Close the connection: requires handling the deferred. Details here:
+            https://jml.io/pages/how-to-disconnect-in-twisted-really.html
+        """
+        deferred = self.actor.commandSources.port.stopListening()
+        deferred.callback(None)
+
+    def tearDown(self):
+        # have to clear any actors that were registered previously.
+        Model._registeredActors = set()
+        super(TestStartStopGuider,self).tearDown()
+
     def setUp(self):
+        self.actor = guiderActor.GuiderActor.GuiderActor.newActor(location='apo',makeCmdrConnection=False)
+        self.actor.runInReactorThread = False
         super(TestStartStopGuider,self).setUp()
+        self.addCleanup(self._close_port)
         # Do this after super setUp, as that's what creates actorState.
         self.queues = {}
         self.queues[guiderActor.GCAMERA] = Queue('gcamera')
