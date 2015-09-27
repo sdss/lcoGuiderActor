@@ -56,9 +56,9 @@ test_guiderActor/gcam/linear_uniform_dt.txt -text
 test_guiderActor/gcam/plPlugMapP-8641.par -text
 test_guiderActor/gcam/plPlugMapP-8646D.par -text
 test_guiderActor/guiderTester.py -text
-test_guiderActor/lco-gcam/lco-gimg-0001.fits -text
-test_guiderActor/lco-gcam/lco-gimg-0200.fits -text svneol=unset#unset
-test_guiderActor/lco-gcam/lco-gimg-0320.fits -text
+test_guiderActor/lco-gcam/lco-gimg-0001.fits.gz -text
+test_guiderActor/lco-gcam/lco-gimg-0200.fits.gz -text
+test_guiderActor/lco-gcam/lco-gimg-0320.fits.gz -text
 test_guiderActor/profile_guider.py -text
 test_guiderActor/test_GuiderCmd.py -text
 test_guiderActor/test_guiderActor.py -text
