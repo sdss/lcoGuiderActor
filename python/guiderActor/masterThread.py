@@ -104,17 +104,8 @@ def _do_one_fiber(fiber, gState, cmd, frameInfo, haLimWarn):
     poserr = fiber.xyserr
 
     # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
-    # phi is the orientation of the alignment hole measured clockwise from N
-    # rotation is the anticlockwise rotation from x on the ALTA to the pin
-    theta = 90                   # allow for 90 deg rot of camera view, should be -90
-    theta += gProbe.rotation # allow for intrinsic fibre rotation
-    try:
-        theta -= gProbe.phi      # allow for orientation of alignment hole
-    except Exception as e:
-        cmd.warn('text="skipping phi-less probe %s"' % (fiber.fiberid))
-        return
-
-    gProbe.rotStar2Sky = theta # Squirrel the real angle away.
+    # NOTE: We should never get here if rotStar2Sky is still nan.
+    theta = gProbe.rotStar2Sky
 
     #FIXME PH -- We should ignore gprobes not present on plate/pointing (MARVELS dual pointing)
     #               and ignore fibers not found in flat.
@@ -450,7 +441,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         if _check_fiber(fiber, gState, guideCmd):
             _do_one_fiber(fiber, gState, guideCmd, frameInfo, haLimWarn)
 
-    frameInfo.guideMode(gState)
+    frameInfo.setGuideMode(gState)
 
     nStar = frameInfo.A[0, 0]
     if nStar == 0 or gState.inMotion:
