@@ -1079,7 +1079,7 @@ def main(actor, queues):
                     gState.inMotion = False
                     continue
                 
-                # TBD: need to check whether the telescope moved here, and
+                # TBD: #2230 need to check whether the telescope moved here, and
                 # ignore this frame if a "tcc offset" was issued.
                 # This requires something that monitors tccModel.moveItems[4:]
                 # changing to 'Y' so we can flag it, and clear the flag only
