@@ -31,10 +31,16 @@ class GProbe(object):
         broken, disabled (enabled), noStar, notExist, atFocus (aboveFocus,belowFocus), toofaint
     and gProbe.good will tell you if all bits are in the OK state.
     """
-    def __init__(self,id=-9999,gprobeKey=None,guideInfoKey=None):
-        """Pass the contents of the platedb.gprobe and/or platedb.guideInfo keyword to initialize"""
+    def __init__(self, id=-9999, gprobeKey=None, guideInfoKey=None, gprobeBits=GOOD):
+        """
+        Init this probe using the appropriate keywords.
+        kwargs:
+            gprobeKey: platedb.gprobe keyword
+            guideInfoKey: platedb.guideInfo keyword
+            gprobebits (int): platedb.gprobesInUse value for this probe
+        """
         self.id = id
-        self._bits = GOOD
+        self._bits = gprobeBits
         self._ugriz = [numpy.nan,]*5
         self.ref_mag = numpy.nan
         if gprobeKey is not None:

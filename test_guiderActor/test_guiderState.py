@@ -2,6 +2,7 @@
 """
 Test the GuiderState module using unittest.
 """
+import os
 import unittest
 import numpy as np
 
@@ -10,6 +11,7 @@ from actorcore import TestHelper
 import guiderTester
 
 from guiderActor import GuiderState
+from guiderActor.GuiderActor import set_default_pids, set_pid_scaling
 
 gprobeKey = {}
 gprobeKey['good'] = [10,1,True,100,100,10,0,-.1,-.1,0,'GUIDE']
@@ -18,15 +20,29 @@ gprobeKey['tritium'] = [10,3,True,300,300,10,0,-.1,-.1,0,'TRITIUM']
 gprobeKey['aboveFocus'] = [10,4,True,400,400,10,0,-.1,-.1,-400,'GUIDE']
 gprobeKey['belowFocus'] = [10,5,True,500,500,10,0,-.1,-.1,+400,'GUIDE']
 gprobeKey['broken'] = [10,6,False,600,600,10,0,-.1,-.1,0,'GUIDE']
+# gprobesInUse = ["(1=0x0)","(2=0x0)","(3=0x2)","(4=0x0)","(5=0x0)","(6=0x1)"]
+# NOTE: the above gprobesInUse would translate to these integer bits:
+gprobebits = [0,0,2,0,0,1]
+guideInfoKey = [1,10.,20.,30.0,40.0,50,0.00]
 
 ugriz = np.array([13,13.5,14,14.5,15])
 
 class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
     def setUp(self):
+        
         super(TestGuiderState,self).setUp()
+
+        # have to set up the PID scaling values for APO
+        self.config.read(os.path.expandvars('$GUIDERACTOR_DIR/etc/guider_APO.cfg'))
+        set_default_pids(self.config, self.gState)
+        set_pid_scaling(self.config, self.gState)
+
         #myGlobals.actorState.models = {'tcc':Model('axePos',[20,30,40])}
         for k,v in gprobeKey.items():
-            self.gState.gprobes[v[1]] = GuiderState.GProbe(gprobeKey=v)
+            guideInfoKey[0] = v[1]
+            self.gState.gprobes[v[1]] = GuiderState.GProbe(gprobeKey=v,
+                                                           guideInfoKey=guideInfoKey,
+                                                           gprobeBits=gprobebits[v[1]-1])
             self.gState.gprobes[v[1]].ugriz = ugriz
     
     def test_aboveFocus(self):
@@ -57,7 +73,7 @@ class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
         for name in gprobeKey:
             probe = self.gState.gprobes[gprobeKey[name][1]]
             value = probe.exists
-            if 'broken' not in name:
+            if 'broken' not in name and 'tritium' not in name:
                 self.assertTrue(value,name)
             else:
                 self.assertFalse(value,name)
