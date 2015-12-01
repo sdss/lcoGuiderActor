@@ -2,7 +2,7 @@
 Classes related to the current state of the guider.
 """
 
-import numpy
+import numpy as np
 import math
 
 import PID
@@ -41,8 +41,8 @@ class GProbe(object):
         """
         self.id = id
         self._bits = gprobeBits
-        self._ugriz = [numpy.nan,]*5
-        self.ref_mag = numpy.nan
+        self._ugriz = [np.nan,]*5
+        self.ref_mag = np.nan
         if gprobeKey is not None:
             self.from_platedb_gprobe(gprobeKey)
         if guideInfoKey is not None:
@@ -109,7 +109,7 @@ class GProbe(object):
         try:
             self.rotStar2Sky = 90 + self.rotation - self.phi
         except:
-            self.rotStar2Sky = numpy.nan
+            self.rotStar2Sky = np.nan
 
     def _check_id(self,id,fromName):
         """
@@ -292,14 +292,14 @@ class GuiderState(object):
         self.startFrame = None # guider frame number to start movie at.
 
         self.fscanMJD = self.fscanID = -1
-        self.design_ha = numpy.nan
+        self.design_ha = np.nan
 
-        self.plugPlateScale = numpy.nan
-        self.dSecondary_dmm = numpy.nan
-        self.gcameraPixelSize = numpy.nan
-        self.gcameraMagnification = numpy.nan
-        self.longitude = numpy.nan
-        self.focalRatio = numpy.nan
+        self.plugPlateScale = np.nan
+        self.dSecondary_dmm = np.nan
+        self.gcameraPixelSize = np.nan
+        self.gcameraMagnification = np.nan
+        self.longitude = np.nan
+        self.focalRatio = np.nan
 
         # Start with all fibers 
         self.setGuideMode("axes")
@@ -415,8 +415,8 @@ class GuiderState(object):
         self.decenterRA = 0
         self.decenterDec = 0
         self.decenterRot = 0
-        self.decenterFocus = numpy.nan
-        self.decenterScale = numpy.nan
+        self.decenterFocus = np.nan
+        self.decenterScale = np.nan
 
     def set_pid_defaults(self, axis, **kwargs):
         """Set the default pid values for axis."""
@@ -484,29 +484,29 @@ class FrameInfo(object):
         """Sets all parameters to NaN, so that they at least exist."""
         self.frameNo = frameNo
 
-        self.dRA = numpy.nan
-        self.dDec = numpy.nan
-        self.dRot = numpy.nan
-        self.dFocus = numpy.nan
-        self.dScale = numpy.nan
+        self.dRA = np.nan
+        self.dDec = np.nan
+        self.dRot = np.nan
+        self.dFocus = np.nan
+        self.dScale = np.nan
 
-        self.filtRA = numpy.nan
-        self.filtDec = numpy.nan
-        self.filtRot = numpy.nan
-        self.filtFocus = numpy.nan
-        self.filtScale = numpy.nan
+        self.filtRA = np.nan
+        self.filtDec = np.nan
+        self.filtRot = np.nan
+        self.filtFocus = np.nan
+        self.filtScale = np.nan
 
-        self.offsetRA = numpy.nan
-        self.offsetDec = numpy.nan
-        self.offsetRot = numpy.nan
-        self.offsetFocus = numpy.nan
-        self.offsetScale = numpy.nan
+        self.offsetRA = np.nan
+        self.offsetDec = np.nan
+        self.offsetRot = np.nan
+        self.offsetFocus = np.nan
+        self.offsetScale = np.nan
         
         self.guideCameraScale = guideCameraScale
         self.plugPlateScale = plugPlateScale
         self.arcsecPerMM = arcsecPerMM
         self.micronsPerArcsec = 1/3600.0*plugPlateScale*1e3 # convert arcsec to microns
-        self.seeing = numpy.nan
+        self.seeing = np.nan
 
         # conversion for a Gaussian, use this eveywhere but in ipGguide.c
         # conversion from sigma to FWHM for a JEG double Gaussian is done in ipGguide.c (sigmaToFWHMJEG = 2.468)
@@ -523,25 +523,25 @@ class FrameInfo(object):
         self.guideDecRMS = 0.
         self.inFocusFwhm = []
 
-        self.guideAzRMS = numpy.nan      #not implemented yet
-        self.guideAltRMS = numpy.nan
+        self.guideAzRMS = np.nan      #not implemented yet
+        self.guideAltRMS = np.nan
 
-        self.guideFitRMS = numpy.nan     #not implemented yet
-        self.nguideFitRMS = numpy.nan
-        self.nrejectFitRMS = numpy.nan
+        self.guideFitRMS = np.nan     #not implemented yet
+        self.nguideFitRMS = np.nan
+        self.nrejectFitRMS = np.nan
 
-        self.decenterRA = numpy.nan
-        self.decenterDec = numpy.nan
-        self.decenterRot = numpy.nan
-        self.decenterFocus = numpy.nan
-        self.decenterScale = numpy.nan
+        self.decenterRA = np.nan
+        self.decenterDec = np.nan
+        self.decenterRot = np.nan
+        self.decenterFocus = np.nan
+        self.decenterScale = np.nan
         
-        self.refractionBalance = numpy.nan
-        self.wavelength = numpy.nan
-        self.dHA = numpy.nan
+        self.refractionBalance = np.nan
+        self.wavelength = np.nan
+        self.dHA = np.nan
         
-        self.A = numpy.matrix(numpy.zeros(3*3).reshape([3,3]))
-        self.b = numpy.matrix(numpy.zeros(3).reshape([3,1]))
+        self.A = np.matrix(np.zeros(3*3).reshape([3,3]))
+        self.b = np.matrix(np.zeros(3).reshape([3,1]))
         self.b3 = 0
         self.guideAxes = False
         self.guideFocus = False
