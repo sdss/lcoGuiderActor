@@ -7,6 +7,7 @@ correct queue with the correct parameters.
 If these tests work correctly, each masterThread function should work
 correctly when called via a GuiderCmd (assuming test_masterThread clears).
 """
+import os
 import unittest
 from Queue import Queue
 
@@ -130,7 +131,8 @@ class TestFakeCartridge(GuiderCmdTester,unittest.TestCase):
         if expect is None:
             expect = {}
         queue = self.queues[guiderActor.MASTER]
-        msg = self._run_cmd('fakeCartridge pmDir=data %s'%(args),queue)
+        pmDir = os.path.expandvars('$GUIDERACTOR_DIR/test_guiderActor/gcam')
+        msg = self._run_cmd('fakeCartridge pmDir=%s %s'%(pmDir,args),queue)
         self.assertEqual(msg.type, guiderActor.Msg.LOAD_CARTRIDGE)
         self.assertEqual(msg.plate, expect.get('plate',None))
         self.assertEqual(msg.pointing, expect.get('pointing',None))
