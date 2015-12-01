@@ -14,12 +14,12 @@ from guiderActor import GuiderState
 from guiderActor.GuiderActor import set_default_pids, set_pid_scaling
 
 gprobeKey = {}
-gprobeKey['good'] = [10,1,True,100,100,10,0,-.1,-.1,0,'GUIDE']
-gprobeKey['acquire'] = [10,2,True,200,200,10,0,-.1,-.1,0,'ACQUIRE']
-gprobeKey['tritium'] = [10,3,True,300,300,10,0,-.1,-.1,0,'TRITIUM']
-gprobeKey['aboveFocus'] = [10,4,True,400,400,10,0,-.1,-.1,-400,'GUIDE']
-gprobeKey['belowFocus'] = [10,5,True,500,500,10,0,-.1,-.1,+400,'GUIDE']
-gprobeKey['broken'] = [10,6,False,600,600,10,0,-.1,-.1,0,'GUIDE']
+gprobeKey['good'] = [10,1,True,100,100,10,10,-.1,-.1,0,'GUIDE']
+gprobeKey['acquire'] = [10,2,True,200,200,20,20,-.1,-.1,0,'ACQUIRE']
+gprobeKey['tritium'] = [10,3,True,300,300,1,30,-.1,-.1,0,'TRITIUM']
+gprobeKey['aboveFocus'] = [10,4,True,400,400,10,40,-.1,-.1,-400,'GUIDE']
+gprobeKey['belowFocus'] = [10,5,True,500,500,10,50,-.1,-.1,+400,'GUIDE']
+gprobeKey['broken'] = [10,6,False,600,600,10,60,-.1,-.1,0,'GUIDE']
 # gprobesInUse = ["(1=0x0)","(2=0x0)","(3=0x2)","(4=0x0)","(5=0x0)","(6=0x1)"]
 # NOTE: the above gprobesInUse would translate to these integer bits:
 gprobebits = [0,0,2,0,0,1]
@@ -93,7 +93,14 @@ class TestGuiderState(guiderTester.GuiderTester,unittest.TestCase):
                 self.assertTrue(value,name)
             else:
                 self.assertFalse(value,name)
-    
+
+    def test_rotStar2Sky(self):
+        for name in gprobeKey:
+            probe = self.gState.gprobes[gprobeKey[name][1]]
+            value = probe.rotStar2Sky
+            self.assertEqual(value, 90 + probe.rotation - probe.phi)
+
+
     def _setDecenter(self,decenters,enable=None,new=True):
         decenters = {'decenterRA':1,'decenterDec':2}
         self.gState.setDecenter(decenters,self.cmd,enable)

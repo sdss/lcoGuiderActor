@@ -82,13 +82,11 @@ class GProbe(object):
         self.focusOffset = gprobeKey[9]
         self.fiber_type = gprobeKey[10]
         self.checkTritium()
-        self.rotStar2Sky = numpy.nan
         self.haOffsetTimes = {}
         self.haXOffsets = {}
         self.haYOffsets = {}
         self.checkFocus()
-    #...
-    
+
     def from_platedb_guideInfo(self,guideInfoKey):
         """
         Fill in data from the platedb.guideInfo keyword.
@@ -101,7 +99,17 @@ class GProbe(object):
         self.yFocal = guideInfoKey[4]
         self.phi = guideInfoKey[5]
         self.throughput = guideInfoKey[6]
-    #...
+        self.set_rotStar2Sky()
+
+    def set_rotStar2Sky(self):
+        """Compute rotStar2Sky from phi and rotation, if they're available."""
+        # rotStar2Sky is the angle to rotate (x, y) on the camera to (ra, alt)
+        # phi is the orientation of the alignment hole measured clockwise from N
+        # rotation is the anticlockwise rotation from x on the camera to the pin
+        try:
+            self.rotStar2Sky = 90 + self.rotation - self.phi
+        except:
+            self.rotStar2Sky = numpy.nan
 
     def _check_id(self,id,fromName):
         """
