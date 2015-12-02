@@ -115,7 +115,7 @@ class GuiderTester(TestHelper.ActorTester):
                 gState.gprobes[gk[1]].disabled = True
         self.gState = gState
     
-    def _init_probes(self):
+    def _init_probes_gimg_0040(self):
         """
         Initialize the "real" guide probes.
         Use with tests that e.g. call guiderImageAnalysis on the MJD 57356 files.
@@ -124,6 +124,9 @@ class GuiderTester(TestHelper.ActorTester):
         for probe,info,bits in zip(platedb_gprobe,platedb_guideInfo,platedb_gprobesInUse):
             junk,bits = bits.strip('()').split('=')
             self.gState.gprobes[probe[1]] = GuiderState.GProbe(probe[1],gprobeKey=probe,guideInfoKey=info,gprobeBits=int(bits,16))
+        # disable the acquisition probes, since the observers did so.
+        self.gState.gprobes[3].disabled = True
+        self.gState.gprobes[11].disabled = True
         tritium = platedb_gprobe[16]
         self.gState.gprobes[tritium[1]] = GuiderState.GProbe(tritium[1],gprobeKey=tritium,gprobeBits=2)
 
