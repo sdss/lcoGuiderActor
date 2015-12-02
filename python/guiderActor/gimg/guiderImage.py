@@ -34,6 +34,15 @@ class Fiber(object):
         self.radius = r
         self.illrad = illr
 
+        self.reset_star_values()
+
+        self.gProbe = None
+        
+        # The label of this fiber in the labeled, masked image (from scipy.ndimage.label)
+        self.label = label
+
+    def reset_star_values(self):
+        """Reset all values that are measured from a star image."""
         self.xs = np.nan
         self.ys = np.nan
         self.xyserr = np.nan
@@ -48,11 +57,6 @@ class Fiber(object):
         self.dy = np.nan
         self.dRA = np.nan
         self.dDec = np.nan
-
-        self.gProbe = None
-        
-        # The label of this fiber in the labeled, masked image (from scipy.ndimage.label)
-        self.label = label
 
     def __str__(self):
         return ('Fiber id %i: center %g,%g; star %g,%g; radius %g' %
@@ -177,10 +181,12 @@ class GuiderImageAnalysis(object):
         # 8.5 for the GUIDE fibers).  We therefore cut on this radius.
         self.bigFiberRadius = 12.
 
+        # Clip the flat to lie between these values.
+        # Prevents dividing by really big/small numbers when using the flat.
+        self.flat_clip = (0.5,1.5)
+
         # Saturation level.
         #need to make use of full 64k image for bright marvels guide stars.
-        #A solution was to scale by 2 data into and out of the C code
-        #Problems also with the rotation of postage stamps
         # jkp: note that the saturation level is a bit below the
         # full well level of the chip, to prevent column bleedthrough.
         #self.saturationLevel = 0xA000     #41k
@@ -232,11 +238,11 @@ class GuiderImageAnalysis(object):
         """Convert pix to arcseconds, using the pixelscale."""
         return pix * self.pixelscale
 
-    def flux2mag(self, flux, exptime):
-        """Convert flux to magnitude, using exptime."""
-        if exptime == 0:
+    def flux2mag(self, flux):
+        """Convert flux to magnitude, using self.exptime."""
+        if self.exptime == 0:
             return -99
-        return -2.5 * np.log10(flux / exptime) + self.zeropoint
+        return -2.5 * np.log10(flux / self.exptime) + self.zeropoint
 
     def find_bias_level(self,image,binning=1):
         """
@@ -355,8 +361,8 @@ class GuiderImageAnalysis(object):
 
         except Exception as e:
             self.cmd.error('text=%s'%qstr('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e)))
-
             raise e
+
     def getGuideloopCards(self, cmd, frameInfo):
         defs = (('guideAxes','guideAxe','guiding on Ra/Dec/Rot?'),
                 ('guideFocus','guideFoc','guiding on Focus?'),
@@ -399,7 +405,6 @@ class GuiderImageAnalysis(object):
             try:
                 val = None
                 val = getattr(frameInfo, name)
-                #print name, val
                 if np.isnan(val):
                     val = -99999.9 # F.ing F.TS
                 c = actorFits.makeCard(cmd, fitsName, val, comment)
@@ -408,48 +413,38 @@ class GuiderImageAnalysis(object):
                 self.cmd.warn('text=%s'%qstr('failed to make guider card %s=%s (%s)' % (name, val, e)))
         return cards
 
+    def rotate_one_fiber(self, image, mask, fiber, r):
+        """
+        Rotate one fiber image stamp (radius r) by the specified angle and
+        return the image stamp and mask stamp.
+        """
+        xc = int(fiber.xcen + 0.5)
+        yc = int(fiber.ycen + 0.5)
+        rot = -fiber.gProbe.rotStar2Sky
+        self.cmd.diag('text=%s'%qstr("rotating fiber %d at (%d,%d) by %0.1f degrees" % (fiber.fiberid, xc, yc, rot)))
+        # Rotate the fiber image
+        stamp_slice = np.s_[yc-r:yc+r+1, xc-r:xc+r+1]
+        rstamp = interpolation.rotate(image[stamp_slice],rot,cval=self.rot_cval,reshape=False)
+        # Now rotate the mask, filling with the masked value.
+        # Use order=0 for this one, so we don't create "fake" mask values along the edges.
+        # This should be maximally pessimistic: only points with no mask in their
+        # interpolated value will be unmasked.
+        rmaskstamp = interpolation.rotate(mask[stamp_slice],rot,cval=self.mask_masked,reshape=False,order=0)
+        
+        return np.flipud(rstamp), np.flipud(rmaskstamp)
+
     def getStampHDUs(self, fibers, bg, image, mask):
         """Get the FITS HDUs for the image stamps."""
         if len(fibers) == 0:
             return [pyfits.ImageHDU(np.array([[]]).astype(np.int16)),
                     pyfits.ImageHDU(np.array([[]]).astype(np.uint8))]
-        self.ensureLibraryLoaded()
         r = int(np.ceil(max([f.radius for f in fibers])))
         stamps = []
         maskstamps = []
-        for f in fibers:
-            xc = int(f.xcen + 0.5)
-            yc = int(f.ycen + 0.5)
-            rot = -f.gProbe.rotStar2Sky
-            self.cmd.diag('text=%s'%qstr("rotating fiber %d at (%d,%d) by %0.1f degrees" % (f.fiberid, xc, yc, rot)))
-            # Rotate the fiber image
-            stamp_slice = np.s_[yc-r:yc+r+1, xc-r:xc+r+1]
-            rstamp = interpolation.rotate(image[stamp_slice],rot)
-            stamps.append(np.flipud(rstamp))
-            # Now rotate the mask, filling with the masked value.
-            rstamp = interpolation.rotate(mask[stamp_slice],rot,cval=self.mask_masked)
-            maskstamps.append(np.flipud(rstamp))
-
-            # stamp = image[yc-r:yc+r+1, xc-r:xc+r+1].astype(np.int16)
-            # rstamp = np.zeros_like(stamp)
-            # self.libguide.rotate_region(np_array_to_REGION(stamp),
-            #                             np_array_to_REGION(rstamp),
-            #                             rot)
-            # stamps.append(np.flipud(rstamp))
-            # # Rotate the mask image...
-            # stamp = mask[yc-r:yc+r+1, xc-r:xc+r+1].astype(np.uint8)
-            # # Replace zeros by 255 so that after rotate_region (which puts
-            # # zeroes in the "blank" regions) we can replace them.
-            # stamp[stamp == 0] = 255
-            # rstamp = np.zeros_like(stamp)
-            # self.libguide.rotate_mask(np_array_to_MASK(stamp),
-            #                           np_array_to_MASK(rstamp),
-            #                           rot)
-            # # "blank" regions become masked-out pixels.
-            # rstamp[rstamp == 0] = GuiderImageAnalysis.mask_masked
-            # # Reinstate the zeroes.
-            # rstamp[rstamp == 255] = 0
-            # maskstamps.append(np.flipud(rstamp))
+        for fiber in fibers:
+            stamp, maskstamp = self.rotate_one_fiber(image,mask,fiber,r)
+            stamps.append(stamp)
+            maskstamps.append(maskstamp)
 
         # Stack the stamps into one image.
         stamps = np.vstack(stamps)
@@ -457,10 +452,7 @@ class GuiderImageAnalysis(object):
         # Replace zeroes by bg
         stamps[stamps==0] = bg
         # Also replace masked regions by bg.
-        # HACKery....
-        #stamps[maskstamps > 0] = maximum(bg - 500, 0)
         stamps[maskstamps > 0] = bg
-        #print 'bg=', bg
         return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
 
     def _get_basic_hdulist(self, image, primhdr, bg):
@@ -473,10 +465,9 @@ class GuiderImageAnalysis(object):
         hdulist.append(imageHDU)
         return hdulist
 
-    def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask, stampImage=None):
+    def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask):
         """Generate an HDU list to be inserted into the proc-file header."""
-        if stampImage is None:
-            stampImage = image
+
         bg = np.median(image[mask == 0])
         hdulist = self._get_basic_hdulist(image,primhdr,bg)
 
@@ -518,8 +509,8 @@ class GuiderImageAnalysis(object):
                     bigs.append(f)
 
             hdulist.append(pyfits.ImageHDU(mask))
-            hdulist += self.getStampHDUs(smalls, bg, stampImage, mask)
-            hdulist += self.getStampHDUs(bigs, bg, stampImage, mask)
+            hdulist += self.getStampHDUs(smalls, bg, image, mask)
+            hdulist += self.getStampHDUs(bigs, bg, image, mask)
 
             # jkp TBD: rework this to make it more legible/easily extensible.
             pixunit = 'guidercam pixels (binned)'
@@ -560,7 +551,6 @@ class GuiderImageAnalysis(object):
                       ('poserr',  'xyserr', 'E', pixunit),
                       ]
 
-            # TBD: FIXME -- rotStar2Sky -- should check with "hasattr"...
             cols = []
             for name,fitsname,fitstype,nilval,units in gpinfofields:
                 if fitsname is None:
@@ -682,7 +672,7 @@ class GuiderImageAnalysis(object):
         # TBD: readnoise and ccd gain should be set in the config file,
         # or even better, written by gcameraICC and read from the header.
         readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
-        ccdGain = 1
+        ccdGain = 1.4 # e-/ADU, taken from ipGGuide.h
         ccdInfo = PyGuide.CCDInfo(self.imageBias,readNoise,ccdGain,)
         # set a high threshold, since we only care about obviously bright stars.
         # TBD: this threshold could be a configurable parameter, so the observer
@@ -698,51 +688,112 @@ class GuiderImageAnalysis(object):
             shape = PyGuide.StarShape.StarShapeData(False,'failed to compute star shape')
         return star,shape
 
-    def _find_stars_gcam(self, image, mask, fibers, exptime):
+    def _set_fiber_star(self, fiber, stars, image, mask):
+        """Fill in the fiber values for this star, safely."""
+
+        try:
+            # findStars returns in order of brightness, so take the first one.
+            star = stars[0]
+        except IndexError:
+            # TBD: Don't know what to do when it doesn't find a star.
+            # probably need to clear out some values in the fibers.
+            self.cmd.warn('text=%s'%qstr('No star found via PyGuide.findStars for fiber %d.'%(fiber.fiberid)))
+            return None
+
+        if not star.isOK:
+            # TBD: What do we do in this case?
+            self.cmd.warn('text=%s'%qstr('PyGuide.findStars failed on fiber %d with: %s.'%(fiber.fiberid,star.msgStr)))
+            return None
+
+        fiber.xs = star.xyCtr[0]
+        fiber.ys = star.xyCtr[1]
+        fiber.xyserr = np.sqrt(star.xyErr[0]**2 + star.xyErr[1]**2)
+        try:
+            shape = PyGuide.StarShape.starShape(image, mask, star.xyCtr, 100)
+            if not shape.isOK:
+                # TBD: What do we do in this case?
+                self.cmd.warn('text=%s'%qstr('PyGuide.starShape failed on fiber %d with: %s.'%(fiber.fiberid,star.msgStr)))
+                return None
+
+            fiber.fwhm = self.pixels2arcsec(shape.fwhm)
+            fiber.sky = shape.bkgnd
+            fiber.flux = shape.ampl
+            if fiber.flux > 0:
+                fiber.mag = self.flux2mag(shape.ampl)
+        except Exception as e:
+            self.cmd.warn('text=%s'%qstr('PyGuide.starShape failed on fiber %d with: %s.'%(fiber.fiberid,e)))
+            return None
+
+    def _find_stars_gcam(self, image, mask, fibers):
         """Find the stars in a processed gcamera image."""
-        # The "img16" object must live until after gfindstars() !
-        img16 = image.astype(np.int16)
-        c_image = np_array_to_REGION(img16)
+        # TBD: readnoise and ccd gain should be set in the config file,
+        # or even better, written by gcameraICC and read from the header.
 
-        goodfibers = [f for f in fibers if not f.is_fake()]
-        c_fibers = self.libguide.fiberdata_new(len(goodfibers))
+        readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
+        ccdGain = 1.4 # e-/ADU, taken from ipGGuide.h
+        ccdInfo = PyGuide.CCDInfo(self.imageBias,readNoise,ccdGain,)
+        # findStars wants False for regions of good data
+        good_mask = mask == self.mask_masked
+        saturated = mask != self.mask_saturated
+        # use a medium threshold, since the stars might not be that bright when acquiring
+        # stars = PyGuide.findStars(image, good_mask, saturated, ccdInfo, thresh=5)
 
-        for i,f in enumerate(goodfibers):
-            c_fibers[0].g_fid[i] = f.fiberid
-            c_fibers[0].g_xcen[i] = f.xcen
-            c_fibers[0].g_ycen[i] = f.ycen
-            c_fibers[0].g_fibrad[i] = f.radius
-            # FIXME ??
-            c_fibers[0].g_illrad[i] = f.radius
-        # TBD: FIXME --
-        #c_fibers.readnoise = ...
+        for fiber in fibers:
+            fiber.reset_star_values()
+            xc = fiber.xcen
+            yc = fiber.ycen
+            r = fiber.radius
+            stamp = np.s_[yc-r:yc+r+1, xc-r:xc+r+1]
 
-        # mode=1: data frame; 0=spot frame
-        mode = 1
-        res = self.libguide.gfindstars(ctypes.byref(c_image), c_fibers, mode)
-        # SH_SUCCESS is this following nutty number...
-        if np.uint32(res) == np.uint32(0x8001c009):
-            self.cmd.diag('text=%s'%qstr('gfindstars returned successfully.'))
-        else:
-            self.cmd.warn('text=%s'%qstr('gfindstars() returned an error code: %08x (%08x; success=%08x)' % (res, np.uint32(res), np.uint32(0x8001c009))))
-
-        # pull star positions out of c_fibers, stuff outputs...
-        for i,f in enumerate(goodfibers):
-            f.xs     = c_fibers[0].g_xs[i]
-            f.ys     = c_fibers[0].g_ys[i]
-            f.xyserr = c_fibers[0].poserr[i]
-            fwhm     = c_fibers[0].fwhm[i]
-            if fwhm != FWHM_BAD:
-                f.fwhm = self.pixels2arcsec(fwhm)
-            # else leave fwhm = nan.
-            # TBD: FIXME -- figure out good units -- mag/(pix^2)?
-            f.sky = (c_fibers[0].sky[i])*2.0    #correct for image div by 2 for Ggcode
-            f.flux = (c_fibers[0].flux[i])*2.0
-            if f.flux > 0:
-                f.mag = self.flux2mag(f.flux, exptime)
-            # else leave f.mag = nan.
-        self.libguide.fiberdata_free(c_fibers)
+            # TBD: NOTE: centroid needs to be within a pixel or so, so won't work
+            # if the star is on the edge of the fiber. findStars will work, but I
+            # don't know if I can use it on all of them at once.
+            stars = PyGuide.findStars(image[stamp],good_mask[stamp],saturated,ccdInfo,thresh=2)[0]
+            self._set_fiber_star(fiber, stars, image[stamp], good_mask[stamp])
         self.fibers = fibers
+
+        # # The "img16" object must live until after gfindstars() !
+        # img16 = image.astype(np.int16)
+        # c_image = np_array_to_REGION(img16)
+
+        # goodfibers = [f for f in fibers if not f.is_fake()]
+        # c_fibers = self.libguide.fiberdata_new(len(goodfibers))
+
+        # for i,f in enumerate(goodfibers):
+        #     c_fibers[0].g_fid[i] = f.fiberid
+        #     c_fibers[0].g_xcen[i] = f.xcen
+        #     c_fibers[0].g_ycen[i] = f.ycen
+        #     c_fibers[0].g_fibrad[i] = f.radius
+        #     # FIXME ??
+        #     c_fibers[0].g_illrad[i] = f.radius
+        # # TBD: FIXME --
+        # #c_fibers.readnoise = ...
+
+        # # mode=1: data frame; 0=spot frame
+        # mode = 1
+        # res = self.libguide.gfindstars(ctypes.byref(c_image), c_fibers, mode)
+        # # SH_SUCCESS is this following nutty number...
+        # if np.uint32(res) == np.uint32(0x8001c009):
+        #     self.cmd.diag('text=%s'%qstr('gfindstars returned successfully.'))
+        # else:
+        #     self.cmd.warn('text=%s'%qstr('gfindstars() returned an error code: %08x (%08x; success=%08x)' % (res, np.uint32(res), np.uint32(0x8001c009))))
+
+        # # pull star positions out of c_fibers, stuff outputs...
+        # for i,f in enumerate(goodfibers):
+        #     f.xs     = c_fibers[0].g_xs[i]
+        #     f.ys     = c_fibers[0].g_ys[i]
+        #     f.xyserr = c_fibers[0].poserr[i]
+        #     fwhm     = c_fibers[0].fwhm[i]
+        #     if fwhm != FWHM_BAD:
+        #         f.fwhm = self.pixels2arcsec(fwhm)
+        #     # else leave fwhm = nan.
+        #     # TBD: FIXME -- figure out good units -- mag/(pix^2)?
+        #     f.sky = (c_fibers[0].sky[i])*2.0    #correct for image div by 2 for Ggcode
+        #     f.flux = (c_fibers[0].flux[i])*2.0
+        #     if f.flux > 0:
+        #         f.mag = self.flux2mag(f.flux, exptime)
+        #     # else leave f.mag = nan.
+        # self.libguide.fiberdata_free(c_fibers)
 
     def findStars(self, gprobes):
         """
@@ -764,10 +815,10 @@ class GuiderImageAnalysis(object):
         """
         image,hdr,sat = self._pre_process(self.gimgfn,binning=self.binning)
 
-        exptime = hdr.get('EXPTIME', 0)
+        self.exptime = hdr.get('EXPTIME', 0)
 
         (darkFileName, flatFileName) = self.findDarkAndFlat(self.gimgfn, hdr)
-        image = self.applyDark(image,darkFileName,exptime)
+        image = self.applyDark(image, darkFileName)
 
         # Check after we've loaded the dark, to ensure the dark temperature was set.
         self._check_ccd_temp(hdr)
@@ -779,7 +830,6 @@ class GuiderImageAnalysis(object):
                 # e.g.: no fibers could be found in the flat
                 self.cmd.warn('text=%s'%qstr('Error processsing flat!'))
                 raise e
-        fibers = [f for f in self.flatFibers if not f.is_fake()]
         # mask the saturated pixels with the appropriate value.
         mask = self.flatMask.copy()
         mask[sat] |= self.mask_saturated
@@ -794,24 +844,20 @@ class GuiderImageAnalysis(object):
         mask[sat_flat] |= self.mask_saturated
 
         # Save the processed image
-        self.guiderImage = image/2.0  #PH***quick Kluge needs to be corrected
+        self.guiderImage = image
         self.guiderHeader = hdr
         self.maskImage = mask
-
-        # TBD: once we've converted to use PyGuide, we can get rid of these kludges!
-
-        # Prepare image for Gunn C code PSF fitting in "gfindstars"...
-        # PH..Kluge to conserve full dynamic range, scale image to fit into signed int in C code.
-        # Have to scale up the outputs.
-        img = image[:]/2.0     #
 
         # Zero out parts of the image that are masked out.
         # In this mask convention, 0 = good, >0 is bad.
         # Mark negative pixels
-        badpixels = (img < 0) & (mask == 0)
+        badpixels = (image < 0) & (mask == 0)
         mask[badpixels] |= self.mask_badpixels
         # Blank out masked pixels.
-        img[mask > 0] = 0
+        image[mask > 0] = 0
+
+        # images use a different rotation fill constant than flats.
+        self.rot_cval = 0
 
         if self.camera == 'ecamera':
             # mask the overscan too, since we're keeping it around for monitoring.
@@ -826,7 +872,8 @@ class GuiderImageAnalysis(object):
             self.cmd.inform('ecam_star={},{:.2f},{:.2f},{:.3f},{:.2f},{:.1f}'.format(self.frameNo,star.xyCtr[0],star.xyCtr[1],shape.fwhm,shape.bkgnd,shape.ampl))
             return [] # no fibers to return
         else:
-            self._find_stars_gcam(image, mask, fibers, exptime)
+            fibers = [f for f in self.flatFibers if not f.is_fake()]
+            self._find_stars_gcam(image, mask, fibers)
             return self.fibers
     
     def applyBias(self,image,binning):
@@ -836,7 +883,7 @@ class GuiderImageAnalysis(object):
         image -= self.imageBias
         return image
         
-    def applyDark(self,image,darkFileName,exptime):
+    def applyDark(self,image,darkFileName):
         """Dark subtract the current image, and return the result"""
         # Create and process the dark image if this is the first time through, or a new dark exposure
         self.cmd.diag('text=%s'%qstr('Using dark image: %s' % darkFileName))
@@ -845,7 +892,7 @@ class GuiderImageAnalysis(object):
         
         # scale and subtract the dark
         if not self.bypassDark:
-            image -= self.processedDark * exptime
+            image -= self.processedDark * self.exptime
         else:
             self.cmd.inform('text=%s'%qstr('Bypassing dark subtraction.'))
         return image
@@ -1159,22 +1206,18 @@ class GuiderImageAnalysis(object):
         # Now clip the flat to be within a reasonable range.
         # Have to do it post-binning, otherwise the fiber edges get wonky.
         # This prevents dividing by really big/small numbers when using the flat.
-        np.clip(flat, 0.5, 1.5, out=flat)
-        
-        #int16 for the rotation code in C
-        binnedImage = flat.astype(np.int16)
+        np.clip(flat, self.flat_clip[0], self.flat_clip[1], out=flat)
+
+        # images use a different rotation fill constant than flats.
+        self.rot_cval = self.flat_clip[0]
 
         # TBD: DX?  DY?  Any other stats in here?
         # we don't want the bzero header keyword set.
         # it somehow is ending up in the raw flat files, but not the object files.
-        del hdr['BZERO']
+        if 'BZERO' in hdr:
+            del hdr['BZERO']
 
-        # For writing fiber postage stamps, fill in rotation fields.
-        for p in gprobes.values():
-            if not hasattr(p, 'rotStar2Sky'):
-                p.rotStar2Sky = 90 + p.rotation - p.phi
-
-        hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask, stampImage=binnedImage)
+        hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask)
         if hdulist is None:
             self.cmd.warn('text=%s'%qstr('Failed to create processed flat file'))
         
