@@ -57,8 +57,10 @@ def getGprobeKeys():
         "fiberType",
     ] # order matters
     # throw out last value (we don't want tritium source),
+    #castMap = (int,)*3 + (float,)*3 +(hardingRotation,) +(float,)*3 + (str,)
+    # note removing harding rotation for Nov Run
+    castMap = (int,)*3 + (float,)*7 + (str,)
     #LCOHACK: warning!!! remove the [:-1] if the tritium source gets removed from the gcamFiberInfo file!!!
-    castMap = (int,)*3 + (float,)*3 +(hardingRotation,) +(float,)*3 + (str,)
     gprobeKeysNumpy = np.asarray([gprobes[key][:-1] for key in gprobeFields]).T
     assert gprobeKeysNumpy.shape == (16, len(gprobeFields))
     # convert to list of mixed types (numpy got messy here)
