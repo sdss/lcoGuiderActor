@@ -157,13 +157,13 @@ class GuiderCmd(object):
     def setPID(self, cmd):
         """Set something's PID coefficients"""
 
-        what = None
+        axis = None
         for k in ["raDec", "rot", "focus", "scale"]:
             if k in cmd.cmd.keywords:
-                what = k
+                axis = k
                 break
 
-        if not what:
+        if not axis:
             cmd.fail("text=\"Impossible condition in setPID\"")
 
         Kp = cmd.cmd.keywords["Kp"].values[0]
@@ -172,7 +172,7 @@ class GuiderCmd(object):
         Imax = cmd.cmd.keywords["Imax"].values[0] if "Imax" in cmd.cmd.keywords else 0
         nfilt = cmd.cmd.keywords["nfilt"].values[0] if "nfilt" in cmd.cmd.keywords else 0
 
-        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, cmd=cmd, what=what,
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, cmd=cmd, axis=axis,
                                                                 Kp=Kp, Ti=Ti, Td=Td, Imax=Imax,
                                                                 nfilt=nfilt))
 
