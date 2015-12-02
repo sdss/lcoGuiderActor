@@ -469,6 +469,8 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
             x = numpy.linalg.solve(frameInfo.A, frameInfo.b)
 
         # convert from mm to degrees
+        # note dRA/dDec are solved via frameInfo.A * x = frameInfo.b
+        # frameInfo A, b are updated in _do_one_fiber for all fibers
         dRA = x[0, 0]/gState.plugPlateScale
         dDec = x[1, 0]/gState.plugPlateScale
         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
