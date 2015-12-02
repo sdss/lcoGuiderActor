@@ -46,6 +46,9 @@ src/gimg/ipGguide.c -text
 src/gimg/shUtils.c -text
 test_guiderActor/cmd_calls/TestExpose.txt -text
 test_guiderActor/ecam/gimg-0003.fits.gz -text
+test_guiderActor/gcam/expect-gimg-0001.fits.gz -text
+test_guiderActor/gcam/expect-gimg-0003.fits.gz -text
+test_guiderActor/gcam/expect-gimg-0040.fits.gz -text
 test_guiderActor/gcam/gimg-0001.fits.gz -text
 test_guiderActor/gcam/gimg-0003.fits.gz -text
 test_guiderActor/gcam/gimg-0004.fits.gz -text
