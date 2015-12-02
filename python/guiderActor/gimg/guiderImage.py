@@ -174,13 +174,6 @@ class GuiderImageAnalysis(object):
         # amount we let the gcamera temperature vary from the setPoint
         self.deltaTemp = 3.0
         
-        # "Big" (acquisition) fibers are bigger than this pixel
-        # radius.  The older SDSS cartridges don't declare (in the
-        # gcamFiberInfo.par file) the larger fibers to be ACQUIRE,
-        # though they are declared to have radii of 14.1 pixels (vs
-        # 8.5 for the GUIDE fibers).  We therefore cut on this radius.
-        self.bigFiberRadius = 12.
-
         # Clip the flat to lie between these values.
         # Prevents dividing by really big/small numbers when using the flat.
         self.flat_clip = (0.5,1.5)
@@ -196,6 +189,16 @@ class GuiderImageAnalysis(object):
         #self.saturationReplacement = 0xA000
         self.saturationReplacement = 0xF000 #62,000
 
+        # TBD: everything below here should come either from the gimg files,
+        # or from the config files. See #2487
+        # ===================================================================
+        # "Big" (acquisition) fibers are bigger than this pixel
+        # radius.  The older SDSS cartridges don't declare (in the
+        # gcamFiberInfo.par file) the larger fibers to be ACQUIRE,
+        # though they are declared to have radii of 14.1 pixels (vs
+        # 8.5 for the GUIDE fibers).  We therefore cut on this radius.
+        self.bigFiberRadius = 12.
+
         # The factor by which guider images are binned down.
         # That is, unbinned (flat) images are this factor bigger in
         # each dimension.
@@ -203,12 +206,20 @@ class GuiderImageAnalysis(object):
 
         # The pixel scale of the guider camera, when binned by "binning"
         # In arcsec/pixel
-        self.pixelscale = 0.428
+        if self.location == 'APO':
+            self.pixelscale = 0.428
+        elif self.location == 'LCO':
+            self.pixelscale = 0.2834
 
         # The photometric zero-point for (g + r)/2 band was 25.34
         # This was calibrated vs MJD 55246, with AZ~=73 deg, airmass~=1.046
         # Masayuki zero average point 25.70 for use for his color transform
         self.zeropoint = 25.70
+
+        # TBD: readnoise and ccd gain should be set in the config file,
+        # or even better, written by gcameraICC and read from the header.
+        self.readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
+        self.ccdGain = 1.4 # e-/ADU, taken from ipGGuide.h
     #...
     
     def __call__(self, cmd, gimgfn, gprobes, setPoint, bypassDark=False, camera='gcamera'):
@@ -648,11 +659,7 @@ class GuiderImageAnalysis(object):
 
     def _find_stars_ecam(self, image, mask):
         """Find the stars in a processed ecamera image."""
-        # TBD: readnoise and ccd gain should be set in the config file,
-        # or even better, written by gcameraICC and read from the header.
-        readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
-        ccdGain = 1.4 # e-/ADU, taken from ipGGuide.h
-        ccdInfo = PyGuide.CCDInfo(self.imageBias,readNoise,ccdGain,)
+        ccdInfo = PyGuide.CCDInfo(self.imageBias,self.readNoise,self.ccdGain)
         # set a high threshold, since we only care about obviously bright stars.
         # TBD: this threshold could be a configurable parameter, so the observer
         # can adjust it in the Pointing Data STUI script, and relax it when focusing.
@@ -702,12 +709,7 @@ class GuiderImageAnalysis(object):
 
     def _find_stars_gcam(self, image, mask, fibers):
         """Find the stars in a processed gcamera image."""
-        # TBD: readnoise and ccd gain should be set in the config file,
-        # or even better, written by gcameraICC and read from the header.
-
-        readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
-        ccdGain = 1.4 # e-/ADU, taken from ipGGuide.h
-        ccdInfo = PyGuide.CCDInfo(self.imageBias,readNoise,ccdGain,)
+        ccdInfo = PyGuide.CCDInfo(self.imageBias,self.readNoise,self.ccdGain)
         # findStars wants False for regions of good data
         good_mask = (mask & self.mask_masked) != 0
         saturated = (mask & self.mask_saturated) != 0
