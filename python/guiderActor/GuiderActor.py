@@ -20,7 +20,7 @@ def set_default_pids(config, gState):
     axes = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")
     for axis in config.options('PID'):
         axis = axes[axis.upper()]
-        Kp, Ti_min, Ti_max, Td, Imax, nfilt = [float(v) for v in config.get('PID', axis).split()]        
+        Kp, Ti_min, Ti_max, Td, Imax, nfilt = [float(v) for v in config.get('PID', axis).split()]
         gState.set_pid_defaults(axis, Kp=Kp, Ti_min=Ti_min, Ti_max=Ti_max, Td=Td, Imax=Imax, nfilt=int(nfilt))
         gState.pid[axis].setPID(Kp=Kp, Ti=Ti_min, Td=Td, Imax=Imax, nfilt=nfilt)
 
