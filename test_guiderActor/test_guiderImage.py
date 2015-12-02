@@ -122,7 +122,6 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
         expect = pyfits.open(self.dataExpect)
 
         for x in result[6].data.names:
-            print x
             if x == 'fiber_type':
                 # Trouble testing numpy string arrays
                 self.assertTrue((result[6].data[x] == expect[6].data[x]).all(),'%s has a mismatch'%x)
@@ -217,7 +216,7 @@ if __name__ == '__main__':
 
     suite = None
     # to test just one piece
-    suite = unittest.TestLoader().loadTestsFromName('test_guiderImage.TestGuiderImage.test_call')
+    # suite = unittest.TestLoader().loadTestsFromName('test_guiderImage.TestGuiderImage.test_call')
     # suite = unittest.TestLoader().loadTestsFromName('test_guiderImage.TestGuiderImage.test_analyzeFlat')
     # suite = unittest.TestLoader().loadTestsFromName('test_guiderImage.TestGuiderImage.test_analyzeFlat_ecam')
     # suite = unittest.TestLoader().loadTestsFromTestCase(TestGuiderImage)
