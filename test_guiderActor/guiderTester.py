@@ -15,7 +15,6 @@ Example:
 """
 
 import os
-import ConfigParser
 import unittest
 
 from actorcore import TestHelper
@@ -23,7 +22,7 @@ from actorcore import TestHelper
 from guiderActor.gimg import guiderImage
 from guiderActor import GuiderState
 import guiderActor.myGlobals as myGlobals
-from guiderActor.GuiderActor import set_default_pids, set_pid_scaling
+from guiderActor import GuiderActor
 
 gprobeKey = {}
 guideInfoKey = {}
@@ -96,14 +95,16 @@ class GuiderTester(TestHelper.ActorTester):
         myGlobals.actorState = self.actorState
         self.setPoint_good = -40
         self.setPoint_bad = -35
+        if self.actorState.actor.location is None:
+            self.actorState.actor.location = 'APO'
         self.gi = guiderImage.GuiderImageAnalysis(self.setPoint_good,self.actorState.actor.location)
         gState = GuiderState.GuiderState()
         myGlobals.actorState.gState = gState
 
-        self.config = ConfigParser.ConfigParser()
-        self.config.read(os.path.expandvars('$GUIDERACTOR_DIR/etc/guider.cfg'))
-        set_default_pids(self.config, gState)
-        set_pid_scaling(self.config, gState)
+        GuiderActor.set_default_pids(self.actor.config, gState)
+        GuiderActor.set_pid_scaling(self.actor.config, gState)
+        GuiderActor.set_telescope(self.actor.config, gState)
+        GuiderActor.set_gcamera(self.actor.config, gState)
 
         self.probeNames = {}
         for name in gprobeKey:
@@ -124,9 +125,6 @@ class GuiderTester(TestHelper.ActorTester):
         for probe,info,bits in zip(platedb_gprobe,platedb_guideInfo,platedb_gprobesInUse):
             junk,bits = bits.strip('()').split('=')
             self.gState.gprobes[probe[1]] = GuiderState.GProbe(probe[1],gprobeKey=probe,guideInfoKey=info,gprobeBits=int(bits,16))
-        # disable the acquisition probes, since the observers did so.
-        self.gState.gprobes[3].disabled = True
-        self.gState.gprobes[11].disabled = True
         tritium = platedb_gprobe[16]
         self.gState.gprobes[tritium[1]] = GuiderState.GProbe(tritium[1],gprobeKey=tritium,gprobeBits=2)
 
@@ -138,7 +136,6 @@ class GuiderTester(TestHelper.ActorTester):
     def _remove_file(self,filename):
         if os.path.exists(filename):
             os.remove(filename)
-
 
 class GuiderThreadTester(GuiderTester,unittest.TestCase):
     """

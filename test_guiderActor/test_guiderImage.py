@@ -3,6 +3,7 @@
 Test the behavior of guider flats, including finding fibers..
 """
 import os
+import glob
 import unittest
 import pyfits
 import numpy as np
@@ -46,6 +47,11 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
     def tearDown(self):
         if hasattr(self,'outFile'):
             self._remove_file(self.outFile)
+
+    @staticmethod
+    def tearDownClass():
+        for filename in glob.glob('?cam/proc-*.fits.gz'):
+            os.remove(filename)
 
     def _check_overwriting(self, inFile, outFile, analyze, args=[]):
         """
@@ -110,6 +116,11 @@ class TestGuiderImage(guiderTester.GuiderTester,unittest.TestCase):
 
     def test_call(self):
         """Test GuiderImageAnalysis.__call__()"""
+
+        # disable the acquisition probes, since the observers did so.
+        self.gState.gprobes[3].disabled = True
+        self.gState.gprobes[11].disabled = True
+
         self.outFile = self.outDataFile # for tearDown
         frameInfo = GuiderState.FrameInfo(40,1,2,3)
         fibers = self._call_gi(self.inDataFile)

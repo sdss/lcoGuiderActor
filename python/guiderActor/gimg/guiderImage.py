@@ -168,9 +168,6 @@ class GuiderImageAnalysis(object):
         self.processedFlat = None
         self.darkTemperature = None
 
-        # Print debugging?
-        self.printDebug = False
-        
         # amount we let the gcamera temperature vary from the setPoint
         self.deltaTemp = 3.0
         
@@ -457,6 +454,105 @@ class GuiderImageAnalysis(object):
         hdulist.append(imageHDU)
         return hdulist
 
+    def _get_HDU7_fields(self, fibers, stampSizes, stampInds):
+        """Return a list containing the data for HDU7 (the fiber data table)."""
+
+        # jkp TBD: rework this to make it more legible/easily extensible.
+        pixunit = 'guidercam pixels (binned)'
+        gpinfofields = [
+                       # python attr, FITScol (if diff), FITStype, NIL val, unit
+                       ('exists',         None,    'L',   np.nan,     None),
+                       ('enabled',        None,    'L',   np.nan,     None),
+                       ('gprobebits',     None,    'B',   np.nan,     None),
+                       ('xFocal',         None,    'E',   np.nan,     'plate mm'),
+                       ('yFocal',         None,    'E',   np.nan,     'plate mm'),
+                       ('radius',         None,    'E',   np.nan,     pixunit),
+                       ('xFerruleOffset', None,    'E',   np.nan,     None),
+                       ('yFerruleOffset', None,    'E',   np.nan,     None),
+                       ('rotation',       None,    'E',   np.nan,     None),
+                       ('rotStar2Sky',    None,    'E',   np.nan,     None),
+                       ('focusOffset',    None,    'E',   np.nan,     'micrometers'),
+                       ('fiber_type',      None,    'A20', np.nan,     None),
+                       ('ugriz',          None,    '5E',  [np.nan,]*5, 'mag'),
+                       ('ref_mag',        None,    'E',   np.nan,     'synthetic predicted fiber mag'),
+                       ]
+
+        ffields = [
+                  # FITScol,  variable, FITStype, unit
+                  ('fiberid', None,     'I', None),
+                  ('xCenter', 'xcen',   'E', pixunit),
+                  ('yCenter', 'ycen',   'E', pixunit),
+                  ('xstar',   'xs',     'E', pixunit),
+                  ('ystar',   'ys',     'E', pixunit),
+                  ('dx',      None,     'E', 'residual in mm, guidercam frame'),
+                  ('dy',      None,     'E', 'residual in mm, guidercam frame'),
+                  ('dRA',     None,     'E', 'residual in mm, plate frame'),
+                  ('dDec',    None,     'E', 'residual in mm, plate frame'),
+                  ('fwhm',    None,     'E', 'arcsec'),
+                  ('flux',    None,     'E', 'total DN'),
+                  ('mag',     None,     'E', 'mag'),
+                  ('sky',     None,     'E', 'DN/pixel'),
+                  ('skymag',  None,     'E', 'mag/(arcsec^2)'),
+                  ('poserr',  'xyserr', 'E', pixunit),
+                  ]
+
+        cols = []
+        for name,fitsname,fitstype,nilval,units in gpinfofields:
+            if fitsname is None:
+                fitsname = name
+            cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
+                                      array=np.array([getattr(f.gProbe, name, nilval) for f in fibers])))
+        for name,atname,fitstype,units in ffields:
+            cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
+                                      array=np.array([getattr(f, atname or name) for f in fibers])))
+
+        cols.append(pyfits.Column(name='stampSize', format='I', array=np.array(stampSizes)))
+        cols.append(pyfits.Column(name='stampIdx', format='I', array=np.array(stampInds)))
+
+        return cols
+
+    def _get_stamp_data(self, gprobes, fibers):
+        """Return the data about the different postage stamps, so we can make images."""
+
+        # TBD: this could almost certainly be made much cleaner, possibly
+        # TBD: by resetting each gProbe and/or fiber when findStars is called.
+
+        # List the fibers by fiber id.
+        fiberids = sorted(gprobes.keys())
+        sfibers = []
+        myfibs = dict([(f.fiberid,f) for f in fibers])
+        for fid in fiberids:
+            if fid in myfibs:
+                sfibers.append(myfibs[fid])
+            else:
+                # Put in NaN fake fibers for ones that weren't found.
+                fake = Fiber(fid)
+                fake.gProbe = gprobes[fid]
+                fake.gProbe.disabled = True
+                sfibers.append(fake)
+
+        # Split into small and big fibers.
+        # Also create the columns "stampInds" and "stampSizes"
+        # for the output table.
+        smalls = []
+        bigs = []
+        stampInds = []
+        stampSizes = []
+        for f in sfibers:
+            if f.is_fake():
+                stampSizes.append(0)
+                stampInds.append(-1)
+            elif f.radius < self.bigFiberRadius:
+                # must do this before appending to smalls!
+                stampInds.append(len(smalls))
+                stampSizes.append(1)
+                smalls.append(f)
+            else:
+                stampInds.append(len(bigs))
+                stampSizes.append(2)
+                bigs.append(f)
+        return sfibers,bigs,smalls,stampSizes,stampInds
+
     def _getProcGimgHDUList(self, primhdr, gprobes, fibers, image, mask):
         """Generate an HDU list to be inserted into the proc-file header."""
 
@@ -464,99 +560,14 @@ class GuiderImageAnalysis(object):
         hdulist = self._get_basic_hdulist(image,primhdr,bg)
 
         try:
-            # List the fibers by fiber id.
-            fiberids = sorted(gprobes.keys())
-            sfibers = []
-            myfibs = dict([(f.fiberid,f) for f in fibers])
-            for fid in fiberids:
-                if fid in myfibs:
-                    sfibers.append(myfibs[fid])
-                else:
-                    # Put in NaN fake fibers for ones that weren't found.
-                    fake = Fiber(fid)
-                    fake.gProbe = gprobes[fid]
-                    fake.gProbe.disabled = True
-                    sfibers.append(fake)
-            fibers = sfibers
-
-            # Split into small and big fibers.
-            # Also create the columns "stampInds" and "stampSizes"
-            # for the output table.
-            smalls = []
-            bigs = []
-            stampInds = []
-            stampSizes = []
-            for f in fibers:
-                if f.is_fake():
-                    stampSizes.append(0)
-                    stampInds.append(-1)
-                elif f.radius < self.bigFiberRadius:
-                    # must do this before appending to smalls!
-                    stampInds.append(len(smalls))
-                    stampSizes.append(1)
-                    smalls.append(f)
-                else:
-                    stampInds.append(len(bigs))
-                    stampSizes.append(2)
-                    bigs.append(f)
+            fibers,bigs,smalls,stampSizes,stampInds = self._get_stamp_data(gprobes,fibers)
 
             hdulist.append(pyfits.ImageHDU(mask))
             hdulist += self.getStampHDUs(smalls, bg, image, mask)
             hdulist += self.getStampHDUs(bigs, bg, image, mask)
+        
+            hdulist.append(pyfits.new_table(self._get_HDU7_fields(fibers, stampSizes, stampInds)))
 
-            # jkp TBD: rework this to make it more legible/easily extensible.
-            pixunit = 'guidercam pixels (binned)'
-            gpinfofields = [
-                           # python attr, FITScol (if diff), FITStype, NIL val, unit
-                           ('exists',         None,    'L',   np.nan,     None),
-                           ('enabled',        None,    'L',   np.nan,     None),
-                           ('gprobebits',     None,    'B',   np.nan,     None),
-                           ('xFocal',         None,    'E',   np.nan,     'plate mm'),
-                           ('yFocal',         None,    'E',   np.nan,     'plate mm'),
-                           ('radius',         None,    'E',   np.nan,     pixunit),
-                           ('xFerruleOffset', None,    'E',   np.nan,     None),
-                           ('yFerruleOffset', None,    'E',   np.nan,     None),
-                           ('rotation',       None,    'E',   np.nan,     None),
-                           ('rotStar2Sky',    None,    'E',   np.nan,     None),
-                           ('focusOffset',    None,    'E',   np.nan,     'micrometers'),
-                           ('fiber_type',      None,    'A20', np.nan,     None),
-                           ('ugriz',          None,    '5E',  [np.nan,]*5, 'mag'),
-                           ('ref_mag',        None,    'E',   np.nan,     'synthetic predicted fiber mag'),
-                           ]
-
-            ffields = [
-                      # FITScol,  variable, FITStype, unit
-                      ('fiberid', None,     'I', None),
-                      ('xCenter', 'xcen',   'E', pixunit),
-                      ('yCenter', 'ycen',   'E', pixunit),
-                      ('xstar',   'xs',     'E', pixunit),
-                      ('ystar',   'ys',     'E', pixunit),
-                      ('dx',      None,     'E', 'residual in mm, guidercam frame'),
-                      ('dy',      None,     'E', 'residual in mm, guidercam frame'),
-                      ('dRA',     None,     'E', 'residual in mm, plate frame'),
-                      ('dDec',    None,     'E', 'residual in mm, plate frame'),
-                      ('fwhm',    None,     'E', 'arcsec'),
-                      ('flux',    None,     'E', 'total DN'),
-                      ('mag',     None,     'E', 'mag'),
-                      ('sky',     None,     'E', 'DN/pixel'),
-                      ('skymag',  None,     'E', 'mag/(arcsec^2)'),
-                      ('poserr',  'xyserr', 'E', pixunit),
-                      ]
-
-            cols = []
-            for name,fitsname,fitstype,nilval,units in gpinfofields:
-                if fitsname is None:
-                    fitsname = name
-                cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
-                                          array=np.array([getattr(f.gProbe, name, nilval) for f in fibers])))
-            for name,atname,fitstype,units in ffields:
-                cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
-                                          array=np.array([getattr(f, atname or name) for f in fibers])))
-
-            cols.append(pyfits.Column(name='stampSize', format='I', array=np.array(stampSizes)))
-            cols.append(pyfits.Column(name='stampIdx', format='I', array=np.array(stampInds)))
-
-            hdulist.append(pyfits.new_table(cols))
         except Exception as e:
             self.cmd.warn('text=%s'%qstr('could not create header for proc- guider file: %s' % (e,)))
             tback('guiderImage write', e)
@@ -1198,6 +1209,7 @@ class GuiderImageAnalysis(object):
             self.cmd.inform('text=%s'%qstr('Reading processed flat-field from %s' % flatout))
             try:
                 self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes)
+                self.currentFlatName = flatFileName
                 return
             except:
                 self.cmd.warn('text=%s'%qstr('Failed to read processed flat-field from %s; regenerating it.' % flatout))
