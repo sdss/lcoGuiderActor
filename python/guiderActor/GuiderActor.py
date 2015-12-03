@@ -30,6 +30,21 @@ def set_pid_scaling(config, gState):
     gState.alt_min = float(config.get('PID_altitude_scale', 'min'))
     gState.alt_max = float(config.get('PID_altitude_scale', 'max'))
 
+def set_telescope(config, gState):
+    """Set values related to the telescope from the config file."""
+    gState.plugPlateScale = float(config.get('telescope', "scale"))
+    gState.dSecondary_dmm = float(config.get('telescope', "dSecondary_dmm"))
+    gState.longitude = float(config.get('telescope', "longitude"))
+    gState.focalRatio = float(config.get('telescope', "focalRatio"))
+
+def set_gcamera(config, gState):
+    """Set values related to the guide camera from the config file."""
+    expTime = float(config.get('gcamera', "exposureTime"))
+    readTime = float(config.get('gcamera', "binnedReadTime"))
+    masterThread.set_time(gState,expTime,1,readTime)
+    gState.gcameraPixelSize = float(config.get('gcamera', "pixelSize"))
+    gState.gcameraMagnification = float(config.get('gcamera', "magnification"))
+
 class GuiderActor(actorcore.Actor.SDSSActor):
     """Manage the threads that calculate guiding corrections and gcamera commands."""
     __metaclass__ = abc.ABCMeta
@@ -37,7 +52,6 @@ class GuiderActor(actorcore.Actor.SDSSActor):
     @staticmethod
     def newActor(location=None,**kwargs):
         """Return the version of the actor based on our location."""
-
         location = GuiderActor._determine_location(location)
         if location == 'apo':
             return GuiderActorAPO('guider',**kwargs)
@@ -70,24 +84,14 @@ class GuiderActor(actorcore.Actor.SDSSActor):
                            ("gcamera", guiderActor.GCAMERA, gcameraThread),
                            ("movie", guiderActor.MOVIE, movieThread),]
 
-        expTime = float(self.config.get('gcamera', "exposureTime"))
-        readTime = float(self.config.get('gcamera', "binnedReadTime"))
-        masterThread.set_time(gState,expTime,1,readTime)
-
-        gState.plugPlateScale = float(self.config.get('telescope', "scale"))
-        gState.dSecondary_dmm = float(self.config.get('telescope', "dSecondary_dmm"))
-        gState.longitude = float(self.config.get('telescope', "longitude"))
-        gState.focalRatio = float(self.config.get('telescope', "focalRatio"))
-        gState.gcameraPixelSize = float(self.config.get('gcamera', "pixelSize"))
-        gState.gcameraMagnification = float(self.config.get('gcamera', "magnification"))
-
         for what in self.config.options("enable"):
             enable = {"True" : True, "False" : False}[self.config.get('enable', what)]
             gState.setGuideMode(what, enable)
 
         set_default_pids(self.config, gState)
         set_pid_scaling(self.config, gState)
-
+        set_telescope(self.config, gState)
+        set_gcamera(self.config, gState)
 
 class GuiderActorAPO(GuiderActor):
     """APO version of this actor."""
