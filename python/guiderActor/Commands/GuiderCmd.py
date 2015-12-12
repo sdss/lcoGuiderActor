@@ -360,8 +360,6 @@ class GuiderCmd(object):
             design_ha += 360
 
         # Lookup the valid gprobes
-        extraArgs = ""
-        if plate: extraArgs += "plate=%s" % (plate)
         gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
         gprobesInUseKey = actorState.models["platedb"].keyVarDict["gprobesInUse"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
