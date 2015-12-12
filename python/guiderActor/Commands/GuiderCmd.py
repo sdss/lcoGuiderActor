@@ -393,7 +393,7 @@ class GuiderCmd(object):
         plPlugMapMKey = actorState.models["platedb"].keyVarDict["plPlugMapM"]
         guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-                                            cmdStr="getGprobesPlateGeom cartridge=%d %s" % (cartridge, extraArgs),
+                                            cmdStr="getGprobesPlateGeom %s" % (extraArgs),
                                             keyVars=[guideInfoKey, plPlugMapMKey])
         if cmdVar.didFail:
             cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
