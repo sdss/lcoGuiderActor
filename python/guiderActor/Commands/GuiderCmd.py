@@ -311,9 +311,10 @@ class GuiderCmd(object):
         loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
         cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
 
-        if cartridge < 0:
+        # Only auto-select the cart if a plate was not specified.
+        if cartridge < 0 and plate is None:
             cartridge = loadedCartridge
-            
+
         if loadedCartridge != cartridge:
             msg = "Expected cartridge %s, but %s is loaded" % (cartridge, loadedCartridge)
             if force:
