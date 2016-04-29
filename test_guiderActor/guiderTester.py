@@ -63,16 +63,16 @@ skipIfNoGuiderImages = unittest.skipIf(
     not os.path.exists(guiderImagesPath), 'guiderImages product not set up.')
 
 
-def getTestImage(directory, mjd, image, raiseError=True):
-    """Returns the full path in the guiderImages product for a test image."""
+def getTestFile(directory, mjd, filename, raiseError=True):
+    """Returns the full path in the guiderImages product for a test file."""
 
-    imagePath = os.path.join(guiderImagesPath, 'data',
-                             directory, str(mjd), image)
-    if raiseError and not os.path.exists(imagePath):
-        raise ValueError('image {0} does not exist in guiderImages'
-                         .format(imagePath))
+    filePath = os.path.join(guiderImagesPath, 'data',
+                            directory, str(mjd), filename)
+    if raiseError and not os.path.exists(filePath):
+        raise ValueError('filename {0} does not exist in guiderImages'
+                         .format(filePath))
 
-    return imagePath
+    return filePath
 
 
 class GuiderTester(TestHelper.ActorTester):
