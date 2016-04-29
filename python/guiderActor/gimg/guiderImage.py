@@ -968,17 +968,10 @@ class GuiderImageAnalysis(object):
         # NOTE, that's not always true, we sometimes lose fibers, even
         # acquisition fibers which are pretty big.
 
-        # HACK -- find threshold level inefficiently.
-        # This is the threshold level that was used in "gfindfibers".
-        i2 = image.copy().ravel()
-        I = np.argsort(i2)
-        # median
-        med = i2[I[len(I)/2]]
-        # pk == 99th percentile
-        #pk = i2[I[int(len(I)*0.99)]]
-        pk = i2[I[int(len(I)*0.998)]]
-        #pk = i2[I[int(len(I)*0.998)]]  # change percentile based on N big fibers, N small fibers
-        thresh = (med + pk)/2.
+        # Finds threshold level.
+        median = np.median(image)
+        pk = np.percentile(image, interpolation='higher')  # We could use interpolation='linear'
+        thresh = (median + pk) / 2.
 
         # Threshold image
         T = (image > thresh)
