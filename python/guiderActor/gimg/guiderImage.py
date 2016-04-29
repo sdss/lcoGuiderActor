@@ -793,6 +793,7 @@ class GuiderImageAnalysis(object):
                 self.cmd.warn('text=%s'%qstr('Error processsing flat!'))
                 raise e
         # mask the saturated pixels with the appropriate value.
+        # NOTE: Why to do this now if we are going to repeat it later?
         mask = self.flatMask.copy()
         mask[sat] |= self.mask_saturated
 
