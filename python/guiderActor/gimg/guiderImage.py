@@ -25,6 +25,7 @@ import actorcore.utility.fits as actorFits
 from opscore.utility.tback import tback
 from opscore.utility.qstr import qstr
 
+
 class Fiber(object):
     """A guider fiber and the star image seen through it."""
     def __init__(self, fiberid, xc=np.nan, yc=np.nan, r=np.nan, illr=np.nan, label=-1):
@@ -988,6 +989,7 @@ class GuiderImageAnalysis(object):
         mask = binary_erosion(T, iterations=3)
 
         # Make an annular/ring mask around thresholded fibers
+        # NOTE: where is this used? Why is it assigned to a Numpy attribute.
         np.ringmask = binary_dilation(T, iterations=5)
 
         # Label connected components.
@@ -1001,19 +1003,29 @@ class GuiderImageAnalysis(object):
 
         fibers = []
         self.cmd.diag('text=%s'%qstr('%d components' % (nlabels)))
-        for i in range(1, nlabels+1):
+        for i in range(1, nlabels + 1):
             # find pixels labelled as belonging to object i.
             obji = (fiber_labels == i)
             # ri,ci = nonzero(obji)
             npix = obji.sum()
+
             # center_of_mass returns row,column... swap to x,y
-            (yc,xc) = center_of_mass(obji)
+            (yc, xc) = center_of_mass(obji)
+            radius = np.sqrt(npix / np.pi)
+
             # x,y,radius / BIN because the flat is unbinned pixels, but we want
             # to report in binned pixels.
             # The 0.25 pixel offset makes these centroids agree with gfindstar's
             # pixel coordinate convention.
-            self.cmd.diag('text=%s'%qstr('fiber %d (%d,%g,%g,%g)' % (i,npix,xc,yc,np.sqrt(npix/np.pi))))
-            fibers.append(Fiber(-1, xc/BIN - 0.25, yc/BIN - 0.25, np.sqrt(npix/np.pi)/BIN, -1, label=i))
+
+            self.cmd.diag('text={0}'.format(qstr('fiber %d (%d,%g,%g,%g)' %
+                                                 (i, npix, xc, yc, radius))))
+
+            # Creates the Fiber objects
+            xx = xc / BIN - 0.25
+            yy = yc / BIN - 0.25
+            rr = np.sqrt(npix / np.pi) / BIN  # Radius of the fiber
+            fibers.append(Fiber(-1, xx, yy, rr, -1, label=i))
 
         # Match up the fibers with the known probes.
 
