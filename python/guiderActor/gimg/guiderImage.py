@@ -1238,7 +1238,7 @@ class GuiderImageAnalysis(object):
         elif self.camera == 'ecamera':
             hdulist = self._process_ecam_flat(image, flatFileName, hdr)
             gprobes = None
-        print(cmd,hdulist,directory,filename)
+
         actorFits.writeFits(cmd,hdulist,directory,filename,doCompress=True,chmod=0644)
         # Now read that file we just wrote...
         self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes)
