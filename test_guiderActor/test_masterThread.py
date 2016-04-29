@@ -18,24 +18,30 @@ class TestMasterThread(guiderTester.GuiderTester,unittest.TestCase):
     """Test specific masterThread commands."""
     def setUp(self):
         super(TestMasterThread,self).setUp()
-    
+
     def test_load_cartridge(self):
         pass
 
-class TestGuiderStep(guiderTester.GuiderTester,unittest.TestCase):
+
+@guiderTester.skipIfNoGuiderImages
+class TestGuiderStep(guiderTester.GuiderTester, unittest.TestCase):
     """Test the phases of guiderStep in masterThread"""
     def setUp(self):
-        self.centerUpIn = 'data/gimg-0024.fits.gz'
-        self.centerUpOut = 'data/proc-'+self.centerUpIn
-        self.guidingIn = 'data/gimg-0040.fits.gz'
-        self.guidingOut = 'data/proc-'+self.guidingIn
-        super(TestGuiderStep,self).setUp()
-    
+        self.centerUpIn = guiderTester.getTestImage('data', 57357,
+                                                    'gimg-0024.fits.gz')
+        self.centerUpOut = guiderTester.getTestImage('data', 57357,
+                                                     'proc-' + self.centerUpIn)
+        self.guidingIn = guiderTester.getTestImage('data', 57357,
+                                                   'gimg-0040.fits.gz')
+        self.guidingOut = guiderTester.getTestImage('data', 57357,
+                                                    'proc-' + self.guidingIn)
+        super(TestGuiderStep, self).setUp()
+
     def tearDown(self):
         self._remove_file(self.centerUpOut)
         self._remove_file(self.guidingOut)
         super(TestGuiderStep,self).tearDown()
-    
+
     def test_check_fiber_guiding(self):
         self.gState.centerUp = False
         self.fibers = self.gi(self.cmd,self.guidingIn,self.gState.gprobes,setPoint=self.setPoint_good)
@@ -48,7 +54,7 @@ class TestGuiderStep(guiderTester.GuiderTester,unittest.TestCase):
                 self.assertFalse(result,name)
             else:
                 self.assertTrue(result,name)
-    
+
     def test_check_fiber_centerUp(self):
         self.gState.centerUp = True
         self.fibers = self.gi(self.cmd,self.centerUpIn,self.gState.gprobes,setPoint=self.setPoint_good)
@@ -77,7 +83,7 @@ class TestDecenter(guiderTester.GuiderTester,unittest.TestCase):
         self.assertEqual(self.gState.decenterRA,0)
         self.assertEqual(self.gState.decenterDec,0)
         self.assertEqual(self.gState.mangaDither,'C')
-    
+
     def _set_decenter_ok(self,decenters):
         masterThread.set_decenter(self.cmd, {}, self.gState, True)
         masterThread.set_decenter(self.cmd, decenters, self.gState, None)
@@ -91,7 +97,7 @@ class TestDecenter(guiderTester.GuiderTester,unittest.TestCase):
     def test_set_decenter_mangaDither(self):
         decenters = {'decenterRA':1,'decenterDec':2,'mangaDither':'N'}
         self._set_decenter_ok(decenters)
-    
+
     def test_set_decenter_cannot_change(self):
         decenters = {'decenterRA':1,'decenterDec':2}
         masterThread.set_decenter(self.cmd, decenters, self.gState, None)
@@ -246,7 +252,7 @@ class TestSetTime(guiderTester.GuiderTester,unittest.TestCase):
 
 if __name__ == '__main__':
     verbosity = 2
-    
+
     suite = None
     # to test just one piece
     # suite = unittest.TestLoader().loadTestsFromTestCase(TestStartStopGuider)
