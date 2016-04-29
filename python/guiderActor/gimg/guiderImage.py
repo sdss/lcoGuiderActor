@@ -829,7 +829,7 @@ class GuiderImageAnalysis(object):
         """Apply a bias correction to the image, and return the image and bias level."""
         self.find_bias_level(image,binning=binning)
         self.cmd.diag('text=%s'%qstr('subtracting bias level: %g' % self.imageBias))
-        image -= self.imageBias
+        image = image - self.imageBias
         return image
 
     def applyDark(self,image,darkFileName):
