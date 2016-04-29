@@ -72,3 +72,13 @@ plt.ylabel('y [pixels]')
 plt.legend(frameon=False, loc='upper left', markerscale=5, fontsize=8)
 
 plt.savefig('centroids.pdf')
+
+# Outputs some stistics comparing IRAF and PyGuide
+
+iraf_centroids = xystar_imexam[:-1, :]
+iraf_centroids_sorted = iraf_centroids[np.argsort(iraf_centroids[:, 0])]
+
+pyguide_centroids_sorted = centroids[np.argsort(centroids[:, 0])]
+
+print('Relative difference between IRAF and PyGuide: {0:.3g}'.format(
+    np.abs(1. - np.mean(pyguide_centroids_sorted / iraf_centroids_sorted))))
