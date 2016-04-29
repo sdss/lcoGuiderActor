@@ -744,7 +744,8 @@ class GuiderImageAnalysis(object):
             xc = fiber.xcen
             yc = fiber.ycen
             r = fiber.radius
-            stamp = np.s_[yc-r:yc+r+1, xc-r:xc+r+1]
+            stamp = np.s_[np.rint(yc - r).astype(np.int):np.rint(yc + r + 1).astype(np.int),
+                          np.rint(xc - r).astype(np.int):np.rint(xc + r + 1).astype(np.int)]
 
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
