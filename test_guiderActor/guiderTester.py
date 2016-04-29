@@ -6,10 +6,10 @@ Example:
         def setUp(self):
             #do some stuff
             super(TestGuiderImage,self).setUp())
-    
+
         def test_guiderImageThingy(self):
             self.call_gi(filename)
-    
+
     if __name__ == '__main__':
         unittest.main()
 """
@@ -23,6 +23,9 @@ from guiderActor.gimg import guiderImage
 from guiderActor import GuiderState
 import guiderActor.myGlobals as myGlobals
 from guiderActor import GuiderActor
+from functools import wraps
+import warnings
+
 
 gprobeKey = {}
 guideInfoKey = {}
@@ -83,6 +86,25 @@ def updateModel(name,model):
     """Update the named actorState model with new parameters."""
     myGlobals.actorState.models[name] = TestHelper.Model(name,model)
 
+
+# Decorator to skip a test if the guider images product is not set up.
+guiderImagesPath = os.path.realpath(os.environ['GUIDERIMAGES_DIR'])
+skipIfNoGuiderImages = unittest.skipIf(
+    not os.path.exists(guiderImagesPath), 'guiderImages product not set up.')
+
+
+def getTestImage(directory, mjd, image):
+    """Resturns the full path in the guiderImages product for a test image."""
+
+    imagePath = os.path.join(guiderImagesPath, 'data',
+                             directory, str(mjd), image)
+    if not os.path.exists(imagePath):
+        raise ValueError('image {0} does not exist in guiderImages'
+                         .format(imagePath))
+
+    return imagePath
+
+
 class GuiderTester(TestHelper.ActorTester):
     """
     guiderActor test suites should subclass this and unittest, in that order.
@@ -115,7 +137,7 @@ class GuiderTester(TestHelper.ActorTester):
             if 'disabled' in name:
                 gState.gprobes[gk[1]].disabled = True
         self.gState = gState
-    
+
     def _init_probes_gimg_0040(self):
         """
         Initialize the "real" guide probes.
@@ -137,6 +159,7 @@ class GuiderTester(TestHelper.ActorTester):
         if os.path.exists(filename):
             os.remove(filename)
 
+
 class GuiderThreadTester(GuiderTester,unittest.TestCase):
     """
     guiderActor Thread test suites should subclass this and unittest, in that order.
@@ -149,4 +172,3 @@ class GuiderThreadTester(GuiderTester,unittest.TestCase):
         self._load_cmd_calls(class_name)
         # lets us see really long list/list diffs
         self.maxDiff = None
-
