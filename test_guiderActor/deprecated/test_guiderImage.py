@@ -92,10 +92,10 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         self.gi.analyzeFlat(inFile,self.gState.gprobes,cmd=self.cmd)
         self.assertTrue(os.path.exists(self.outFile),'analyzeFlat file write: %s'%self.outFile)
 
-        # TBD: I know this is a dumb test: we want to do a better analysis
+        # TODO: I know this is a dumb test: we want to do a better analysis
         # (maybe by hand in IRAF or something?) of the images and use that for
         # our comparison here.
-        # NOTE TBD: In particular, the current expected results file is missing
+        # NOTE TODO: In particular, the current expected results file is missing
         # fiber 11 because it's damaged. If we fix the code to deal with that
         # per #2357 we'll need a test that knows about that fiber!
         result = pyfits.open(self.outFile)
@@ -106,10 +106,10 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
                 self.assertTrue((result[6].data[x] == expect[6].data[x]).all(),'%s has a mismatch'%x)
             elif x != 'rotStar2Sky' and x != 'ugriz' and x != 'ref_mag':
                 # !!!!!!!!!!!!!!!
-                # TBD: remove the if rotStar2Sky once we have a better test!
+                # TODO: remove the if rotStar2Sky once we have a better test!
                 # The problem is rotStar2Sky was never saved for old flats.
                 # !!!!!!!!!!!!!!!
-                # TBD: don't have ugriz data for these to test, but could add some.
+                # TODO: don't have ugriz data for these to test, but could add some.
                 # Would have to pull it from the database.
                 # !!!!!!!!!!!!!!!
                 np.testing.assert_allclose(result[6].data[x],expect[6].data[x],err_msg='%s has a mismatch'%x)
@@ -123,7 +123,7 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         self.gi.camera = 'ecamera'
         self.gi.analyzeFlat(inFile,self.gState.gprobes,cmd=self.cmd)
         self.assertTrue(os.path.exists(outFile),'analyzeFlat_ecam file write: %s'%outFile)
-        # TBD: best test is probably to check that the flat is median ~1.
+        # TODO: best test is probably to check that the flat is median ~1.
         self.assertFalse('Need to create a test for this!')
         self._check_overwriting(inFile,outFile,self.gi.analyzeFlat,[self.gState.gprobes])
 
@@ -139,7 +139,7 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         fibers = self._call_gi(self.inDataFile)
         self.gi.writeFITS(self.actorState.models, self.cmd, frameInfo, self.gState.gprobes)
 
-        # TBD: I know this is a dumb test: we want to do a better analysis
+        # TODO: I know this is a dumb test: we want to do a better analysis
         # (maybe by hand in IRAF or something?) of the images and use that for
         # our comparison here.
         result = pyfits.open(self.outFile)
@@ -151,24 +151,24 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
                 self.assertTrue((result[6].data[x] == expect[6].data[x]).all(),'%s has a mismatch'%x)
             elif x == 'xstar' or x == 'ystar':
                 # !!!!!!!!!!!!!!!
-                # TBD: remove once I know I have optimal fit values to compare to.
-                # TBD: while I sort out the exact position differences...
+                # TODO: remove once I know I have optimal fit values to compare to.
+                # TODO: while I sort out the exact position differences...
                 np.testing.assert_allclose(result[6].data[x],expect[6].data[x],rtol=1e-2,err_msg='%s has a mismatch'%x)
             elif x == 'fwhm':
                 # !!!!!!!!!!!!!!!
-                # TBD: remove once I know I have optimal fit values to compare to.
-                # TBD: while I sort out the exact fwhm differences
+                # TODO: remove once I know I have optimal fit values to compare to.
+                # TODO: while I sort out the exact fwhm differences
                 np.testing.assert_allclose(result[6].data[x],expect[6].data[x],rtol=1e-1,err_msg='%s has a mismatch'%x)
             elif x != 'rotStar2Sky' and x != 'ugriz' and x != 'ref_mag' and \
                  x != 'dx' and x != 'dy' and x != 'dRA' and x != 'dDec':
                 # !!!!!!!!!!!!!!!
-                # TBD: remove the if rotStar2Sky once we have a better test!
+                # TODO: remove the if rotStar2Sky once we have a better test!
                 # The problem is rotStar2Sky was never saved for old flats.
                 # !!!!!!!!!!!!!!!
-                # TBD: don't have ugriz data for these to test, but could add some.
+                # TODO: don't have ugriz data for these to test, but could add some.
                 # Would have to pull it from the database.
                 # !!!!!!!!!!!!!!!
-                # TBD: dx/dy are currently calculated in masterThreaad, but
+                # TODO: dx/dy are currently calculated in masterThreaad, but
                 # they could be calculated as part of guiderImage(), if we passed
                 # in the frameInfo data.
                 np.testing.assert_allclose(result[6].data[x],expect[6].data[x],err_msg='%s has a mismatch'%x)

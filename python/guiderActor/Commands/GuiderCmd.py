@@ -600,7 +600,7 @@ class GuiderCmd(object):
         """
         time = cmd.cmd.keywords['time'].values[0] if 'time' in cmd.cmd.keywords else 5
 
-        # TBD: Can't change ecam binning yet!
+        # TODO: Can't change ecam binning yet!
         bin = cmd.cmd.keywords['bin'].values[0] if 'bin' in cmd.cmd.keywords else 1
 
         queue = myGlobals.actorState.queues[guiderActor.MASTER]

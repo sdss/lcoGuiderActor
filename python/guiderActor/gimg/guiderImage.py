@@ -187,7 +187,7 @@ class GuiderImageAnalysis(object):
         #self.saturationReplacement = 0xA000
         self.saturationReplacement = 0xF000 #62,000
 
-        # TBD: everything below here should come either from the gimg files,
+        # TODO: everything below here should come either from the gimg files,
         # or from the config files. See #2487
         # ===================================================================
         # "Big" (acquisition) fibers are bigger than this pixel
@@ -214,7 +214,7 @@ class GuiderImageAnalysis(object):
         # Masayuki zero average point 25.70 for use for his color transform
         self.zeropoint = 25.70
 
-        # TBD: readnoise and ccd gain should be set in the config file,
+        # TODO: readnoise and ccd gain should be set in the config file,
         # or even better, written by gcameraICC and read from the header.
         self.readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
         self.ccdGain = 1.4 # e-/ADU, taken from ipGGuide.h
@@ -266,10 +266,10 @@ class GuiderImageAnalysis(object):
             # subtracting the overall median value should be good enough
             # NOTE: The the "inner" portion of the bias region is most
             # representative of the rest of the chip.
-            # TBD: Which is correct here?
+            # TODO: Which is correct here?
             #bias = np.median(image[:,(1024/binning):(1038/binning)])
-            # TBD: The upper is what Renbin wanted,
-            # TBD: the lower is what makes sense from over-exposed flats and the ecam.
+            # TODO: The upper is what Renbin wanted,
+            # TODO: the lower is what makes sense from over-exposed flats and the ecam.
             bias = np.median(image[:,(1039/binning):])
         else:
             # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
@@ -400,7 +400,7 @@ class GuiderImageAnalysis(object):
                 ('decenterScale', 'dcnScle', 'applied user supplied scale offset, %' ),
                 ('refractionBalance','refrBal','specified refraction balance between (0,1)'),
                 )
-                #TBD: FIXME PH --- do we change to 1e6 units for scale
+                #TODO: FIXME PH --- do we change to 1e6 units for scale
         cards = []
         for name, fitsName, comment in defs:
             try:
@@ -471,7 +471,7 @@ class GuiderImageAnalysis(object):
     def _get_HDU7_fields(self, fibers, stampSizes, stampInds):
         """Return a list containing the data for HDU7 (the fiber data table)."""
 
-        # jkp TBD: rework this to make it more legible/easily extensible.
+        # jkp TODO: rework this to make it more legible/easily extensible.
         pixunit = 'guidercam pixels (binned)'
         gpinfofields = [
                        # python attr, FITScol (if diff), FITStype, NIL val, unit
@@ -528,8 +528,8 @@ class GuiderImageAnalysis(object):
     def _get_stamp_data(self, gprobes, fibers):
         """Return the data about the different postage stamps, so we can make images."""
 
-        # TBD: this could almost certainly be made much cleaner, possibly
-        # TBD: by resetting each gProbe and/or fiber when findStars is called.
+        # TODO: this could almost certainly be made much cleaner, possibly
+        # TODO: by resetting each gProbe and/or fiber when findStars is called.
 
         # List the fibers by fiber id.
         fiberids = sorted(gprobes.keys())
@@ -604,7 +604,7 @@ class GuiderImageAnalysis(object):
             if self.camera == 'gcamera':
                 hdulist = self._getProcGimgHDUList(hdr, gprobes, self.fibers, image, self.maskImage)
             elif self.camera == 'ecamera':
-                bg = np.median(image)#TBD: this is a poor choice for star-filled ecam images!
+                bg = np.median(image)#TODO: this is a poor choice for star-filled ecam images!
                 hdulist = self._get_basic_hdulist(image, hdr, bg)
                 hdulist.append(fits.ImageHDU(self.maskImage))
             imageHDU = hdulist[0]
@@ -686,7 +686,7 @@ class GuiderImageAnalysis(object):
         """Find the stars in a processed ecamera image."""
         ccdInfo = PyGuide.CCDInfo(self.imageBias,self.readNoise,self.ccdGain)
         # set a high threshold, since we only care about obviously bright stars.
-        # TBD: this threshold could be a configurable parameter, so the observer
+        # TODO: this threshold could be a configurable parameter, so the observer
         # can adjust it in the Pointing Data STUI script, and relax it when focusing.
         stars = PyGuide.findStars(image,mask,None,ccdInfo,thresh=5)
         try:
@@ -870,7 +870,7 @@ class GuiderImageAnalysis(object):
         flatfits = fits.open(flatFileName)
         flat = flatfits[0].data
         if self.camera == 'ecamera':
-            # TBD: eventually we'll actually compute a mask for the ecam flats
+            # TODO: eventually we'll actually compute a mask for the ecam flats
             # for now, just assume all pixels are good.
             mask = np.zeros_like(flat,np.uint8)
             return flat, mask, []
@@ -927,7 +927,7 @@ class GuiderImageAnalysis(object):
 
         # Check if it's a good dark
         darkMean = image.mean()
-        # TBD: if we use the "outer" bias region (per the ecam data), we need
+        # TODO: if we use the "outer" bias region (per the ecam data), we need
         # ~40 for a bad dark; for Renbin's preferred valeus ~20 is fine.
         if darkMean > 40:
             self.cmd.warn('text=%s'%qstr('Much more signal in the dark than expected: %6.2f')%darkMean)
@@ -966,7 +966,7 @@ class GuiderImageAnalysis(object):
 
     def _find_fibers_in_flat(self, image, flatFileName, gprobes, hdr):
         """Identify the fibers in a flat image."""
-        # TBD: FIXME -- we KNOW the area (ie, the number of pixels) of the
+        # TODO: FIXME -- we KNOW the area (ie, the number of pixels) of the
         # fibers -- we could choose the threshold appropriately.
         # NOTE, that's not always true, we sometimes lose fibers, even
         # acquisition fibers which are pretty big.
@@ -985,7 +985,7 @@ class GuiderImageAnalysis(object):
         background = np.median(image[np.logical_not(T)])
         self.cmd.diag('text=%s'%qstr('Background in flat %s: %g' % (flatFileName, background)))
 
-        # TBD: PH, should we make the mask only after the labeled regions that
+        # TODO: PH, should we make the mask only after the labeled regions that
         # match fibers have been identified?
         # Make the mask a bit smaller than the thresholded fibers.
         mask = binary_erosion(T, iterations=3)
@@ -997,7 +997,7 @@ class GuiderImageAnalysis(object):
         # Label connected components.
         (fiber_labels,nlabels) = label(T)
 
-        # TBD: FIXME -- the following could be made a bit quicker by using:
+        # TODO: FIXME -- the following could be made a bit quicker by using:
         #    objs = find_objects(fiber_albels, nlabels)
         # ==> "objs" is a list of (slice-rows, slice-cols)
 
@@ -1120,7 +1120,7 @@ class GuiderImageAnalysis(object):
         # Filter out those with no match...
         fibers = [f for i,f in enumerate(fibers) if i in fmap and f.fiberid >= 0]
 
-        # TBD: PH should we create the masks here rather than above?
+        # TODO: PH should we create the masks here rather than above?
         #   nonreal fibers have been removed
         #   set non real labels to 0? to modify the mask
 
@@ -1134,7 +1134,7 @@ class GuiderImageAnalysis(object):
         flat = np.zeros_like(image).astype(np.float32)
         all_median = np.empty(len(fibers),dtype=np.float32)
 
-        # TBD: Paul Harding
+        # TODO: Paul Harding
         # For consistent mags of the guide stars independent of cartridges or fibers
         # we need to normalize the flats in a robust way.
         # Assume that acquisition fibers all have a similar throughput
@@ -1179,7 +1179,7 @@ class GuiderImageAnalysis(object):
         # images use a different rotation fill constant than flats.
         self.rot_cval = self.flat_clip[0]
 
-        # TBD: DX?  DY?  Any other stats in here?
+        # TODO: DX?  DY?  Any other stats in here?
         # we don't want the bzero header keyword set.
         # it somehow is ending up in the raw flat files, but not the object files.
         if 'BZERO' in hdr:
@@ -1221,7 +1221,7 @@ class GuiderImageAnalysis(object):
 
         flatout = self.getProcessedOutputName(flatFileName)
         if self.camera == 'ecamera' and '.gz' not in flatout:
-            #TBD: kludge, since we currently don't gzip unprocessed ecam files, because IRAF.
+            #TODO: kludge, since we currently don't gzip unprocessed ecam files, because IRAF.
             flatout = flatout + '.gz'
         directory,filename = os.path.split(flatout)
 

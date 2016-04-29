@@ -475,7 +475,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         dDec = x[1, 0]/gState.plugPlateScale
         dRot = -math.degrees(x[2, 0]) # and from radians to degrees
 
-        # TBD: we are not applying any rotation decentering at present.
+        # TODO: we are not applying any rotation decentering at present.
         #PH Kludge add the decenter guiding rotation offset here for now (in degrees)
         #if gState.decenter:
         #    dRot += gState.decenterRot/3600.0
@@ -700,7 +700,7 @@ def loadAllProbes(cmd, gState):
         pm = ypm.structs['PLUGMAPOBJ'].asArray()
 
         # output information about the science program for this plate.
-        # jkp TBD: may need to conver these to strings in some way
+        # jkp TODO: may need to conver these to strings in some way
         # to catch ["marvels","apogee"], but I need to see how lists are
         # handled in the YPF, which requires an example...
         #instruments = ypm['instruments'].value
@@ -710,7 +710,7 @@ def loadAllProbes(cmd, gState):
         # It is useful to keep the object information as well,
         # so that we can put "any star down any hole". This is potentially
         # very useful for testing.
-        # TBD: we'll probably need a new type here for MaNGA.
+        # TODO: we'll probably need a new type here for MaNGA.
         keep = pm[numpy.where(((pm.holeType == "GUIDE") & (pm.objType == "NA"))
                               | (pm.holeType == "OBJECT"))]
         cmd.diag('text="kept %d probes"' % (len(keep)))
@@ -725,7 +725,7 @@ def loadTccBlock(cmd, actorState, gState):
        guider prepFk5InFiber
 
     !!!!!!!!!!!!!!!!!!11
-    jkp TBD: Why do we do this separately from loadAllProbes?
+    jkp TODO: Why do we do this separately from loadAllProbes?
     They issue the same catPlPlugMapM command, right?
     I think we can merge them together, and/or get rid of loadAllProbes and
     replace it with specific platedbActor calls to load just the bits we want.
@@ -873,7 +873,7 @@ def load_cartridge(msg, queues, gState, actorState):
         gState.gprobes[id] = gProbe
 
     # Build and install an instrument block for this cartridge info
-    # NOTE: TBD: we don't actually need to do loadTccBlock unless we want fk5infiber.
+    # NOTE: TODO: we don't actually need to do loadTccBlock unless we want fk5infiber.
     # See ticket #2229 for how we should deal with this: the blocks end up litering
     # a directory on the tcc, and we can't upload them to the new tcc via scp anyway.
     # loadTccBlock(msg.cmd, actorState, gState)
@@ -884,7 +884,7 @@ def load_cartridge(msg, queues, gState, actorState):
     #if cmdVar.didFail:
     #    msg.cmd.fail('text="Failed to set inst!"')
 
-    # NOTE: TBD: for initial LCO testing, we don't have magnitudes or platedb!
+    # NOTE: TODO: for initial LCO testing, we don't have magnitudes or platedb!
     if (actorState.actor.location).lower() != 'lco':
         loadAllProbes(msg.cmd, gState)
         for id,gProbe in gState.gprobes.items():
@@ -892,7 +892,7 @@ def load_cartridge(msg, queues, gState, actorState):
             if test.any(): # should only be one
                 gProbe.ugriz = gState.allProbes.mag[test][0]
 
-    # TBD: SDSS4: We may have to twiddle with this for coobserved plates.
+    # TODO: SDSS4: We may have to twiddle with this for coobserved plates.
     # What to do with APOGEEMANGA? Also use the surveyMode?
     gState.setRefractionBalance(gState.plateType, gState.surveyMode)
 
@@ -1098,7 +1098,7 @@ def main(actor, queues):
                 if not gState.cmd:    # exposure already finished
                     gState.inMotion = False
                     continue
-                # TBD: #2230 need to check whether the telescope moved here, and
+                # TODO: #2230 need to check whether the telescope moved here, and
                 # ignore this frame if a "tcc offset" was issued.
                 # This requires something that monitors tccModel.moveItems[4:]
                 # changing to 'Y' so we can flag it, and clear the flag only

@@ -217,7 +217,7 @@ class ImageMaker(object):
         ax1.set_axis_off()
         fig.add_axes(ax1)
         ax1.imshow(self.guiderView,aspect=self.aspect,origin='lower',cmap=cmap,interpolation='nearest',vmin=0,vmax=1)
-        # jkp TBD: scatter doesn't work right for single pixels in matplotlib < 1.1.1
+        # jkp TODO: scatter doesn't work right for single pixels in matplotlib < 1.1.1
         # see: https://github.com/matplotlib/matplotlib/pull/695
         if self.guiderSat[0].shape > 0:
             ax1.scatter(self.guiderSat[1]+0.5,self.guiderSat[0]+0.5,s=1,marker=',',color='magenta',edgecolor='none',antialiased=False)
@@ -248,7 +248,7 @@ class ImageMaker(object):
         ax2.quiver(self.vectors[0],self.vectors[1],self.vectors[2],self.vectors[3],color=(0,1,0),width=0.003,edgecolor='none',headwidth=0,units='width',scale=self.qscale)
         ax2.text(10,490,'offset=%4.3f", %4.3f", %4.3f"'%self.offset,color='white')
         ax2.text(10,470,'focus=%4.2f$\mu$m'%self.focus,color='white')
-        # jkp TBD: Do I need to multiply this by 100? Schlegel says yes,
+        # jkp TODO: Do I need to multiply this by 100? Schlegel says yes,
         # but the fits header says its in %...
         ax2.text(10,450,'scale=%4.2e%%'%(self.scale),color='white')
         ax2.text(10,430,'RMSerr=%4.2f'%(self.rms),color='white')

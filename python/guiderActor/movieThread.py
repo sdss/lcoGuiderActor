@@ -38,7 +38,7 @@ class MovieMaker(object):
         start = msg.start
         end = msg.end
         
-        # jkp TBD: how to get the real output filename?
+        # jkp TODO: how to get the real output filename?
         #filename = # parse from stdout of subprocess?
         self.filename = os.path.join(filedir,'%s-%04d-%04d.mp4'%(mjd,start,end))
         # Takes about 1 second per frame to make the images, plus a bit more per frame to make the movie from them.
