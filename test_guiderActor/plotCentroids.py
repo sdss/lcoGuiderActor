@@ -34,12 +34,12 @@ plt.contour(data, levels=np.arange(500, 10000, 1000),
 xstar = ff[-1].data['xstar']
 ystar = ff[-1].data['ystar']
 guider_PyGuide = plt.scatter(xstar, ystar, marker='x', color='r', s=2, lw=0.2,
-                             label='Current guiderActor with PyGuide')
+                             label='guiderActor with PyGuide')
 
 # Idem but adding +1 to x/ystar
 guider_PyGuider_1 = plt.scatter(
     xstar + 1., ystar + 1., marker='x', color='g', s=2, lw=0.2,
-    label='Current guiderActor with PyGuide x/y + 1')
+    label='guiderActor with PyGuide x/y + 1')
 
 # Loads measurements from IRAF.
 dataIRAF_file = getTestFile('gcam', 57357, 'expected_7660-57356-1.json')
