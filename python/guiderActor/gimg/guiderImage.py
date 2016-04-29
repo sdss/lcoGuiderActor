@@ -11,7 +11,7 @@ import ctypes
 import datetime
 import re
 
-import pyfits
+from astropy.io import fits
 import numpy as np
 
 from scipy.ndimage.morphology import binary_closing, binary_dilation, binary_erosion
@@ -439,8 +439,8 @@ class GuiderImageAnalysis(object):
     def getStampHDUs(self, fibers, bg, image, mask):
         """Get the FITS HDUs for the image stamps."""
         if len(fibers) == 0:
-            return [pyfits.ImageHDU(np.array([[]]).astype(np.int16)),
-                    pyfits.ImageHDU(np.array([[]]).astype(np.uint8))]
+            return [fits.ImageHDU(np.array([[]]).astype(np.int16)),
+                    fits.ImageHDU(np.array([[]]).astype(np.uint8))]
         r = int(np.ceil(max([f.radius for f in fibers])))
         stamps = []
         maskstamps = []
@@ -456,15 +456,15 @@ class GuiderImageAnalysis(object):
         stamps[stamps==0] = bg
         # Also replace masked regions by bg.
         stamps[maskstamps > 0] = bg
-        return [pyfits.ImageHDU(stamps), pyfits.ImageHDU(maskstamps)]
+        return [fits.ImageHDU(stamps), fits.ImageHDU(maskstamps)]
 
     def _get_basic_hdulist(self, image, primhdr, bg):
         """Return an hdulist with the most basic header keywords filled in."""
-        imageHDU = pyfits.PrimaryHDU(image, header=primhdr)
+        imageHDU = fits.PrimaryHDU(image, header=primhdr)
         imageHDU.header['IMGBACK'] = (bg, 'crude background for entire image. For STUI.')
         imageHDU.header['OVERSCAN'] = (self.imageBias, 'Bias level of this image.')
         imageHDU.header['SDSSFMT'] = ('{}PROC 1 4'.format(self.camera[0].upper()), 'guider file version for STUI: v1 has 7 HDUs.')
-        hdulist = pyfits.HDUList()
+        hdulist = fits.HDUList()
         hdulist.append(imageHDU)
         return hdulist
 
@@ -514,14 +514,14 @@ class GuiderImageAnalysis(object):
         for name,fitsname,fitstype,nilval,units in gpinfofields:
             if fitsname is None:
                 fitsname = name
-            cols.append(pyfits.Column(name=fitsname, format=fitstype, unit=units,
+            cols.append(fits.Column(name=fitsname, format=fitstype, unit=units,
                                       array=np.array([getattr(f.gProbe, name, nilval) for f in fibers])))
         for name,atname,fitstype,units in ffields:
-            cols.append(pyfits.Column(name=name, format=fitstype, unit=units,
+            cols.append(fits.Column(name=name, format=fitstype, unit=units,
                                       array=np.array([getattr(f, atname or name) for f in fibers])))
 
-        cols.append(pyfits.Column(name='stampSize', format='I', array=np.array(stampSizes)))
-        cols.append(pyfits.Column(name='stampIdx', format='I', array=np.array(stampInds)))
+        cols.append(fits.Column(name='stampSize', format='I', array=np.array(stampSizes)))
+        cols.append(fits.Column(name='stampIdx', format='I', array=np.array(stampInds)))
 
         return cols
 
@@ -576,11 +576,11 @@ class GuiderImageAnalysis(object):
         try:
             fibers,bigs,smalls,stampSizes,stampInds = self._get_stamp_data(gprobes,fibers)
 
-            hdulist.append(pyfits.ImageHDU(mask))
+            hdulist.append(fits.ImageHDU(mask))
             hdulist += self.getStampHDUs(smalls, bg, image, mask)
             hdulist += self.getStampHDUs(bigs, bg, image, mask)
 
-            hdulist.append(pyfits.new_table(self._get_HDU7_fields(fibers, stampSizes, stampInds)))
+            hdulist.append(fits.new_table(self._get_HDU7_fields(fibers, stampSizes, stampInds)))
 
         except Exception as e:
             self.cmd.warn('text=%s'%qstr('could not create header for proc- guider file: %s' % (e,)))
@@ -606,7 +606,7 @@ class GuiderImageAnalysis(object):
             elif self.camera == 'ecamera':
                 bg = np.median(image)#TBD: this is a poor choice for star-filled ecam images!
                 hdulist = self._get_basic_hdulist(image, hdr, bg)
-                hdulist.append(pyfits.ImageHDU(self.maskImage))
+                hdulist.append(fits.ImageHDU(self.maskImage))
             imageHDU = hdulist[0]
             self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, objectname)
             directory,filename = os.path.split(procpath)
@@ -656,7 +656,7 @@ class GuiderImageAnalysis(object):
         # Load guider-cam image.
         self.cmd.diag('text=%s'%qstr('Reading guider-cam image %s' % filename))
         try:
-            image,hdr = pyfits.getdata(filename,0,header=True)
+            image,hdr = fits.getdata(filename,0,header=True)
         except IOError:
             raise GuiderExceptions.GuiderError('File not found: %s'%filename)
 
@@ -866,7 +866,7 @@ class GuiderImageAnalysis(object):
         NOTE, returns a list of fibers the same length as 'gprobes';
         some will have xcen=ycen=NaN; test with fiber.is_fake()
         """
-        flatfits = pyfits.open(flatFileName)
+        flatfits = fits.open(flatFileName)
         flat = flatfits[0].data
         if self.camera == 'ecamera':
             # TBD: eventually we'll actually compute a mask for the ecam flats
@@ -891,7 +891,7 @@ class GuiderImageAnalysis(object):
 
     def readProcessedDark(self, darkFileName):
         """Read darkFileName and return the data."""
-        data = pyfits.open(darkFileName)
+        data = fits.open(darkFileName)
         self.darkTemperature = data[0].header['CCDTEMP']
         return data[0].data
 
@@ -956,7 +956,7 @@ class GuiderImageAnalysis(object):
 
         #Write the dark image
         directory,filename = os.path.split(darkout)
-        hdu = pyfits.PrimaryHDU(image,hdr)
+        hdu = fits.PrimaryHDU(image,hdr)
         actorFits.writeFits(cmd,hdu,directory,filename,doCompress=True,chmod=0644)
 
         self.processedDark = image
