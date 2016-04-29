@@ -309,7 +309,8 @@ class GuiderCmd(object):
         loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
         cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
 
-        if cartridge < 0:
+        # Only auto-select the cart if a plate was not specified.
+        if cartridge < 0 and plate is None:
             cartridge = loadedCartridge
 
         if loadedCartridge != cartridge:
@@ -358,8 +359,6 @@ class GuiderCmd(object):
             design_ha += 360
 
         # Lookup the valid gprobes
-        extraArgs = ""
-        if plate: extraArgs += "plate=%s" % (plate)
         gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
         gprobesInUseKey = actorState.models["platedb"].keyVarDict["gprobesInUse"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
@@ -392,7 +391,7 @@ class GuiderCmd(object):
         guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
 
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-                                            cmdStr="getGprobesPlateGeom cartridge=%d %s" % (cartridge, extraArgs),
+                                            cmdStr="getGprobesPlateGeom %s" % (extraArgs),
                                             keyVars=[guideInfoKey, plPlugMapMKey])
         if cmdVar.didFail:
             cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
