@@ -11,6 +11,7 @@ doc/ProcessedGuiderImages.html -text
 etc/gcamFiberInfo_APO.par -text
 etc/gcamFiberInfo_LCO.par -text
 etc/guider.cfg -text
+etc/guiderActor.module -text
 etc/guider_APO.cfg -text
 etc/guider_LCO.cfg -text
 include/ipGguide.h -text
@@ -48,6 +49,7 @@ test_guiderActor/cmd_calls/TestExpose.txt -text
 test_guiderActor/guiderTester.py -text
 test_guiderActor/profile_guider.py -text
 test_guiderActor/test_GuiderCmd.py -text
+test_guiderActor/test_gcameraThread.py -text
 test_guiderActor/test_guiderActor.py -text
 test_guiderActor/test_guiderImage.py -text
 test_guiderActor/test_guiderState.py -text

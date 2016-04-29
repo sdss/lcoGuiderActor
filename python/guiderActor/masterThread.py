@@ -1098,8 +1098,13 @@ def main(actor, queues):
                 if not gState.cmd:    # exposure already finished
                     gState.inMotion = False
                     continue
+<<<<<<< HEAD
 
                 # TBD: need to check whether the telescope moved here, and
+=======
+                
+                # TBD: #2230 need to check whether the telescope moved here, and
+>>>>>>> master
                 # ignore this frame if a "tcc offset" was issued.
                 # This requires something that monitors tccModel.moveItems[4:]
                 # changing to 'Y' so we can flag it, and clear the flag only
