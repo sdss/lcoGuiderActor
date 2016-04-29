@@ -291,15 +291,27 @@ class GuiderImageAnalysis(object):
         DARKFILE= '/data/gcam/55205/gimg-0003.fits.gz'
         FLATFILE= '/data/gcam/55205/gimg-0224.fits.gz'
         """
+
         # files prior to MJD 56465 have the dark/flat without .gz in the header.
+
         darkfile = fitsheader['DARKFILE']
+
         if not os.path.exists(darkfile):
-            darkfile = darkfile+'.gz'
+            darkfile = os.path.join(os.path.dirname(gimgfn),
+                                    os.path.basename(darkfile))
+        if not os.path.exists(darkfile):
+            darkfile = darkfile + '.gz'
+
         flatfile = fitsheader.get('FLATFILE', None)
+
         if flatfile is not None:
             if not os.path.exists(flatfile):
-                flatfile = flatfile+'.gz'
-        return darkfile,flatfile
+                flatfile = os.path.join(os.path.dirname(gimgfn),
+                                        os.path.basename(flatfile))
+            if not os.path.exists(flatfile):
+                flatfile = flatfile + '.gz'
+
+        return darkfile, flatfile
 
     def getProcessedOutputName(self, imgfn):
         """Return the name of the file that we will save the processed results to."""
