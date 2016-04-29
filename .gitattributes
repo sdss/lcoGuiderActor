@@ -34,15 +34,10 @@ python/guiderActor/obsolete/guiderImagePlots.py -text
 python/guiderActor/obsolete/procimg.py -text
 python/guiderActor/obsolete/protoGcamFITS.py -text
 python/guiderActor/obsolete/pyGuide_test.py -text
+python/guiderActor/obsolete/src/gimg/gutils.c -text svneol=native#unset
 python/guiderActor/obsolete/test_flat.py -text
 python/guiderActor/obsolete/tests.py -text
 /setup.py -text
-src/Makefile -text
-src/gimg/Makefile -text
-src/gimg/attic.c -text
-src/gimg/gutils.c -text
-src/gimg/ipGguide.c -text
-src/gimg/shUtils.c -text
 test_guiderActor/centroids.pdf -text
 test_guiderActor/cmd_calls/TestExpose.txt -text
 test_guiderActor/guiderTester.py -text
