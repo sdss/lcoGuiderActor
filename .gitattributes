@@ -43,6 +43,7 @@ src/gimg/attic.c -text
 src/gimg/gutils.c -text
 src/gimg/ipGguide.c -text
 src/gimg/shUtils.c -text
+test_guiderActor/centroids.pdf -text
 test_guiderActor/cmd_calls/TestExpose.txt -text
 test_guiderActor/guiderTester.py -text
 test_guiderActor/profile_guider.py -text
