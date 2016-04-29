@@ -27,9 +27,9 @@ from guiderActor import GuiderState
 def getTestImagePaths(dir, mjd, file):
     """Return the infile and outfile associated with this filename."""
 
-    infile = guiderTester.getTestImage(dir, mjd, file)
-    outfile = guiderTester.getTestImage(dir, mjd, 'proc-' + file,
-                                        raiseError=False)
+    infile = guiderTester.getTestFile(dir, mjd, file)
+    outfile = guiderTester.getTestFile(dir, mjd, 'proc-' + file,
+                                       raiseError=False)
 
     return infile, outfile
 
@@ -80,8 +80,8 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         inFile, self.outFile = getTestImagePaths('gcam', 57357,
                                                  'gimg-0003.fits.gz')
 
-        flatExpect = guiderTester.getTestImage('gcam', 57357,
-                                               'expect-gimg-0003.fits.gz')
+        flatExpect = guiderTester.getTestFile('gcam', 57357,
+                                              'expect-gimg-0003.fits.gz')
 
         self.gi.analyzeFlat(inFile, self.gState.gprobes, cmd=self.cmd)
         self.assertTrue(os.path.exists(self.outFile))
