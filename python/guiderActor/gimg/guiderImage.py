@@ -972,7 +972,7 @@ class GuiderImageAnalysis(object):
 
         # Finds threshold level.
         median = np.median(image)
-        pk = np.percentile(image, interpolation='higher')  # We could use interpolation='linear'
+        pk = np.percentile(image, 99.8, interpolation='higher')  # We could use 'linear'
         thresh = (median + pk) / 2.
 
         # Threshold image
