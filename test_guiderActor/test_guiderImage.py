@@ -22,6 +22,7 @@ import pyfits
 import numpy as np
 import guiderTester
 from guiderActor import GuiderState
+import json
 
 
 def getTestImagePaths(dir, mjd, file):
@@ -113,15 +114,15 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         self._check_overwriting(inFile, self.outFile,
                                 self.gi.analyzeFlat, [self.gState.gprobes])
 
-    def test_call(self):
-        """Test GuiderImageAnalysis.__call__()"""
+    def test_call_c_code(self):
+        """Test GuiderImageAnalysis.__call__() vs the old expected values."""
 
         self.init_probes(mjd=57357, plateid=7660, fscan_mjd=57356, fscan_id=1)
 
         inFile, self.outFile = getTestImagePaths('gcam', 57357,
                                                  'gimg-0040.fits.gz')
-        dataExpect = guiderTester.getTestImage('gcam', 57357,
-                                               'expect-gimg-0040.fits.gz')
+        dataExpect = guiderTester.getTestFile('gcam', 57357,
+                                              'expect-gimg-0040.fits.gz')
 
         # disable the acquisition probes, since the observers did so.
         self.gState.gprobes[3].disabled = True
@@ -170,6 +171,43 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
                 np.testing.assert_allclose(
                     result[6].data[column], expect[6].data[column],
                     err_msg=err_msg)
+
+    def test_call_iraf(self):
+        """Test GuiderImageAnalysis.__call__() vs values measured with IRAF."""
+
+        self.init_probes(mjd=57357, plateid=7660, fscan_mjd=57356, fscan_id=1)
+
+        inFile, self.outFile = getTestImagePaths('gcam', 57357,
+                                                 'gimg-0040.fits.gz')
+        dataIRAF_file = guiderTester.getTestFile('gcam', 57357,
+                                                 'expected_7660-57356-1.json')
+        dataIRAF = json.load(open(dataIRAF_file))
+
+        # disable the acquisition probes, since the observers did so.
+        self.gState.gprobes[3].disabled = True
+        self.gState.gprobes[11].disabled = True
+
+        frameInfo = GuiderState.FrameInfo(40, 1, 2, 3)
+        self._call_gi(inFile)
+        self.gi.writeFITS(self.actorState.models, self.cmd, frameInfo,
+                          self.gState.gprobes)
+
+        result = pyfits.open(self.outFile)
+        data = result[6].data
+
+        # FIXME: These tests fails, as the relative difference with the
+        # PyGuide centroids is still significant.
+
+        # Loads expected values measured using IRAF's imexam
+        # Removes 0.5 to make measurements 0-indexed and centred on the pixel.
+        imexam_xystar = np.array(dataIRAF['57357']['imexam_xstar_ystar'],
+                                 np.float32) - 0.5
+
+        np.testing.assert_allclose(data['xstar'], imexam_xystar[:, 0],
+                                   rtol=1e-2, err_msg='xstar does not match.')
+
+        np.testing.assert_allclose(data['ystar'], imexam_xystar[:, 1],
+                                   rtol=1e-2, err_msg='ystar does not match.')
 
 
 if __name__ == '__main__':
