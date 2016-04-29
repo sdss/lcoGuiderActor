@@ -4,6 +4,7 @@ setupRequired(PyGuide)
 setupOptional(platelist)
 setupRequired(RO)
 setupOptional(ffmpeg)
+setupOptional(guiderActor_test_images)
 
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
