@@ -14,7 +14,7 @@ class PID(object):
         self.Ti = Ti                    # Integral time
         self.Td = Td                    # Derivative time
 
-        # NOTE: TBD: Imax is currently unused!
+        # NOTE: TODO: Imax is currently unused!
         self.Imax = Imax                # limit to abs(.Ix)
         self.tfilt = tfilt
         if tfilt != None:
@@ -57,7 +57,7 @@ class PID(object):
             self.Dx = (x - self._x)/dt
             self.Ix += dt*x / self.Ti # scale by Ti now
 
-        # NOTE: TBD: ignoring this because we are scaling Ti with altitude,
+        # NOTE: TODO: ignoring this because we are scaling Ti with altitude,
         # so to do this right, we'd have to think about how to use Imax in that case.
         # if self.Imax > 0 and abs(self.Ix) > self.Imax:
         #     self.Ix = self.Imax if self.Ix > 0 else -self.Imax
