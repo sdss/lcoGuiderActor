@@ -80,5 +80,8 @@ iraf_centroids_sorted = iraf_centroids[np.argsort(iraf_centroids[:, 0])]
 
 pyguide_centroids_sorted = centroids[np.argsort(centroids[:, 0])]
 
-print('Relative difference between IRAF and PyGuide: {0:.3g}'.format(
-    np.abs(1. - np.mean(pyguide_centroids_sorted / iraf_centroids_sorted))))
+print('Average relative difference between IRAF and PyGuide: {0:.3g}'.format(
+    np.mean(np.abs(1. - pyguide_centroids_sorted / iraf_centroids_sorted))))
+
+print('Max. relative difference between IRAF and PyGuide: {0:.3g}'.format(
+    np.max(np.abs(1. - pyguide_centroids_sorted / iraf_centroids_sorted))))
