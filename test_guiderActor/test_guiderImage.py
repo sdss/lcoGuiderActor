@@ -37,6 +37,8 @@ def getTestImagePaths(dir, mjd, file):
 
 @guiderTester.skipIfNoGuiderImages
 class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
+    """Base clase for tests using GuiderImage."""
+
     def setUp(self):
         self.verbose = True
         super(TestGuiderImage, self).setUp()
@@ -63,6 +65,75 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         analyze(inFile, *args, cmd=self.cmd)
         os.chmod(outFile, 0644)
         self._remove_file(outFile)
+
+    def _test_call(self, mjd, plateid, fscan_mjd, fscan_id, frameid,
+                   gprobes_disabled=[]):
+        """Runs GuiderImageAnalysis.__call__(). Returns proc-gimg filename."""
+
+        self.init_probes(mjd=mjd, plateid=plateid, fscan_mjd=fscan_mjd,
+                         fscan_id=fscan_id)
+
+        inFile, self.outFile = getTestImagePaths(
+            'gcam', mjd, 'gimg-{0:04d}.fits.gz'.format(frameid))
+
+        # Disables acquisition probes
+        for gid in gprobes_disabled:
+            self.gState.gprobes[gid].disabled = True
+
+        frameInfo = GuiderState.FrameInfo(frameid, 1, 2, 3)
+        self._call_gi(inFile)
+        self.gi.writeFITS(self.actorState.models, self.cmd, frameInfo,
+                          self.gState.gprobes)
+
+        return self.outFile
+
+    def _compareBinTables(self, procgimg_fn, expected_fn):
+        """Compares the bin tables in two proc-gimg files."""
+
+        result = pyfits.open(procgimg_fn)
+        expect = pyfits.open(expected_fn)
+
+        for column in result[6].data.names:
+            err_msg = '{0} has a mismatch'.format(column)
+
+            if column == 'fiber_type':
+                # Trouble testing numpy string arrays
+                self.assertTrue(
+                    (result[6].data[column] == expect[6].data[column]).all(),
+                    err_msg)
+
+            elif column in ['xstar', 'ystar']:
+                # Checks that star positions are ok within 1%.
+                np.testing.assert_allclose(
+                    result[6].data[column], expect[6].data[column], rtol=1e-2,
+                    err_msg=err_msg)
+
+            elif column == 'fwhm':
+                np.testing.assert_allclose(
+                    result[6].data[column], expect[6].data[column], rtol=1e-1,
+                    err_msg=err_msg)
+
+            elif column in ['rotStar2Sky', 'ugriz', 'ref_mag', 'dx', 'dy',
+                            'dRA', 'dDec']:
+                # TODO: the problem is rotStar2Sky was not saved for old flats.
+                # TODO: don't have ugriz data for these to test,
+                # but could add some. Would have to pull it from the database.
+                # TODO: dx/dy are currently calculated in masterThreaad, but
+                # they could be calculated as part of guiderImage(),
+                # if we passed in the frameInfo data.
+                # NOTE: is the last point still true?
+                continue
+
+            else:
+                # FIXME: This test fails for flux, flux, mag, sky, and poserr.
+                # np.testing.assert_allclose(
+                #     result[6].data[column], expect[6].data[column],
+                #     err_msg=err_msg)
+                pass
+
+
+class TestCalibrations(TestGuiderImage):
+    """Tests darks and flats."""
 
     def test_analyzeDark(self):
         """Test GuiderImageAnalysis.analyzeDark()"""
@@ -114,94 +185,43 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         self._check_overwriting(inFile, self.outFile,
                                 self.gi.analyzeFlat, [self.gState.gprobes])
 
+
+class TestCallAPO(TestGuiderImage):
+    """Tests calls to GuiderImage with APO guider data."""
+
     def test_call_c_code(self):
         """Test GuiderImageAnalysis.__call__() vs the old expected values."""
 
-        self.init_probes(mjd=57357, plateid=7660, fscan_mjd=57356, fscan_id=1)
+        self.outFile = self._test_call(mjd=57357, plateid=7660,
+                                       fscan_mjd=57356, fscan_id=1,
+                                       frameid=40, gprobes_disabled=[3, 11])
 
-        inFile, self.outFile = getTestImagePaths('gcam', 57357,
-                                                 'gimg-0040.fits.gz')
         dataExpect = guiderTester.getTestFile('gcam', 57357,
                                               'expect-gimg-0040.fits.gz')
 
-        # disable the acquisition probes, since the observers did so.
-        self.gState.gprobes[3].disabled = True
-        self.gState.gprobes[11].disabled = True
-
-        frameInfo = GuiderState.FrameInfo(40, 1, 2, 3)
-        self._call_gi(inFile)
-        self.gi.writeFITS(self.actorState.models, self.cmd, frameInfo,
-                          self.gState.gprobes)
-
-        # First we check with the values generated with the previous
-        # implementation of the code.
-        result = pyfits.open(self.outFile)
-        expect = pyfits.open(dataExpect)
-
-        for column in result[6].data.names:
-            err_msg = '{0} has a mismatch'.format(column)
-            if column == 'fiber_type':
-                # Trouble testing numpy string arrays
-                self.assertTrue(
-                    (result[6].data[column] == expect[6].data[column]).all(),
-                    err_msg)
-            elif column in ['xstar', 'ystar']:
-                # Checks that star positions are ok within 1%.
-                np.testing.assert_allclose(
-                    result[6].data[column], expect[6].data[column], rtol=1e-2,
-                    err_msg=err_msg)
-            elif column == 'fwhm':
-                np.testing.assert_allclose(
-                    result[6].data[column], expect[6].data[column], rtol=1e-1,
-                    err_msg=err_msg)
-            elif column in ['rotStar2Sky', 'ugriz', 'ref_mag', 'dx', 'dy',
-                            'dRA', 'dDec']:
-                # TODO: the problem is rotStar2Sky was not saved for old flats.
-                # TODO: don't have ugriz data for these to test,
-                # but could add some. Would have to pull it from the database.
-                # TODO: dx/dy are currently calculated in masterThreaad, but
-                # they could be calculated as part of guiderImage(),
-                # if we passed in the frameInfo data.
-                # NOTE: is the last point still true?
-
-                continue
-
-            else:
-                # FIXME: This test fails for flux, flux, mag, sky, and poserr.
-                np.testing.assert_allclose(
-                    result[6].data[column], expect[6].data[column],
-                    err_msg=err_msg)
+        self._compareBinTables(self.outFile, dataExpect)
 
     def test_call_iraf(self):
         """Test GuiderImageAnalysis.__call__() vs values measured with IRAF."""
 
-        self.init_probes(mjd=57357, plateid=7660, fscan_mjd=57356, fscan_id=1)
+        self.outFile = self._test_call(mjd=57357, plateid=7660,
+                                       fscan_mjd=57356, fscan_id=1,
+                                       frameid=40, gprobes_disabled=[3, 11])
 
-        inFile, self.outFile = getTestImagePaths('gcam', 57357,
-                                                 'gimg-0040.fits.gz')
         dataIRAF_file = guiderTester.getTestFile('gcam', 57357,
                                                  'expected_7660-57356-1.json')
         dataIRAF = json.load(open(dataIRAF_file))
 
-        # disable the acquisition probes, since the observers did so.
-        self.gState.gprobes[3].disabled = True
-        self.gState.gprobes[11].disabled = True
-
-        frameInfo = GuiderState.FrameInfo(40, 1, 2, 3)
-        self._call_gi(inFile)
-        self.gi.writeFITS(self.actorState.models, self.cmd, frameInfo,
-                          self.gState.gprobes)
-
         result = pyfits.open(self.outFile)
         data = result[6].data
-
-        # FIXME: These tests fails, as the relative difference with the
-        # PyGuide centroids is still significant.
 
         # Loads expected values measured using IRAF's imexam
         # Removes 0.5 to make measurements 0-indexed and centred on the pixel.
         imexam_xystar = np.array(dataIRAF['57357']['imexam_xstar_ystar'],
                                  np.float32) - 0.5
+
+        # FIXME: These tests fails, as the relative difference with the
+        # PyGuide centroids is still significant.
 
         np.testing.assert_allclose(data['xstar'], imexam_xystar[:, 0],
                                    rtol=1e-2, err_msg='xstar does not match.')
