@@ -79,9 +79,18 @@ iraf_centroids = xystar_imexam[:-1, :]
 iraf_centroids_sorted = iraf_centroids[np.argsort(iraf_centroids[:, 0])]
 
 pyguide_centroids_sorted = centroids[np.argsort(centroids[:, 0])]
+diff_PyGuide_IRAF = np.abs(1. - pyguide_centroids_sorted /
+                           iraf_centroids_sorted)
+print('Relative difference between IRAF and PyGuide:')
+print('    Max: {0:.3g}'.format(np.max(diff_PyGuide_IRAF)))
+print('    Mean: {0:.3g}'.format(np.mean(diff_PyGuide_IRAF)))
 
-print('Average relative difference between IRAF and PyGuide: {0:.3g}'.format(
-    np.mean(np.abs(1. - pyguide_centroids_sorted / iraf_centroids_sorted))))
+guiderActor_1 = np.array([xstar, ystar]).T
+guiderActor_1_sorted = guiderActor_1[np.argsort(guiderActor_1[:, 0])]
+diff_PyGuide_guiderActor_1 = (np.delete(pyguide_centroids_sorted, -2, axis=0) -
+                              guiderActor_1_sorted[:-2])
 
-print('Max. relative difference between IRAF and PyGuide: {0:.3g}'.format(
-    np.max(np.abs(1. - pyguide_centroids_sorted / iraf_centroids_sorted))))
+print('\nAbsolute difference between PyGuide and guiderActor+1:')
+print('    Min: {0:.3g}'.format(np.min(diff_PyGuide_guiderActor_1)))
+print('    Max: {0:.3g}'.format(np.max(diff_PyGuide_guiderActor_1)))
+print('    Mean: {0:.3g}'.format(np.mean(diff_PyGuide_guiderActor_1)))
