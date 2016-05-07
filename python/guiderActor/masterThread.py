@@ -656,9 +656,14 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guideCmd.respond("seeing=%g" % (rms0*frameInfo.sigmaToFWHM))
         guideCmd.respond("focusError=%g" % (dFocus))
         guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
+
         if gState.guideFocus and not blockFocusMove:
+            # Sets the right direction in which the focus offset moves the focus
+            # on the telescope.
+            focusDirection = actorState.actorConfig.getint('telescope', 'focusDirection')
+            tccOffsetFocus = focusDirection * offsetFocus
             cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                     cmdStr="set focus=%f/incremental" % (offsetFocus),
+                                     cmdStr="set focus=%f/incremental" % (tccOffsetFocus),
                                      timeLim=20)
 
             if cmdVar.didFail:
