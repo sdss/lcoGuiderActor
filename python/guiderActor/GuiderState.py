@@ -259,12 +259,12 @@ class GProbe(object):
             zd = 90. - actorState.models["tcc"].keyVarDict["axePos"][1]
         except TypeError:
             zd = 90. # if the tcc doesn't return a proper position.
-        # TBD: zd=0 never occurs for tracking, but need to test for zd=0 for simulate
+        # TODO: zd=0 never occurs for tracking, but need to test for zd=0 for simulate
         airmass = 1./math.cos(math.radians(zd))
         gobs = value[1] + airmass*k0_g
         robs = value[2] + airmass*k0_r
         self.ref_mag = robs + a1 + a2*(gobs-robs) + a3*(gobs-robs)**2
-        #self.ref_mag = (gobs+robs)/2. #jkp TBD: placeholder
+        #self.ref_mag = (gobs+robs)/2. #jkp TODO: placeholder
 #...
 
 class GuiderState(object):

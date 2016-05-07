@@ -102,6 +102,7 @@ class GuiderCmd(object):
             ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
             ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
+            ('sendfield', self.sendfield)
             ]
     #
     # Define commands' callbacks
@@ -309,7 +310,8 @@ class GuiderCmd(object):
         loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
         cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
 
-        if cartridge < 0:
+        # Only auto-select the cart if a plate was not specified.
+        if cartridge < 0 and plate is None:
             cartridge = loadedCartridge
 
         if loadedCartridge != cartridge:
@@ -358,8 +360,6 @@ class GuiderCmd(object):
             design_ha += 360
 
         # Lookup the valid gprobes
-        extraArgs = ""
-        if plate: extraArgs += "plate=%s" % (plate)
         gprobeKey = actorState.models["platedb"].keyVarDict["gprobe"]
         gprobesInUseKey = actorState.models["platedb"].keyVarDict["gprobesInUse"]
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
@@ -392,7 +392,7 @@ class GuiderCmd(object):
         guideInfoKey = actorState.models["platedb"].keyVarDict["guideInfo"]
 
         cmdVar = actorState.actor.cmdr.call(actor="platedb", forUserCmd=cmd,
-                                            cmdStr="getGprobesPlateGeom cartridge=%d %s" % (cartridge, extraArgs),
+                                            cmdStr="getGprobesPlateGeom %s" % (extraArgs),
                                             keyVars=[guideInfoKey, plPlugMapMKey])
         if cmdVar.didFail:
             cmd.fail("text=%s" % qstr("Failed to lookup gprobes's geometry for cartridge %d" % (cartridge)))
@@ -601,9 +601,25 @@ class GuiderCmd(object):
         """
         time = cmd.cmd.keywords['time'].values[0] if 'time' in cmd.cmd.keywords else 5
 
-        # TBD: Can't change ecam binning yet!
+        # TODO: Can't change ecam binning yet!
         bin = cmd.cmd.keywords['bin'].values[0] if 'bin' in cmd.cmd.keywords else 1
 
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
         queue.put(Msg(Msg.START_GUIDING, cmd=cmd, expTime=time, oneExposure=True,
                   bin=bin, camera='ecamera'))
+
+    def sendfield(self, cmd):
+        """Commands the TCC to go to the RA/Dec of the loaded cart."""
+
+        actorState = guiderActor.myGlobals.actorState
+        gState = actorState.gState
+        ra, dec = gState.boresight_ra, gState.boresight_dec
+
+        cmdVar = actorState.actor.cmdr.call(
+            actor='tcc', forUserCmd=cmd,
+            cmdStr='target {0:.5f}, {1:.5f} icrs'.format(ra, dec))
+
+        if cmdVar.didFail:
+            cmd.warn('text="Failed to send field."')
+
+        return
