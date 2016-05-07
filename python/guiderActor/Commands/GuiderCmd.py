@@ -102,6 +102,7 @@ class GuiderCmd(object):
             ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
             ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
+            ('sendfield', self.sendfield)
             ]
     #
     # Define commands' callbacks
@@ -606,3 +607,19 @@ class GuiderCmd(object):
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
         queue.put(Msg(Msg.START_GUIDING, cmd=cmd, expTime=time, oneExposure=True,
                   bin=bin, camera='ecamera'))
+
+    def sendfield(self, cmd):
+        """Commands the TCC to go to the RA/Dec of the loaded cart."""
+
+        actorState = guiderActor.myGlobals.actorState
+        gState = actorState.gState
+        ra, dec = gState.boresight_ra, gState.boresight_dec
+
+        cmdVar = actorState.actor.cmdr.call(
+            actor='tcc', forUserCmd=cmd,
+            cmdStr='target {0:.5f}, {1:.5f} icrs'.format(ra, dec))
+
+        if cmdVar.didFail:
+            cmd.warn('text="Failed to send field."')
+
+        return
