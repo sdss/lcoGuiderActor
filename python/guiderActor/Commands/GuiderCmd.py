@@ -102,7 +102,7 @@ class GuiderCmd(object):
             ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie','[<movieMJD>] <start> <end>',self.makeMovie),
             ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
-            ('sendfield', self.sendfield)
+            ('sendfield', '', self.sendfield)
             ]
     #
     # Define commands' callbacks
