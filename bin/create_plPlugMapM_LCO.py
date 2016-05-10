@@ -72,7 +72,7 @@ def addHeader(header, file, plateID, fscanID):
     return
 
 
-def doPointing(plateID, pointing, fscanIDs):
+def doPointing(plateID, pointing, fscanIDs, nGuides=16):
     """Creates the plPlugMapM files for a specific pointing."""
 
     pointingName = '' if pointing == 'A' else pointing
@@ -101,9 +101,9 @@ def doPointing(plateID, pointing, fscanIDs):
         # Calculates the range of fiberIds that correspond to this pointing
         # and fscanID.
         pointingNum = string.uppercase.index(pointingName)
-        preIndex = 16 * 3 * pointingNum
-        fiberID_range = preIndex + np.arange(1 + (fscanID - 1) * 16,
-                                             1 + fscanID * 16)
+        preIndex = nGuides * 3 * pointingNum
+        fiberID_range = preIndex + np.arange(1 + (fscanID - 1) * nGuides,
+                                             1 + fscanID * nGuides)
 
         outFileName = 'plPlugMapM-{0}{3}-{1}-{2:02d}.par'.format(
             plateID, mjd, fscanID, pointingName)
@@ -112,6 +112,12 @@ def doPointing(plateID, pointing, fscanIDs):
         validHoles = plPlugMapObj[(plPlugMapObj['holeType'] == 'LIGHT_TRAP') |
                                   (np.in1d(plPlugMapObj['fiberId'],
                                            fiberID_range))]
+
+        # Gets the minimum fiberId greater than 0 for the valid holes.
+        minFiberId = np.unique(np.sort(validHoles['fiberId']))[1] - 1
+
+        # Renames the fiberIds to be in the range [1, 16]
+        validHoles['fiberId'][validHoles['fiberId'] > 0] -= minFiberId
 
         enums = {'holeType': ['HOLETYPE', yannyFile._enum_cache['HOLETYPE']],
                  'objType': ['OBJTYPE', yannyFile._enum_cache['OBJTYPE']]}
@@ -122,7 +128,7 @@ def doPointing(plateID, pointing, fscanIDs):
         for ii, line in enumerate(header):
             if line.startswith('guidenums' + str(pointingNum + 1)):
                 guides = str('guidenums' + str(pointingNum + 1)) + ' ' + \
-                    ' '.join(map(str, fiberID_range))
+                    ' '.join(map(str, np.arange(1, nGuides + 1)))
                 header[ii] = guides
                 break
 
