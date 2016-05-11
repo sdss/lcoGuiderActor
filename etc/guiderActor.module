@@ -56,6 +56,9 @@ prereq RO
 module load PyGuide
 prereq PyGuide
 
+module load astropy
+prereq astropy
+
 #
 # ENVIRONMENT SECTION
 #
