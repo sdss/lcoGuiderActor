@@ -281,6 +281,16 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
 
 def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRot):
     """Finish the calculation for the ra/dec/rot corrections and apply them."""
+
+    # Changes the offset convention to match the telescope being commanded.
+    actorConfig = guiderActor.myGlobals.actorState.actorConfig
+    axisDirection = actorConfig.getint('telescope', 'axisDirection')
+    rotDirection = actorConfig.getint('telescope', 'rotDirection')
+
+    offsetRa = axisDirection * offsetRa
+    offsetDec = axisDirection * offsetDec
+    offsetRot = rotDirection * offsetRot
+
     if gState.guideAxes:
         cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=cmd,
                                  cmdStr="offset arc %f, %f"%(-offsetRa, -offsetDec))
