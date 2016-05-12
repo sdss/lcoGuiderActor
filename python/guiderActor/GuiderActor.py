@@ -71,6 +71,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         actorState = guiderActor.myGlobals.actorState
         self.actorState = actorState
         actorState.gState = GuiderState.GuiderState()
+        actorState.actorConfig = self.config
         gState = actorState.gState
 
         # Load other actor's models so we can send it commands
@@ -179,4 +180,3 @@ class GuiderActorLCO(GuiderActor):
         #         return False
 
         return True
-
