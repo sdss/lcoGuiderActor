@@ -59,6 +59,8 @@ prereq PyGuide
 module load astropy
 prereq astropy
 
+module load guiderImages
+
 #
 # ENVIRONMENT SECTION
 #
