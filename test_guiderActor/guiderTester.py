@@ -48,10 +48,10 @@ def getGProbeTesterData(filename=None, mjd=None, plateid=None,
     if not filename:
         if not plateid:
             filename = os.path.join(guiderImagesPath,
-                                    'data/gprobes_default.json')
+                                    'gprobes_default.json')
         else:
             filename = os.path.join(
-                guiderImagesPath, 'data',
+                guiderImagesPath,
                 '{0}/{1}/gprobes_{2}-{3}-{4}.json'.format(camera, mjd, plateid,
                                                           fscan_mjd, fscan_id))
 
@@ -66,7 +66,7 @@ skipIfNoGuiderImages = unittest.skipIf(
 def getTestFile(directory, mjd, filename, raiseError=True):
     """Returns the full path in the guiderImages product for a test file."""
 
-    filePath = os.path.join(guiderImagesPath, 'data',
+    filePath = os.path.join(guiderImagesPath,
                             directory, str(mjd), filename)
     if raiseError and not os.path.exists(filePath):
         raise ValueError('filename {0} does not exist in guiderImages'
