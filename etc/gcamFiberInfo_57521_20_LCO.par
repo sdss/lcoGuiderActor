@@ -1,0 +1,108 @@
+#gcamFiberInfo_LCO.par
+#
+# This file was copied from gcamFiberInfo.par, originally created for APO.
+#
+# All the cordinates sizes are in binned Andor camera pixels.
+# The rotation angles are all for the Andor camera
+# The binned pixel size is ??um x ??um.
+#
+#************************************************************
+#
+# OLD CARTERIDGES 1-9  (APOGEE CARTRIDGES)
+
+# WARNING: there are many notes in here refering to the SDSS-I guide camera,
+# and/or to the new APO Alta camera: those notes should be removed, and
+# any measurements that may have been based on them replaced with new
+# appropriate measurements for LCO.
+
+# The x,y values have been transformed from Dan Long's values
+# to Andor values using the transformations measured for cartridge 1
+# They should be close, but updated to more precise values
+# measured with a star offset pattern.
+#
+#ROTATION
+#The rotation can be determined to +-15 degrees without being on the sky
+#Plug the guide fibers into the special rotation measurement plate #35xxx
+#Look at the output of the fibes with an eye piece, all should show some occultation
+#Photograph the fiber output block, Dan Long is the expert on this.
+#(if no camera available (note the orientation of the obstruction viewed by eye on a sketch)
+#Measure the angle from what would be the guider rotation axis to the pin.
+#This can be done in photoshop, or a cad package, or with a protractor
+#
+#There are 2 angles necessary to define the relationship between
+#the X axis on the guider and N on the fiber.
+#
+#(A) The angle described above but as viewed by the guide camera
+#    and measured CCW from the guider X axis. Thus the angle theta
+#    is the angle CCW from the guider x axis to the alignment pin
+#    if it could be seen on the the guider image.
+#
+#(B) The angle phi defined as orientation of the alignment pin and the
+#    guide hole. Derived from deltaX and deltaY in plate coords (N=Y), (E=X)
+#    viewed form the sky side of the plate. tan (phi) = dy/dx, phi=atan2(dy,dx)
+#    thus the angle x ccw through y in a RH coords
+#    This angle is calculated from the x,yfocal in the plPlugmapM file
+#
+#A third angle is required to get to Az Alt coords
+#
+#  Note the pin angle phi for fiber in the North half of the plate are
+#  typically 0+-20deg, and 180+-20 for the South half.
+#  The deviation from 0 or 180 depends on the hole location on the plate
+#  relative to the anchor point location, and its set to minimize torque
+#  on the fiber.
+#
+#                   |    North Probes           |    South Probes
+#           |       |                           |
+#Cartridges | 1- 9  |   5,6,7,8,9               |   1,2,3,4,10,11
+#           |----------------------------------------------------------
+#           |10-17  |   9,10,11,12,13,14,15,16  |   1,2,3,4,5,6,7,8
+#
+#If guiding in Alt Az a third angle is necessary
+#The relationship of the rotator angle, spiderInstangle to plate y.
+#     This is -90 ???
+#
+#*************************************************************************
+#Dead fiber notes
+#
+#**************************************************************************
+
+version $Revision: 162174 $             # SVN revision for this file
+
+typedef enum {
+        GUIDE,
+        ACQUIRE,
+        TRITIUM
+} FIBERTYPE;
+
+typedef struct {
+        int   cartridgeId;
+        int   gProbeId;
+        int   exists;	      # I.e. not broken
+        float xcen;           # pixels, w.r.t (0.5, 0.5) at center of LL pixel
+        float ycen;           # pixels, w.r.t (0.5, 0.5) at center of LL pixel
+        float radius;         # pixels
+        float rot;            # degrees, +CCW image x to pin
+        float pinRot;         # depreciated
+        float xferruleOffset; # um, applied before rotation, opticalCcenter-ferruleCenter
+        float yferruleOffset; # um, applied before rotation, OC-FC
+        float focusOffset;    # um, +ve towards sky,(inside focus probes)
+        FIBERTYPE fiberType;  # guide,acquire,tritium
+} GPROBE;
+
+GPROBE  20  1 1   229.348746082  437.709247649  10.0767481705  342  0.0  16.29  0.57    400.0   GUIDE
+GPROBE  20  2 1   160.610606061  303.968181818  10.2490127544  326  0.0  14.17  -19.50  0.0     GUIDE
+GPROBE  20  3 1   116.819019608  115.609084967  34.8931986876  -999 0.0  -999.  -999    0.0     ACQUIRE
+GPROBE  20  4 1   225.557432432  90.8817567568  9.70668461991  304  0.0  3.56   -33.91  400.0   GUIDE
+GPROBE  20  5 1    228.23816568   264.26183432  10.3724992904  322  0.0  19.53  -16.39  0.0     GUIDE
+GPROBE  20  6 1   227.142857143  177.086309524  10.3417658917  327  0.0  16.66  -19.17  -400.0  GUIDE
+GPROBE  20  7 1   92.7884615385  236.729020979  9.54131162098  322  0.0  16.54  5.06    0.0     GUIDE
+GPROBE  20  8 1   228.021929825  351.144736842  10.4336945075  313  0.0  17.15  -12.46  400.0   GUIDE
+GPROBE  20  9 1   304.700292398  351.644736842  10.4336945075  313  0.0  15.69  -9.80   400.0   GUIDE
+GPROBE  20 10 1   305.136740331  264.733425414   10.734438914  338  0.0  5.12   3.32    0.0     GUIDE
+GPROBE  20 11 1   416.756983963  114.500905329  35.0797095197  -999 0.0  -999.  -999    0.0     ACQUIRE
+GPROBE  20 12 1   305.477536232  177.477536232  10.4793564084  308  0.0  9.70   6.54    -400.0  GUIDE
+GPROBE  20 13 1   374.471518987  389.917721519  10.0292534136  339  0.0  8.60   7.48    0.0     GUIDE
+GPROBE  20 14 1    303.51993865  89.9187116564  10.1867081482  006  0.0  24.83  11.58   -400.0  GUIDE
+GPROBE  20 15 1   440.675465839  320.330745342  10.1240201181  313  0.0  8.17   -5.94   0.0     GUIDE
+GPROBE  20 16 1        306.2625     437.796875  10.0925300881  317  0.0  -11.85 -1.88   400.0   GUIDE
+GPROBE  20 17 0             0.0            0.0            0.0 -999  0.0   -999.  -999    0.0    TRITIUM
