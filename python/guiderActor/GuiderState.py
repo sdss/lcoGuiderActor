@@ -23,10 +23,10 @@ UNKNOWN = 0xff     # shouldn't ever happen
 class GProbe(object):
     """
     Contains information about a single guide probe.
-    
+
     ugriz is an array of fiber magnitudes  (through 2arcsec fibers) from in plPlugMapP.par.
     When set, it computes self.ref_mag, which is the synthetic predicted magnitude for this fiber.
-    
+
     GProbe flag bits are set via the corresponding property:
         broken, disabled (enabled), noStar, notExist, atFocus (aboveFocus,belowFocus), toofaint
     and gProbe.good will tell you if all bits are in the OK state.
@@ -47,7 +47,7 @@ class GProbe(object):
             self.from_platedb_gprobe(gprobeKey)
         if guideInfoKey is not None:
             self.from_platedb_guideInfo(guideInfoKey)
-    
+
     def checkFocus(self):
         """Set the above/below focus bits based on the focusOffset value."""
         # allow a small range of allowed focus offsets.
@@ -58,7 +58,7 @@ class GProbe(object):
         else:
             self.aboveFocus = False
             self.belowFocus = False
-        
+
     def checkTritium(self):
         """If this probe is labeled a tritium star, disable it."""
         if self.fiber_type == 'TRITIUM':
@@ -69,6 +69,11 @@ class GProbe(object):
         Fill in data from the platedb.gprobe key.
         Expects a list, as output by CmdVar.getKeyVarData()
         """
+
+        # Gets the additional grpobe rotation due to the CCD chip rotation.
+        actorConfig = myGlobals.actorState.actorConfig
+        rotationCCD = actorConfig.getfloat('gcamera', 'ccdRotation')
+
         self._check_id(gprobeKey[1],'platedb.gprobe')
         self.broken = False if gprobeKey[2] else True
         if self.broken:
@@ -76,7 +81,7 @@ class GProbe(object):
         self.xCenter = gprobeKey[3]
         self.yCenter = gprobeKey[4]
         self.radius = gprobeKey[5]
-        self.rotation = gprobeKey[6]
+        self.rotation = gprobeKey[6] + rotationCCD
         self.xFerruleOffset = gprobeKey[7]
         self.yFerruleOffset = gprobeKey[8]
         self.focusOffset = gprobeKey[9]
@@ -115,7 +120,7 @@ class GProbe(object):
         """
         Verify that the id is correct for this probe,
         or set it if it hasn't been set yet.
-        
+
         fromName is the name of the actorkey the new id came from.
         """
         if self.id == -9999:
@@ -126,15 +131,15 @@ class GProbe(object):
             # otherwise, everything's fine.
             pass
     #...
-    
+
     def _unset(self,bit):
         """Set bit to 0."""
         self._bits = self._bits & (~bit)
-    
+
     def _set(self,bit):
         """Set bit to 1."""
         self._bits = self._bits | bit
-    
+
     @property
     def good(self):
         """True if all probe bits except [above|below]Focus are 0."""
@@ -168,7 +173,7 @@ class GProbe(object):
     @broken.setter
     def broken(self,value):
         self._set(BROKEN) if value else self._unset(BROKEN)
-    
+
     @property
     def noStar(self):
         """True if this probe has no star defined in the plugmap."""
@@ -209,7 +214,7 @@ class GProbe(object):
     @tooFaint.setter
     def tooFaint(self,value):
         self._set(TOOFAINT) if value else self._unset(TOOFAINT)
-    
+
     @property
     def gprobebits(self):
         """The bits for this probe's status (int)."""
@@ -220,7 +225,7 @@ class GProbe(object):
             raise ValueError("gprobebits must be set as an integer!")
         else:
             self._bits = value
- 
+
     @property
     def ugriz(self):
         '''
@@ -237,14 +242,14 @@ class GProbe(object):
         the current telescope position. Guider effective wavelength is
         5400A, so calculate guidermag from g and r. Then correct for
         atmospheric extinction.
-        
+
         APO atmospheric extinction coeff at airmass=1 taken from table 3 of the
         ubercal paper, Padmanabhan et al. 2008 ApJ.
         with the k0 value for the filters, g:0.17, r:0.10
 
-        Color terms for transformation from r + a1 + a2*(g-r) + a3*(g-r)**2 = ref_mag 
+        Color terms for transformation from r + a1 + a2*(g-r) + a3*(g-r)**2 = ref_mag
         a1=0.535, a2=0.506, a3=-0.0312
-        Coefficient are from Masayuki, Gunn&Strkyer stds observed through modeled guider & g,r passbands 
+        Coefficient are from Masayuki, Gunn&Strkyer stds observed through modeled guider & g,r passbands
         """
         self._ugriz = value
         actorState = myGlobals.actorState
@@ -253,7 +258,7 @@ class GProbe(object):
         a1 = 0.535
         a2 = 0.506
         a3 = -0.0312
-        
+
         #get airmass from tcc only gives alt = tcc.axePos[2]
         try:
             zd = 90. - actorState.models["tcc"].keyVarDict["axePos"][1]
@@ -270,7 +275,7 @@ class GProbe(object):
 class GuiderState(object):
     """
     The current state of the guider.
-    
+
     Contains information about the currently loaded cartridge, the target of
     each guide probe, custom parameters (decentering, stacking, exposure time, etc.).
 
@@ -301,7 +306,7 @@ class GuiderState(object):
         self.longitude = np.nan
         self.focalRatio = np.nan
 
-        # Start with all fibers 
+        # Start with all fibers
         self.setGuideMode("axes")
         self.setGuideMode("focus")
         self.setGuideMode("scale")
@@ -309,7 +314,7 @@ class GuiderState(object):
 
         # Will contain [id]:gProbe pairs
         self.gprobes = {}
-    
+
         # PIDs for various axes, and their default, on-initialization values.
         self.pid = {}
         self.pid_defaults = {}
@@ -335,7 +340,7 @@ class GuiderState(object):
     def setGprobeState(self, fiber, enable=True):
         """
         Set the enable/disable state of either one fiber, or all fibers of type fiber.
-        
+
         fiber types: ACQUIRE GUIDE TRITIUM
         If an integer, must refer to a currently loaded probe.
         """
@@ -367,7 +372,7 @@ class GuiderState(object):
             self.refractionBalance = 1
         else:
             self.refractionBalance = 0
-    
+
     def setDecenter(self, decenters, cmd, enable):
         """
         Set decenter[RA,Dec,Rot] and mangaDither to the values in decenters.
@@ -399,16 +404,16 @@ class GuiderState(object):
         else:
             default = '?'
         self.mangaDither = decenters.get('mangaDither',default)
-    
+
     def finish_decenter(self):
         """Finish any pending decenter cmds."""
         for cmd in self.decenterCmd:
             cmd.finish('')
         self.decenterCmd = []
-    
+
     def clearDecenter(self):
         """Clear all decenter information."""
-        
+
         self.decenterCmd = []
         self.decenter = False
         self.mangaDither = 'C'
@@ -501,7 +506,7 @@ class FrameInfo(object):
         self.offsetRot = np.nan
         self.offsetFocus = np.nan
         self.offsetScale = np.nan
-        
+
         self.guideCameraScale = guideCameraScale
         self.plugPlateScale = plugPlateScale
         self.arcsecPerMM = arcsecPerMM
@@ -535,18 +540,18 @@ class FrameInfo(object):
         self.decenterRot = np.nan
         self.decenterFocus = np.nan
         self.decenterScale = np.nan
-        
+
         self.refractionBalance = np.nan
         self.wavelength = np.nan
         self.dHA = np.nan
-        
+
         self.A = np.matrix(np.zeros(3*3).reshape([3,3]))
         self.b = np.matrix(np.zeros(3).reshape([3,1]))
         self.b3 = 0
         self.guideAxes = False
         self.guideFocus = False
         self.guideScale = False
-    
+
     def setGuideMode(self,gState=None):
         """Save the guide* values from gState, or reset them to False."""
         self.guideAxes = gState.guideAxes
