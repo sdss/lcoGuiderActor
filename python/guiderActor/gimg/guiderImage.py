@@ -656,7 +656,12 @@ class GuiderImageAnalysis(object):
         # Load guider-cam image.
         self.cmd.diag('text=%s'%qstr('Reading guider-cam image %s' % filename))
         try:
-            image,hdr = fits.getdata(filename,0,header=True)
+            # Read the image as uint (if available), with the BZERO/BSCALE scaling as uint,
+            # but then convert to float32 for processing.
+            # This solves a problem with over-subtraction of bias level
+            # in the LCO files causing uint overflow into large values.
+            image,hdr = fits.getdata(filename,0,header=True,uint=True)
+            image = np.array(image, dtype=np.float32)
         except IOError:
             raise GuiderExceptions.GuiderError('File not found: %s'%filename)
 
@@ -918,34 +923,35 @@ class GuiderImageAnalysis(object):
         image,hdr,sat = self._pre_process(darkFileName,binning=self.binning)
         # Fail on bad CCD temp here, since we really need the dark to be at the setPoint.
         if not self._check_ccd_temp(hdr):
-            raise GuiderExceptions.BadDarkError
+            raise GuiderExceptions.BadDarkError('CCD temp significantly different from setPoint.')
         else:
             self.darkTemperature = hdr['CCDTEMP']
 
         # NOTE: darks are binned.
         # there are very few hot pixels and bulk dark is < 0.02 e/sec at -40C
 
+        # First, check that the dark is stacked and long enough to have some signal.
+        exptime = hdr['EXPTIME']
+        stack = hdr.get('STACK', 1)
+        exptimen = hdr.get('EXPTIMEN', exptime)
+        # We didn't institute the long dark stacking until 2013.06.23,
+        # so don't check darks before that date.
+        expdate = hdr.get('DATE-OBS').split()[0]  # only need date, not time.
+        expdate = datetime.datetime.strptime(expdate, '%Y-%m-%d')
+        pre_stacking_date = datetime.datetime(2013, 6, 23)
+        if expdate > pre_stacking_date and (stack < 3 or exptimen < 30):
+            errMsg = 'Total dark exposure time too short: minimum stack of 3 with total time > 30s .'
+            self.cmd.warn('text=%s' % qstr(errMsg))
+            raise GuiderExceptions.BadDarkError(errMsg)
+
         # Check if it's a good dark
         darkMean = image.mean()
         # TODO: if we use the "outer" bias region (per the ecam data), we need
-        # ~40 for a bad dark; for Renbin's preferred valeus ~20 is fine.
+        # ~40 for a bad dark; for Renbin's preferred values ~20 is fine.
         if darkMean > 40:
-            self.cmd.warn('text=%s'%qstr('Much more signal in the dark than expected: %6.2f')%darkMean)
-            raise GuiderExceptions.BadDarkError
-        exptime = hdr['EXPTIME']
-        stack = hdr.get('STACK',1)
-        exptimen = hdr.get('EXPTIMEN',exptime)
-        # We didn't institute the long dark stacking until 2013.06.23,
-        # so don't check darks before that date.
-        expdate = hdr.get('DATE-OBS').split()[0] # only need date, not time.
-        expdate = datetime.datetime.strptime(expdate,'%Y-%m-%d')
-        pre_stacking_date = datetime.datetime(2013,6,23)
-        if expdate > pre_stacking_date and (stack < 3 or exptimen < 30):
-            self.cmd.warn('text=%s'%qstr('Total dark exposure time too short: minimum stack of 3 with total time > 30s .'))
-            raise GuiderExceptions.BadDarkError
-        if (exptime < 0.5):    #proxy for zero second exposure
-           self.cmd.warn('text=%s' % qstr("Dark image less than 0.5 sec"))
-           raise GuiderExceptions.BadDarkError
+            errMsg = 'Much more signal in the dark than expected: %6.2f'%darkMean
+            self.cmd.warn('text=%s'%qstr(errMsg))
+            raise GuiderExceptions.BadDarkError(errMsg)
 
         # Convert the dark into a 1-second equivalent exposure.
         # NOTE: we really do want to divide by exptime, not exptimen,

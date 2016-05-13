@@ -20,9 +20,11 @@ import glob
 import unittest
 import pyfits
 import numpy as np
+import json
+
 import guiderTester
 from guiderActor import GuiderState
-import json
+from guiderActor.gimg import GuiderExceptions
 
 
 def getTestImagePaths(dir, mjd, file):
@@ -50,7 +52,7 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
     @staticmethod
     def tearDownClass():
         testDataPath = guiderTester.guiderImagesPath
-        dataRegEx = os.path.join(testDataPath, 'data', '?cam/*/proc-*.fits.gz')
+        dataRegEx = os.path.join(testDataPath, 'data', '*cam/*/proc-*.fits.gz')
         for filename in glob.glob(dataRegEx):
             os.remove(filename)
 
@@ -136,13 +138,39 @@ class TestCalibrations(TestGuiderImage):
     """Tests darks and flats."""
 
     def test_analyzeDark(self):
-        """Test GuiderImageAnalysis.analyzeDark()"""
-
         inFile, outFile = getTestImagePaths('gcam', 57357, 'gimg-0001.fits.gz')
         self.outFile = outFile  # for tearDown
         self.gi.analyzeDark(inFile, cmd=self.cmd)
         self.assertTrue(os.path.exists(outFile))
         self._check_overwriting(inFile, outFile, self.gi.analyzeDark)
+
+    def test_analyzeDark_lco(self):
+        self.gi.setPoint = -10
+        inFile, outFile = getTestImagePaths('lco-gcam', 57520, 'gimg-0032.fits.gz')
+        self.outFile = outFile  # for tearDown
+        self.gi.analyzeDark(inFile, cmd=self.cmd)
+        self.assertTrue(os.path.exists(outFile))
+        self._check_overwriting(inFile, outFile, self.gi.analyzeDark)
+
+    def test_analyzeDark_no_stack(self):
+        self.gi.setPoint = -10
+        inFile, outFile = getTestImagePaths('lco-gcam', 57521, 'gimg-0018.fits.gz')
+        self.outFile = outFile  # for tearDown
+        with self.assertRaises(GuiderExceptions.BadDarkError) as cm:
+            self.gi.analyzeDark(inFile, cmd=self.cmd)
+        errMsg = 'Total dark exposure time too short'
+        self.assertIn(errMsg, str(cm.exception))
+        self.assertIn(errMsg, self.cmd.messages[-1])
+
+    def test_analyzeDark_too_short(self):
+        self.gi.setPoint = -10
+        inFile, outFile = getTestImagePaths('lco-gcam', 57521, 'gimg-0019.fits.gz')
+        self.outFile = outFile  # for tearDown
+        with self.assertRaises(GuiderExceptions.BadDarkError) as cm:
+            self.gi.analyzeDark(inFile, cmd=self.cmd)
+        errMsg = 'Total dark exposure time too short'
+        self.assertIn(errMsg, str(cm.exception))
+        self.assertIn(errMsg, self.cmd.messages[-1])
 
     def test_analyzeFlat(self):
         """Test GuiderImageAnalysis.analyzeFlat()"""
