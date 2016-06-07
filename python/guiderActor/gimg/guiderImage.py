@@ -7,7 +7,6 @@ from them in bulk.
 
 import os.path
 from operator import attrgetter
-import ctypes
 import datetime
 import re
 
@@ -68,49 +67,10 @@ class Fiber(object):
 
     def is_fake(self):
         return np.isnan(self.xcen)
-#...
-
-# The following are ctypes classes for interaction with the ipGguide.c code.
-class REGION(ctypes.Structure):
-    _fields_ = [("nrow", ctypes.c_int),
-                ("ncol", ctypes.c_int),
-                ("rows_s16", ctypes.POINTER(ctypes.POINTER(ctypes.c_int16)))]
-
-class MASK(ctypes.Structure):
-    _fields_ = [("nrow", ctypes.c_int),
-                ("ncol", ctypes.c_int),
-                ("rows", ctypes.POINTER(ctypes.POINTER(ctypes.c_ubyte)))]
-
-class FIBERDATA(ctypes.Structure):
-    _fields_ = [("g_nfibers", ctypes.c_int),
-                ("g_fid", ctypes.POINTER(ctypes.c_int32)),
-                ("g_xcen", ctypes.POINTER(ctypes.c_double)),
-                ("g_ycen", ctypes.POINTER(ctypes.c_double)),
-                ("g_fibrad", ctypes.POINTER(ctypes.c_double)),
-                ("g_illrad", ctypes.POINTER(ctypes.c_double)),
-                ("g_xs", ctypes.POINTER(ctypes.c_double)),
-                ("g_ys", ctypes.POINTER(ctypes.c_double)),
-                ("flux", ctypes.POINTER(ctypes.c_double)),
-                ("sky", ctypes.POINTER(ctypes.c_double)),
-                ("fwhm", ctypes.POINTER(ctypes.c_double)),
-                ("poserr", ctypes.POINTER(ctypes.c_double)),
-                ("g_readnoise", ctypes.c_double),
-                ("g_npixmask", ctypes.c_int)]
 
 # Must match ipGguide.h
 FWHM_BAD = 99.99
 
-def np_array_to_REGION(A):
-    H, W = A.shape
-    ptrtype = ctypes.POINTER(ctypes.c_int16)
-    rows = (ptrtype*H)(*[row.ctypes.data_as(ptrtype) for row in A])
-    return REGION(H, W, rows)
-
-def np_array_to_MASK(A):
-    H, W = A.shape
-    ptrtype = ctypes.POINTER(ctypes.c_uint8)
-    rows = (ptrtype*H)(*[row.ctypes.data_as(ptrtype) for row in A])
-    return MASK(H, W, rows)
 
 def bin_image(img, BIN):
     """Return an image rebinned by BINxBIN pixels."""
@@ -272,7 +232,6 @@ class GuiderImageAnalysis(object):
             # TODO: the lower is what makes sense from over-exposed flats and the ecam.
             bias = np.median(image[:,(1039/binning):])
         else:
-            # find bias = BIAS_PERCENTILE (ipGguide.h) = (100 - 70%)
             self.cmd.warn('text=%s'%qstr("Cheating with bais level! No overscan was found!"))
             ir = image.ravel()
             I = np.argsort(ir)
