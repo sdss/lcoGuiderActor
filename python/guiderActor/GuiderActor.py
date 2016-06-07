@@ -15,6 +15,9 @@ import movieThread
 import GuiderState
 import guiderActor.myGlobals
 
+import warnings
+
+
 def set_default_pids(config, gState):
     """Set the PID value defaults from the config file."""
     axes = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")
@@ -57,6 +60,8 @@ class GuiderActor(actorcore.Actor.SDSSActor):
             return GuiderActorAPO('guider',**kwargs)
         elif location == 'lco':
             return GuiderActorLCO('guider',**kwargs)
+        elif location is None:
+            return GuiderActorTest('guider', **kwargs)
         else:
             raise KeyError("Don't know my location: cannot return a working Actor!")
 
@@ -180,3 +185,16 @@ class GuiderActorLCO(GuiderActor):
         #         return False
 
         return True
+
+
+class GuiderActorTest(GuiderActorAPO):
+    """Test version of this actor. In prnciple, inherits from GuiderActorAPO."""
+
+    location = 'TEST'
+
+    def __init__(self, *args, **kwargs):
+        """Issues a warning saying that we are in test mode."""
+
+        warnings.warn('Running guiderActor in TEST mode', UserWarning)
+
+        super(GuiderActorTest, self).__init__(*args, **kwargs)

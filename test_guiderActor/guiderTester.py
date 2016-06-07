@@ -99,6 +99,7 @@ class GuiderTester(TestHelper.ActorTester):
         gState = GuiderState.GuiderState()
         self.gState = gState
         myGlobals.actorState.gState = self.gState
+        myGlobals.actorState.actorConfig = self.actor.config
 
         GuiderActor.set_default_pids(self.actor.config, self.gState)
         GuiderActor.set_pid_scaling(self.actor.config, self.gState)

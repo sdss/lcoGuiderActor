@@ -38,7 +38,6 @@ python/guiderActor/obsolete/src/gimg/gutils.c -text svneol=native#unset
 python/guiderActor/obsolete/test_flat.py -text
 python/guiderActor/obsolete/tests.py -text
 /setup.py -text
-test_guiderActor/centroids.pdf -text
 test_guiderActor/cmd_calls/TestExpose.txt -text
 test_guiderActor/guiderTester.py -text
 test_guiderActor/profile_guider.py -text

@@ -248,14 +248,18 @@ class TestCallAPO(TestGuiderImage):
         imexam_xystar = np.array(dataIRAF['57357']['imexam_xstar_ystar'],
                                  np.float32) - 0.5
 
+        # Fiber 11 was disabled, so we make it nan in IRAF
+        imexam_xystar[10, :] = np.nan
+
+        # import ipdb; ipdb.set_trace()
         # FIXME: These tests fails, as the relative difference with the
         # PyGuide centroids is still significant.
 
         np.testing.assert_allclose(data['xstar'], imexam_xystar[:, 0],
-                                   rtol=1e-2, err_msg='xstar does not match.')
+                                   rtol=5e-3, err_msg='xstar does not match.')
 
         np.testing.assert_allclose(data['ystar'], imexam_xystar[:, 1],
-                                   rtol=1e-2, err_msg='ystar does not match.')
+                                   rtol=5e-3, err_msg='ystar does not match.')
 
 
 if __name__ == '__main__':
