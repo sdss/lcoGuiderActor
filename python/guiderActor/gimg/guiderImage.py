@@ -699,7 +699,7 @@ class GuiderImageAnalysis(object):
             shape = PyGuide.StarShape.StarShapeData(False,'failed to compute star shape')
         return star,shape
 
-    def _set_fiber_star(self, fiber, stars, image, mask):
+    def _set_fiber_star(self, fiber, stars, image, mask, stampFrameCoords):
         """Fill in the fiber values for this star, safely."""
 
         try:
@@ -714,8 +714,8 @@ class GuiderImageAnalysis(object):
             return
 
         # shift the centers back into the data frame.
-        fiber.xs = star.xyCtr[0] + fiber.xcen - fiber.radius - 1
-        fiber.ys = star.xyCtr[1] + fiber.ycen - fiber.radius - 1
+        fiber.xs = stampFrameCoords[0] + star.xyCtr[0]
+        fiber.ys = stampFrameCoords[1] + star.xyCtr[1]
         fiber.xyserr = np.hypot(*star.xyErr)
         try:
             shape = PyGuide.StarShape.starShape(image, mask, star.xyCtr, 100)
@@ -744,8 +744,17 @@ class GuiderImageAnalysis(object):
             xc = fiber.xcen
             yc = fiber.ycen
             r = fiber.radius
-            stamp = np.s_[np.rint(yc - r).astype(np.int):np.rint(yc + r + 1).astype(np.int),
-                          np.rint(xc - r).astype(np.int):np.rint(xc + r + 1).astype(np.int)]
+
+            # Calculates the stamp slice.
+            y0, y1 = np.rint(yc - r).astype(np.int), np.rint(yc + r + 1).astype(np.int)
+            x0, x1 = np.rint(xc - r).astype(np.int), np.rint(xc + r + 1).astype(np.int)
+
+            # This defines the origin of the coordinates of the stamp with
+            # respect to the general data frame. We'll use it to convert
+            # back from stamp centroid coordinates to data frame ones.
+            stampFrameCoords = (x0, y0)
+
+            stamp = np.s_[y0:y1, x0:x1]
 
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
@@ -753,7 +762,8 @@ class GuiderImageAnalysis(object):
             except Exception as e:
                 self.cmd.warn('text=%s'%qstr('PyGuide.findStars failed on fiber %d with: %s.'%(fiber.fiberid,e)))
             else:
-                self._set_fiber_star(fiber, stars, image[stamp], good_mask[stamp])
+                self._set_fiber_star(fiber, stars, image[stamp], good_mask[stamp],
+                                     stampFrameCoords)
 
         self.fibers = fibers
 
