@@ -300,18 +300,8 @@ class GuiderCmd(object):
         #
         actorState = guiderActor.myGlobals.actorState
 
-        # LCOHACK: this works for LCO but it will break APO, which gets the
-        # instrument number from the mcp. When we merge we'll need break this
-        # by location.
-        # instrumentNumKey = actorState.models["tcc"].keyVarDict["instrumentNum"]
-        # cmdVar = actorState.actor.cmdr.call(actor="tcc", forUserCmd=cmd,
-        #                                     cmdStr="threading status", keyVars=[instrumentNumKey])
-        # if cmdVar.didFail:
-        #     cmd.fail("text=\"Failed to ask tcc for info on cartridges\"")
-        #     return
+        loadedCartridge = self.actor.getLoadedCartridge(cmd, actorState)
 
-        # loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
-        loadedCartridge = 20
         cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
 
         # Only auto-select the cart if a plate was not specified.

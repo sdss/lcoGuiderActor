@@ -161,6 +161,27 @@ class GuiderActorAPO(GuiderActor):
 
         return True
 
+    def getLoadedCartridge(self, cmd, actorState):
+        """Returns the number of the cart loaded in the telescope.
+
+        At APO, this information is provided by the MCP.
+
+        """
+
+        instrumentNumKey = actorState.models['tcc'].keyVarDict['instrumentNum']
+        cmdVar = self.actor.cmdr.call(actor='tcc', forUserCmd=cmd,
+                                            cmdStr='threading status',
+                                            keyVars=[instrumentNumKey])
+
+        if cmdVar.didFail:
+            cmd.fail('text=\"Failed to ask tcc for info on cartridges\"')
+            return
+
+        loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
+
+        return loadedCartridge
+
+
 class GuiderActorLCO(GuiderActor):
     """LCO version of this actor."""
     location='LCO'
@@ -186,6 +207,17 @@ class GuiderActorLCO(GuiderActor):
 
         return True
 
+    def getLoadedCartridge(self, cmd, actorState):
+        """Returns the number of the cart loaded in the telescope.
+
+        At LCO, this information is provided by the TCC.
+
+        """
+
+        # LCOHACK: for now we hardcode the cartridge on the telecope.
+        loadedCartridge = 20
+        return loadedCartridge
+
 
 class GuiderActorTest(GuiderActorAPO):
     """Test version of this actor. In prnciple, inherits from GuiderActorAPO."""
@@ -198,3 +230,8 @@ class GuiderActorTest(GuiderActorAPO):
         warnings.warn('Running guiderActor in TEST mode', UserWarning)
 
         super(GuiderActorTest, self).__init__(*args, **kwargs)
+
+    def getLoadedCartridge(self, cmd, actorState):
+        """Returns the number of the cart loaded in the telescope."""
+
+        pass
