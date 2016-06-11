@@ -19,7 +19,7 @@ from actorcore import TestHelper
 import guiderTester
 
 
-class GuiderCmdTester(guiderTester.GuiderTester):
+class GuiderCmdTester(guiderTester.GuiderTester, unittest.TestCase):
     def setUp(self):
         self.verbose = True
         super(GuiderCmdTester, self).setUp()
@@ -29,6 +29,45 @@ class GuiderCmdTester(guiderTester.GuiderTester):
         self.queues[guiderActor.MASTER] = Queue('master')
         myGlobals.actorState.queues = self.queues
         self.guiderCmd = GuiderCmd.GuiderCmd(self.actor)
+
+
+class GuiderAPOCmdTester(GuiderCmdTester):
+    def setUp(self):
+        self.name = 'guider'
+        self.actor = TestHelper.FakeActor(self.name, self.name+'Actor', location='APO')
+        super(GuiderAPOCmdTester, self).setUp()
+        self.guidercmd = self.actor.commandSets['GuiderCmd_APO']
+
+    def test_ping(self):
+        """Ping just finishes."""
+        self._run_cmd('ping', None)
+        self._check_cmd(0, 1, 0, 0, True)
+
+
+class GuiderLCOCmdTester(GuiderCmdTester):
+    def setUp(self):
+        self.name = 'guider'
+        self.actor = TestHelper.FakeActor(self.name, self.name+'Actor', location='LCO')
+        super(GuiderLCOCmdTester, self).setUp()
+        self.guidercmd = self.actor.commandSets['GuiderCmd_LCO']
+
+    def test_ping(self):
+        """Ping just finishes."""
+        self._run_cmd('ping', None)
+        self._check_cmd(0, 1, 0, 0, True)
+
+
+class GuiderLocalCmdTester(GuiderCmdTester):
+    def setUp(self):
+        self.name = 'guider'
+        self.actor = TestHelper.FakeActor(self.name, self.name+'Actor', location='LOCAL')
+        super(GuiderLocalCmdTester, self).setUp()
+        self.guidercmd = self.actor.commandSets['GuiderCmd_LOCAL']
+
+    def test_ping(self):
+        """Ping just finishes."""
+        self._run_cmd('ping', None)
+        self._check_cmd(0, 1, 0, 0, True)
 
 
 class TestDecentering(GuiderCmdTester, unittest.TestCase):
