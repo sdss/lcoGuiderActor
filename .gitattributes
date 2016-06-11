@@ -4,6 +4,7 @@ bin/convertPlPlugMap.py -text
 bin/darksStackFlow.py -text
 bin/extract_headers.py -text
 bin/getGProbeInfo.py -text
+bin/guiderActor_main.py -text
 bin/guiderToDs9 -text
 bin/guider_movie.py -text
 bin/open_shutter_search.py -text
