@@ -14,8 +14,11 @@ etc/guider.cfg -text
 etc/guiderActor.module -text
 etc/guider_APO.cfg -text
 etc/guider_LCO.cfg -text
+etc/guider_LOCAL.cfg -text
 python/guiderActor/Commands/GuiderCmd.py -text
+python/guiderActor/Commands/GuiderCmd_APO.py -text
 python/guiderActor/Commands/GuiderCmd_LCO.py -text
+python/guiderActor/Commands/GuiderCmd_LOCAL.py -text
 python/guiderActor/Commands/__init__.py -text
 python/guiderActor/GuiderActor.py -text
 python/guiderActor/GuiderState.py -text
