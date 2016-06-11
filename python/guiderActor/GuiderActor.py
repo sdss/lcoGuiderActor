@@ -239,9 +239,9 @@ class GuiderActorLocal(GuiderActor):
     location = 'LOCAL'
 
     def guidingIsOk(self, cmd, actorState, force=False):
-        return True
+        """Is it OK to be guiding?"""
 
-        super(GuiderActorTest, self).__init__(*args, **kwargs)
+        return True
 
     def getLoadedCartridge(self, cmd, actorState):
         """Returns the number of the cart loaded in the telescope."""
