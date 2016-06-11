@@ -23,8 +23,11 @@ import numpy as np
 import json
 
 import guiderTester
+import guiderActor
+from Queue import Queue
 from guiderActor import GuiderState
 from guiderActor.gimg import GuiderExceptions
+from guiderActor.masterThread import guideStep
 
 
 def getTestImagePaths(dir, mjd, file):
@@ -45,9 +48,14 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         self.verbose = True
         super(TestGuiderImage, self).setUp()
 
-    def tearDown(self):
-        if hasattr(self, 'outFile'):
-            self._remove_file(self.outFile)
+        self.queues = {}
+        self.queues[guiderActor.GCAMERA] = Queue('gcamera')
+        self.queues[guiderActor.MASTER] = Queue('master')
+        self.actorState.queues = self.queues
+
+    # def tearDown(self):
+    #     if hasattr(self, 'outFile'):
+    #         self._remove_file(self.outFile)
 
     @staticmethod
     def tearDownClass():
@@ -82,10 +90,16 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
         for gid in gprobes_disabled:
             self.gState.gprobes[gid].disabled = True
 
-        frameInfo = GuiderState.FrameInfo(frameid, 1, 2, 3)
-        self._call_gi(inFile)
-        self.gi.writeFITS(self.actorState.models, self.cmd, frameInfo,
-                          self.gState.gprobes)
+        # frameInfo = GuiderState.FrameInfo(frameid, 1, 2, 3)
+
+        # Does some gymnastics with the guider and actorState to make things
+        # work.
+        self.gState.cmd = self.cmd
+        self.actorState.bypassDark = False
+
+        guideStep(self.actor, self.actorState.queues, self.cmd, self.gState,
+                  inFile, True, self.gi, output_verify='warn',
+                  camera='gcamera')
 
         return self.outFile
 
@@ -110,13 +124,18 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
                     result[6].data[column], expect[6].data[column], rtol=1e-2,
                     err_msg=err_msg)
 
+            elif column in ['dDec']:
+                # Checks that star positions are ok within 1%.
+                np.testing.assert_allclose(
+                    result[6].data[column], expect[6].data[column], rtol=1e-2,
+                    err_msg=err_msg)
+
             elif column == 'fwhm':
                 np.testing.assert_allclose(
                     result[6].data[column], expect[6].data[column], rtol=1e-1,
                     err_msg=err_msg)
 
-            elif column in ['rotStar2Sky', 'ugriz', 'ref_mag', 'dx', 'dy',
-                            'dRA', 'dDec']:
+            elif column in ['rotStar2Sky', 'ugriz', 'ref_mag']:
                 # TODO: the problem is rotStar2Sky was not saved for old flats.
                 # TODO: don't have ugriz data for these to test,
                 # but could add some. Would have to pull it from the database.
@@ -217,15 +236,49 @@ class TestCalibrations(TestGuiderImage):
 class TestCallAPO(TestGuiderImage):
     """Tests calls to GuiderImage with APO guider data."""
 
-    def test_call_c_code(self):
+    def test_compare_c_code_0040(self):
         """Test GuiderImageAnalysis.__call__() vs the old expected values."""
 
         self.outFile = self._test_call(mjd=57357, plateid=7660,
                                        fscan_mjd=57356, fscan_id=1,
-                                       frameid=40, gprobes_disabled=[3, 11])
+                                       frameid=40, gprobes_disabled=[11])
 
         dataExpect = guiderTester.getTestFile('gcam', 57357,
                                               'expect-gimg-0040.fits.gz')
+
+        self._compareBinTables(self.outFile, dataExpect)
+
+    def test_compare_c_code_0041(self):
+        """Same as test_compare_c_code_0040 but with the next image.
+
+        To test consistency in the dRA/dDec difference between images taken
+        using the same cart and flat, on the same night.
+
+        """
+
+        self.outFile = self._test_call(mjd=57357, plateid=7660,
+                                       fscan_mjd=57356, fscan_id=1,
+                                       frameid=41, gprobes_disabled=[11])
+
+        dataExpect = guiderTester.getTestFile('gcam', 57357,
+                                              'expect-gimg-0041.fits.gz')
+
+        self._compareBinTables(self.outFile, dataExpect)
+
+    def test_compare_c_code_0042(self):
+        """Same as test_compare_c_code_0040 but with 0042.
+
+        To test consistency in the dRA/dDec difference between images taken
+        using the same cart and flat, on the same night.
+
+        """
+
+        self.outFile = self._test_call(mjd=57357, plateid=7660,
+                                       fscan_mjd=57356, fscan_id=1,
+                                       frameid=42, gprobes_disabled=[11])
+
+        dataExpect = guiderTester.getTestFile('gcam', 57357,
+                                              'expect-gimg-0042.fits.gz')
 
         self._compareBinTables(self.outFile, dataExpect)
 
