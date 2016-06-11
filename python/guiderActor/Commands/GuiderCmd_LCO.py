@@ -9,9 +9,12 @@ import numpy as np
 
 from sdss.utilities import yanny
 
-import opscore.utility.YPF as YPF
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
+from opscore.utility.qstr import qstr
+import opscore.utility.YPF as YPF
+
+from guiderActor.Commands import GuiderCmd
 
 from guiderActor import Msg, GuiderState
 import guiderActor
@@ -121,28 +124,24 @@ def getGuideInfoKey(gProbeId, guideNumber, plYanny):
     return guideInfo
 
 
-class GuiderCmd_LCO(object):
-    """ Wrap commands to the guider actor"""
+class GuiderCmd_LCO(GuiderCmd.GuiderCmd):
+
     # globals here, only need definition once
     gprobekeys = getGprobeKeys()
     validpointings = ["A", "B", "C", "D"]
 
     def __init__(self, actor):
-        """
-        Declares keys that this actor uses, and available commands that can be sent to it.
+        # initialize from the superclass
+        super(GuiderCmd_LCO, self).__init__(actor)
 
-        actor is the actor that this is part of (guiderActor, in this case).
-        """
-        self.actor = actor
-
-        # Declare keys that we're going to use
+        # Define some new command keywords
         self.keys = keys.KeysDictionary("guider_guiderlco", (3, 0),
                                         keys.Key("plate", types.Int(), help="A plugplate ID"),
                                         keys.Key("pointing", types.String(), help="A pointing for the given plugplate"),
                                         keys.Key("fiberPos", types.Int(), help="A fiber position, 1-indexed"),
                                         keys.Key("pmDir", types.String(), help="Directory where the plPlugMapP files are.")
                                         )
-
+        # Define new commands for APO
         self.vocab = [
             ("fakeCartridge", "<plate> <fiberPos> <pointing> [<pmDir>]", self.fakeCartridge),
             ]
