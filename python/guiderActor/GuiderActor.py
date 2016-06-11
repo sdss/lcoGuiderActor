@@ -12,26 +12,29 @@ import gcameraThread
 import masterThread
 import movieThread
 
+import guiderActor
 import GuiderState
-import guiderActor.myGlobals
+from guiderActor import myGlobals
 
 import warnings
 
 
 def set_default_pids(config, gState):
     """Set the PID value defaults from the config file."""
-    axes = dict(RADEC = "raDec", ROT = "rot", FOCUS = "focus", SCALE = "scale")
+    axes = dict(RADEC="raDec", ROT="rot", FOCUS="focus", SCALE="scale")
     for axis in config.options('PID'):
         axis = axes[axis.upper()]
         Kp, Ti_min, Ti_max, Td, Imax, nfilt = [float(v) for v in config.get('PID', axis).split()]
         gState.set_pid_defaults(axis, Kp=Kp, Ti_min=Ti_min, Ti_max=Ti_max, Td=Td, Imax=Imax, nfilt=int(nfilt))
         gState.pid[axis].setPID(Kp=Kp, Ti=Ti_min, Td=Td, Imax=Imax, nfilt=nfilt)
 
+
 def set_pid_scaling(config, gState):
     """Set the min/max altitude and the axes to scale the PID terms on."""
     gState.axes_to_scale = config.get('PID_altitude_scale', 'axes').split()
     gState.alt_min = float(config.get('PID_altitude_scale', 'min'))
     gState.alt_max = float(config.get('PID_altitude_scale', 'max'))
+
 
 def set_telescope(config, gState):
     """Set values related to the telescope from the config file."""
@@ -40,58 +43,69 @@ def set_telescope(config, gState):
     gState.longitude = float(config.get('telescope', "longitude"))
     gState.focalRatio = float(config.get('telescope', "focalRatio"))
 
+
 def set_gcamera(config, gState):
     """Set values related to the guide camera from the config file."""
     expTime = float(config.get('gcamera', "exposureTime"))
     readTime = float(config.get('gcamera', "binnedReadTime"))
-    masterThread.set_time(gState,expTime,1,readTime)
+    masterThread.set_time(gState, expTime, 1, readTime)
     gState.gcameraPixelSize = float(config.get('gcamera', "pixelSize"))
     gState.gcameraMagnification = float(config.get('gcamera', "magnification"))
+
 
 class GuiderActor(actorcore.Actor.SDSSActor):
     """Manage the threads that calculate guiding corrections and gcamera commands."""
     __metaclass__ = abc.ABCMeta
 
     @staticmethod
-    def newActor(location=None,**kwargs):
+    def newActor(location=None, **kwargs):
         """Return the version of the actor based on our location."""
         location = GuiderActor._determine_location(location)
-        if location == 'apo':
-            return GuiderActorAPO('guider',**kwargs)
-        elif location == 'lco':
-            return GuiderActorLCO('guider',**kwargs)
-        elif location is None:
-            return GuiderActorTest('guider', **kwargs)
+        if location == 'APO':
+            return GuiderActorAPO('guider', productName='guiderActor', **kwargs)
+        elif location == 'LCO':
+            return GuiderActorLCO('guider', productName='guiderActor', **kwargs)
+        elif location == 'LOCAL':
+            return GuiderActorLocal('guider', productName='guiderActor', **kwargs)
         else:
             raise KeyError("Don't know my location: cannot return a working Actor!")
 
-    def __init__(self, name, debugLevel=30, makeCmdrConnection=True):
-        actorcore.Actor.Actor.__init__(self, name, productName='guiderActor', makeCmdrConnection=makeCmdrConnection)
+    def __init__(self, name, debugLevel=30, productName=None, makeCmdrConnection=True):
+        actorcore.Actor.Actor.__init__(self, name, productName=productName, makeCmdrConnection=makeCmdrConnection)
 
-        self.headURL = "$HeadURL: svn+ssh://sdss3svn@sdss3.org/repo/ops/actors/guiderActor/branches/lco/python/guiderActor/guiderActor_main.py $"
+        self.headURL = ('$HeadURL: svn+ssh://sdss3svn@sdss3.org/repo/ops/actors/guiderActor/branches/lco/'
+                        'python/guiderActor/guiderActor_main.py $')
 
         self.logger.setLevel(debugLevel)
+        self.logger.propagate = True
 
-        guiderActor.myGlobals.actorState = actorcore.Actor.ActorState(self)
-        actorState = guiderActor.myGlobals.actorState
-        self.actorState = actorState
-        actorState.gState = GuiderState.GuiderState()
-        actorState.actorConfig = self.config
-        gState = actorState.gState
+        #guiderActor.myGlobals.actorState = actorcore.Actor.ActorState(self)
+        #actorState = guiderActor.myGlobals.actorState
+        #self.actorState = actorState
+        #actorState.gState = GuiderState.GuiderState()
+        #actorState.actorConfig = self.config
+        #gState = actorState.gState
+
+        # Define thread list
+        self.threadList = [("master", guiderActor.MASTER, masterThread),
+                           ("gcamera", guiderActor.GCAMERA, gcameraThread),
+                           ("movie", guiderActor.MOVIE, movieThread), ]
 
         # Load other actor's models so we can send it commands
         # And ours: we use the models to generate the FITS cards.
+        self.models = {}
         for actor in ["gcamera", "ecamera", "mcp", "platedb", "sop", "tcc", "guider", "apo"]:
-            actorState.models[actor] = opscore.actor.model.Model(actor)
+            self.models[actor] = opscore.actor.model.Model(actor)
 
-        actorState.timeout = 60         # timeout on message queues
-
-        self.threadList = [("master", guiderActor.MASTER, masterThread),
-                           ("gcamera", guiderActor.GCAMERA, gcameraThread),
-                           ("movie", guiderActor.MOVIE, movieThread),]
+        self.actorState = actorcore.Actor.ActorState(self, self.models)
+        self.actorState.gState = GuiderState.GuiderState()
+        self.actorState.actorConfig = self.config
+        myGlobals.actorState = self.actorState
+        self.actorState.timeout = 60  # timeout on message queues
+        gState = self.actorState.gState
 
         for what in self.config.options("enable"):
-            enable = {"True" : True, "False" : False}[self.config.get('enable', what)]
+            enable = {"True": True, "False": False}[self.config.get('enable', what)]
             gState.setGuideMode(what, enable)
 
         set_default_pids(self.config, gState)
@@ -99,9 +113,10 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         set_telescope(self.config, gState)
         set_gcamera(self.config, gState)
 
+
 class GuiderActorAPO(GuiderActor):
     """APO version of this actor."""
-    location='APO'
+    location = 'APO'
 
     def guidingIsOK(self, cmd, actorState, force=False):
         """Is it OK to be guiding?"""
@@ -114,7 +129,7 @@ class GuiderActorAPO(GuiderActor):
         ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
         open, closed = 0, 0
         for s in ffsStatus:
-            if s == None:
+            if s is None:
                 cmd.warn('text="Failed to get state of flat field screen from MCP"')
                 break
 
@@ -184,7 +199,7 @@ class GuiderActorAPO(GuiderActor):
 
 class GuiderActorLCO(GuiderActor):
     """LCO version of this actor."""
-    location='LCO'
+    location = 'LCO'
 
     def guidingIsOK(self, cmd, actorState, force=False):
         """Is it OK to be guiding?"""
@@ -219,15 +234,12 @@ class GuiderActorLCO(GuiderActor):
         return loadedCartridge
 
 
-class GuiderActorTest(GuiderActorAPO):
+class GuiderActorLocal(GuiderActor):
     """Test version of this actor. In prnciple, inherits from GuiderActorAPO."""
+    location = 'LOCAL'
 
-    location = 'TEST'
-
-    def __init__(self, *args, **kwargs):
-        """Issues a warning saying that we are in test mode."""
-
-        warnings.warn('Running guiderActor in TEST mode', UserWarning)
+    def guidingIsOk(self, cmd, actorState, force=False):
+        return True
 
         super(GuiderActorTest, self).__init__(*args, **kwargs)
 

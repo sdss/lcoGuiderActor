@@ -9,19 +9,24 @@ import numpy as np
 
 from sdss.utilities import yanny
 
-import opscore.utility.YPF as YPF
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
+from opscore.utility.qstr import qstr
+import opscore.utility.YPF as YPF
+
+from guiderActor.Commands import GuiderCmd
 
 from guiderActor import Msg, GuiderState
 import guiderActor
 import guiderActor.myGlobals as myGlobals
+
 
 def hardingRotation(apoMeasuredRot):
     """Convert Dan Long's measured rotation angle
     To the angle that Paul Harding determined
     """
     return float(apoMeasuredRot) + 18.
+
 
 def getGprobeKeys():
     """Output a list of gprobeKey where gprobeKey itself is also a list
@@ -55,12 +60,12 @@ def getGprobeKeys():
         "yferruleOffset",
         "focusOffset",
         "fiberType",
-    ] # order matters
+    ]  # order matters
     # throw out last value (we don't want tritium source),
-    #castMap = (int,)*3 + (float,)*3 +(hardingRotation,) +(float,)*3 + (str,)
+    # castMap = (int,)*3 + (float,)*3 +(hardingRotation,) +(float,)*3 + (str,)
     # note removing harding rotation for Nov Run
     castMap = (int,)*3 + (float,)*7 + (str,)
-    #LCOHACK: warning!!! remove the [:-1] if the tritium source gets removed from the gcamFiberInfo file!!!
+    # LCOHACK: warning!!! remove the [:-1] if the tritium source gets removed from the gcamFiberInfo file!!!
     gprobeKeysNumpy = np.asarray([gprobes[key][:-1] for key in gprobeFields]).T
     assert gprobeKeysNumpy.shape == (16, len(gprobeFields))
     # convert to list of mixed types (numpy got messy here)
@@ -68,6 +73,7 @@ def getGprobeKeys():
     for gProbeKey in gprobeKeysNumpy:
         gprobeKeys.append([castFunc(val) for val, castFunc in itertools.izip(gProbeKey, castMap)])
     return gprobeKeys
+
 
 def getGuideInfoKey(gProbeId, guideNumber, plYanny):
     """
@@ -90,22 +96,22 @@ def getGuideInfoKey(gProbeId, guideNumber, plYanny):
 
     list output = [gprobId, ra, dec, xFocal, yFocal, phi, throughput]
     """
-    assert gProbeId in range(1,17)
+    assert gProbeId in range(1, 17)
     guideInfo = [gProbeId]
     alignXYpos = []
     # find the values corresponding to guideNumber in the yanny file
     # search the file for object holeType=GUIDE and fiberID = guideNumber
     objs = plYanny["PLUGMAPOBJ"]
-    indexGuide = np.where((objs["holeType"]=="GUIDE") & (objs["fiberId"]==guideNumber))
-    indexAlign = np.where((objs["holeType"]=="ALIGNMENT") & (objs["fiberId"]==guideNumber))
-    attrList = ["ra", "dec", "xFocal", "yFocal", "phi", "throughput"] # order matters
+    indexGuide = np.where((objs["holeType"] == "GUIDE") & (objs["fiberId"] == guideNumber))
+    indexAlign = np.where((objs["holeType"] == "ALIGNMENT") & (objs["fiberId"] == guideNumber))
+    attrList = ["ra", "dec", "xFocal", "yFocal", "phi", "throughput"]  # order matters
     for attr in attrList:
         if attr == "phi":
-            assert len(alignXYpos)==2 # paranoia
+            assert len(alignXYpos) == 2  # paranoia
             alignX, alignY = alignXYpos
             guideX = guideInfo[3]
             guideY = guideInfo[4]
-            phi = 90. - math.atan2(float(alignY) - float(guideY) , float(alignX) - float(guideX))*180/math.pi
+            phi = 90. - math.atan2(float(alignY) - float(guideY), float(alignX) - float(guideX))*180/math.pi
             guideInfo.append(phi)
         elif attr == "throughput":
             guideInfo.append(float(objs[attr][indexGuide]/65535.0))
@@ -113,31 +119,29 @@ def getGuideInfoKey(gProbeId, guideNumber, plYanny):
             guideInfo.append(float(objs[attr][indexGuide]))
         # tag on alignment x/yFocal
         if attr in ["xFocal", "yFocal"]:
-            #xfocal comes first always
+            # xfocal comes first always
             alignXYpos.append(float(objs[attr][indexAlign]))
     return guideInfo
 
-class GuiderCmd_LCO(object):
-    """ Wrap commands to the guider actor"""
+
+class GuiderCmd_LCO(GuiderCmd.GuiderCmd):
+
     # globals here, only need definition once
     gprobekeys = getGprobeKeys()
     validpointings = ["A", "B", "C", "D"]
+
     def __init__(self, actor):
-        """
-        Declares keys that this actor uses, and available commands that can be sent to it.
+        # initialize from the superclass
+        super(GuiderCmd_LCO, self).__init__(actor)
 
-        actor is the actor that this is part of (guiderActor, in this case).
-        """
-        self.actor = actor
-
-        # Declare keys that we're going to use
+        # Define some new command keywords
         self.keys = keys.KeysDictionary("guider_guiderlco", (3, 0),
                                         keys.Key("plate", types.Int(), help="A plugplate ID"),
                                         keys.Key("pointing", types.String(), help="A pointing for the given plugplate"),
                                         keys.Key("fiberPos", types.Int(), help="A fiber position, 1-indexed"),
                                         keys.Key("pmDir", types.String(), help="Directory where the plPlugMapP files are.")
                                         )
-
+        # Define new commands for APO
         self.vocab = [
             ("fakeCartridge", "<plate> <fiberPos> <pointing> [<pmDir>]", self.fakeCartridge),
             ]
@@ -148,19 +152,19 @@ class GuiderCmd_LCO(object):
         """
         plate = int(cmd.cmd.keywords["plate"].values[0])
         fiberPos = int(cmd.cmd.keywords["fiberPos"].values[0]) if "fiberPos" in cmd.cmd.keywords else 1
-        if fiberPos not in [1,2,3]:
+        if fiberPos not in [1, 2, 3]:
             cmd.fail("text=\"fiberPos parameter must be 1, 2 or 3 in fakeCartridge\"")
             return
         pointing = cmd.cmd.keywords["pointing"].values[0] if "pointing" in cmd.cmd.keywords else "A"
         if pointing not in self.validpointings:
-            cmd.fail("text=\"pointing parameter must be one of %s in fakeCartridge\""%", ".join(self.validpointings))
+            cmd.fail("text=\"pointing parameter must be one of %s in fakeCartridge\"" % ", ".join(self.validpointings))
             return
         plPlugMapDir = cmd.cmd.keywords["pmDir"].values[0] if "pmDir" in cmd.cmd.keywords else "/data/plPlugMap/"
 
         queue = myGlobals.actorState.queues[guiderActor.MASTER]
 
         # get the path to the plPlugMap file
-        pmFilePath = os.path.join(plPlugMapDir, "plPlugMapP-%i%s.par"%(plate, "" if pointing == "A" else pointing))
+        pmFilePath = os.path.join(plPlugMapDir, "plPlugMapP-%i%s.par" % (plate, "" if pointing == "A" else pointing))
         # parse the plPlugMapFile
         plYanny = yanny.yanny(pmFilePath, np=True)
         # may use plPlugMap.getPointingInfo() to return updated keyword
@@ -186,10 +190,10 @@ class GuiderCmd_LCO(object):
         # determine the starting guide number
         #
         guideStartNum = 48*(pointingIndex) + 16*(fiberPos-1) + 1
-        guideNums = np.arange(guideStartNum, guideStartNum+16) # 16 guide fibers
+        guideNums = np.arange(guideStartNum, guideStartNum+16)  # 16 guide fibers
         gprobes = {}
         for guideNum, gProbeKey in itertools.izip(guideNums, self.gprobekeys):
-            gprobeId = int(gProbeKey[1]) # index 0 is cart 1 is gProbeId
+            gprobeId = int(gProbeKey[1])  # index 0 is cart 1 is gProbeId
             # alignmentPos is [xFocal, yFocal]
             cmd.diag('text="probeNum,guideNum: {},{}"'.format(gprobeId, guideNum))
             guideInfoKey = getGuideInfoKey(gprobeId, guideNum, plYanny)
