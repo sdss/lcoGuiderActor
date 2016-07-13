@@ -201,7 +201,7 @@ class GuiderActorAPO(GuiderActor):
         """
 
         return super(GuiderActorAPO, self).getLoadedCartridge(
-            cmd, 'mcp', actorState=actorState=None)
+            cmd, 'mcp', actorState=actorState)
 
 
 class GuiderActorLCO(GuiderActor):
@@ -237,7 +237,7 @@ class GuiderActorLCO(GuiderActor):
         """
 
         return super(GuiderActorLCO, self).getLoadedCartridge(
-            cmd, 'tcc', actorState=actorState=None)
+            cmd, 'tcc', actorState=actorState)
 
 
 class GuiderActorLocal(GuiderActor):
