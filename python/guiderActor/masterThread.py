@@ -994,19 +994,19 @@ def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
         # Take nextSeqNo+1 because the current value may still be the one
         # issued from the gcamera flat command, which we don't want for this.
         try:
-            gState.startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+            gState.startFrame = actorState.models[camera].keyVarDict['nextSeqno'][0]+1
             # If 'nextSeqno' hasn't been seen yet (e.g., guider was started after gcamera),
             # we need to get gcamera status first.
         except TypeError:
-            cmdVar = actorState.actor.cmdr.call(actor="gcamera", forUserCmd=cmd, cmdStr="status")
+            cmdVar = actorState.actor.cmdr.call(actor=camera, forUserCmd=cmd, cmdStr="status")
             if cmdVar.didFail:
-                failMsg = "Cannot get gcamera status to determine nextSeqNo!"
+                failMsg = "Cannot get {0} status to determine nextSeqNo!".format(camera)
                 cmd.fail('guideState=failed; text="%s"' % failMsg)
                 return
             # now we can do this safely.
-            gState.startFrame = actorState.models['gcamera'].keyVarDict['nextSeqno'][0]+1
+            gState.startFrame = actorState.models[camera].keyVarDict['nextSeqno'][0]+1
         # if we're in simulation mode, use that number instead.
-        simulating = actorState.models['gcamera'].keyVarDict['simulating']
+        simulating = actorState.models[camera].keyVarDict['simulating']
         if simulating[0]:
             gState.startFrame = simulating[2]
 
