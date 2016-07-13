@@ -661,7 +661,7 @@ class GuiderCmd(object):
         survey = 'NONE'
         surveyMode = 'NONE'
 
-        GOOD_PROBE = 0x00
+        GOOD_PROBE = '0x00'
 
         gprobes = {}
         gprobes[1] = GuiderState.GProbe(int(1))
