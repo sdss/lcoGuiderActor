@@ -113,6 +113,23 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         set_telescope(self.config, gState)
         set_gcamera(self.config, gState)
 
+    def getLoadedCartridge(self, cmd, actor, actorState=None):
+        """Returns the value of instrumentNum from actor."""
+
+        instrumentNumKey = actorState.models[actor].keyVarDict["instrumentNum"]
+        cmdVar = actorState.actor.cmdr.call(actor=actor,
+                                            forUserCmd=cmd,
+                                            cmdStr="info",
+                                            keyVars=[instrumentNumKey])
+
+        if cmdVar.didFail:
+            cmd.fail('text=\"Failed to ask {0} for info on cartridges\"'.format(actor))
+            return
+
+        loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
+
+        return loadedCartridge
+
 
 class GuiderActorAPO(GuiderActor):
     """APO version of this actor."""
@@ -183,18 +200,8 @@ class GuiderActorAPO(GuiderActor):
 
         """
 
-        instrumentNumKey = actorState.models['tcc'].keyVarDict['instrumentNum']
-        cmdVar = self.actor.cmdr.call(actor='tcc', forUserCmd=cmd,
-                                            cmdStr='threading status',
-                                            keyVars=[instrumentNumKey])
-
-        if cmdVar.didFail:
-            cmd.fail('text=\"Failed to ask tcc for info on cartridges\"')
-            return
-
-        loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
-
-        return loadedCartridge
+        return super(GuiderActorAPO, self).getLoadedCartridge(
+            cmd, 'mcp', actorState=actorState=None)
 
 
 class GuiderActorLCO(GuiderActor):
@@ -229,9 +236,8 @@ class GuiderActorLCO(GuiderActor):
 
         """
 
-        # LCOHACK: for now we hardcode the cartridge on the telecope.
-        loadedCartridge = 20
-        return loadedCartridge
+        return super(GuiderActorLCO, self).getLoadedCartridge(
+            cmd, 'tcc', actorState=actorState=None)
 
 
 class GuiderActorLocal(GuiderActor):
