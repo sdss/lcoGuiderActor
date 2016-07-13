@@ -27,49 +27,51 @@ class GuiderCmd(object):
         #
         # Declare keys that we're going to use
         #
-        self.keys = keys.KeysDictionary("guider_guider", (3, 0),
-                                        keys.Key("cartridge", types.Int(), help="A cartridge ID"),
-                                        keys.Key("fscanId", types.Int(), help="The fscanId identifying a plate scanning"),
-                                        keys.Key("mjd", types.Int(), help="The MJD when a plate was scanned"),
-                                        keys.Key("plate", types.Int(), help="A plugplate ID"),
-                                        keys.Key("fibers", types.Int()*(1, None), help="A list of fibers"),
-                                        keys.Key("probe", types.Int(), help="A probe ID, 1-indexed"),
-                                        keys.Key("gprobe", types.Int(), help="A probe ID, 1-indexed"),
-                                        keys.Key("fromProbe", types.Int(), help="A probe ID, 1-indexed"),
-                                        keys.Key("fromGprobe", types.Int(), help="A probe ID, 1-indexed"),
-                                        keys.Key("pointing", types.String(),
-                                                 help="A pointing for the given plugplate"),
-                                        keys.Key("time", types.Float(), help="Exposure time for guider"),
-                                        keys.Key("force", help="Force requested action to happen"),
-                                        keys.Key("gprobes", types.Enum("acquire", "guide"), help="Type of gprobe"),
-                                        keys.Key("oneExposure", help="Take just one exposure"),
-                                        keys.Key("Kp", types.Float(), help="Proportional gain"),
-                                        keys.Key("Ti", types.Float(), help="Integral time"),
-                                        keys.Key("Td", types.Float(), help="Derivative time"),
-                                        keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
-                                        keys.Key("nfilt", types.Int(), help="number of input readings to filter with."),
-                                        keys.Key("geek", help="Show things that only some of us love"),
-                                        keys.Key("cartfile", types.String(), help="cartridge file"),
-                                        keys.Key("plugfile", types.String(), help="plugmap file"),
-                                        keys.Key("file", types.String(), help="guider file"),
-                                        keys.Key("decenterRA", types.Float(), help="Telescope absolute offset for guiding in RA arcsec"),
-                                        keys.Key("decenterDec", types.Float(), help="Telescope absolute offset for guiding in Dec arcsec"),
-                                        keys.Key("decenterRot", types.Float(), help="Telescope absolute offset for guiding in Rot"),
-                                        keys.Key("ditherPos", types.String(),  help="Named MaNGA guider dither position"),
-                                        keys.Key("scale", types.Float(), help="Current scale from \"tcc show scale\""),
-                                        keys.Key("delta", types.Float(), help="Delta scale (percent)"),
-                                        keys.Key("stack", types.Int(), help="number of itime gcamera integrations to request per exposure."),
-                                        keys.Key("corrRatio", types.Float(),
-                                                 help="How much refraction correction to apply (0..)"),
-                                        keys.Key("plateType", types.String(),
-                                                 help="Name of the current plateType (survey concatenation)"),
-                                        keys.Key("surveyMode", types.String(),
-                                                 help="Name of the current surveyMode"),
-                                        keys.Key("movieMJD", types.String(), help="The MJD that we want to generate the movie for."),
-                                        keys.Key("start", types.Int(), help="Guider frame number to start the movie at."),
-                                        keys.Key("end", types.Int(), help="Guider frame number to end the movie at."),
-                                        keys.Key("bin", types.Int(), help="bin factor for exposure"),
-                                        )
+        self.keys = keys.KeysDictionary(
+            "guider_guider", (3, 1),
+            keys.Key("cartridge", types.Int(), help="A cartridge ID"),
+            keys.Key("fscanId", types.Int(), help="The fscanId identifying a plate scanning"),
+            keys.Key("mjd", types.Int(), help="The MJD when a plate was scanned"),
+            keys.Key("plate", types.Int(), help="A plugplate ID"),
+            keys.Key("fibers", types.Int()*(1, None), help="A list of fibers"),
+            keys.Key("probe", types.Int(), help="A probe ID, 1-indexed"),
+            keys.Key("gprobe", types.Int(), help="A probe ID, 1-indexed"),
+            keys.Key("fromProbe", types.Int(), help="A probe ID, 1-indexed"),
+            keys.Key("fromGprobe", types.Int(), help="A probe ID, 1-indexed"),
+            keys.Key("pointing", types.String(), help="A pointing for the given plugplate"),
+            keys.Key("time", types.Float(), help="Exposure time for guider"),
+            keys.Key("force", help="Force requested action to happen"),
+            keys.Key("gprobes", types.Enum("acquire", "guide"), help="Type of gprobe"),
+            keys.Key("oneExposure", help="Take just one exposure"),
+            keys.Key("Kp", types.Float(), help="Proportional gain"),
+            keys.Key("Ti", types.Float(), help="Integral time"),
+            keys.Key("Td", types.Float(), help="Derivative time"),
+            keys.Key("Imax", types.Float(), help="|maximum value of I| (-ve to disable)"),
+            keys.Key("nfilt", types.Int(), help="number of input readings to filter with."),
+            keys.Key("geek", help="Show things that only some of us love"),
+            keys.Key("cartfile", types.String(), help="cartridge file"),
+            keys.Key("plugfile", types.String(), help="plugmap file"),
+            keys.Key("file", types.String(), help="guider file"),
+            keys.Key("decenterRA", types.Float(), help="Telescope absolute offset for guiding in RA arcsec"),
+            keys.Key("decenterDec", types.Float(), help="Telescope absolute offset for guiding in Dec arcsec"),
+            keys.Key("decenterRot", types.Float(), help="Telescope absolute offset for guiding in Rot"),
+            keys.Key("ditherPos", types.String(),  help="Named MaNGA guider dither position"),
+            keys.Key("scale", types.Float(), help="Current scale from \"tcc show scale\""),
+            keys.Key("delta", types.Float(), help="Delta scale (percent)"),
+            keys.Key("stack", types.Int(), help="number of itime gcamera integrations to request per exposure."),
+            keys.Key("corrRatio", types.Float(), help="How much refraction correction to apply (0..)"),
+            keys.Key("plateType", types.String(), help="Name of the current plateType (survey concatenation)"),
+            keys.Key("surveyMode", types.String(), help="Name of the current surveyMode"),
+            keys.Key("movieMJD", types.String(), help="The MJD that we want to generate the movie for."),
+            keys.Key("start", types.Int(), help="Guider frame number to start the movie at."),
+            keys.Key("end", types.Int(), help="Guider frame number to end the movie at."),
+            keys.Key("bin", types.Int(), help="bin factor for exposure"),
+            keys.Key('gprobeX', types.Int(), help='fake gprobe x position (binned)'),
+            keys.Key('gprobeY', types.Int(), help='fake gprobe y position (binned)'),
+            keys.Key('gprobeRadius', types.Int(), help='fake gprobe radius (binned)'),
+            keys.Key('gprobeRA', types.Float(), help='fake gprobe RA'),
+            keys.Key('gprobeDec', types.Float(), help='fake gprobe declination'))
+
         #
         # Declare commands
         #
@@ -104,8 +106,12 @@ class GuiderCmd(object):
             ('setRefractionBalance', "[<corrRatio>] [<plateType>] [<surveyMode>]", self.setRefractionBalance),
             ('makeMovie', '[<movieMJD>] <start> <end>', self.makeMovie),
             ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
-            ('sendfield', '', self.sendfield)
+            ('sendfield', '', self.sendfield),
+            ('loadFakeGProbe', '[<gprobeX>] [<gprobeY>] [<gprobeRadius>] [<gprobeRA>] [<gprobeDec>]', self.loadFakeGProbe)
             ]
+
+        self.fakeCartNumber = 99
+
     #
     # Define commands' callbacks
     #
@@ -623,3 +629,77 @@ class GuiderCmd(object):
             cmd.warn('text="Failed to send field."')
 
         return
+
+    def loadFakeGProbe(self, cmd):
+        """Loads a fake cart (99) with one synthetic gprobe."""
+
+        queue = myGlobals.actorState.queues[guiderActor.MASTER]
+
+        gprobeX = (cmd.cmd.keywords['gprobeX'].values[0]
+                   if 'gprobeX' in cmd.cmd.keywords else None)
+        gprobeY = (cmd.cmd.keywords['gprobeY'].values[0]
+                   if 'gprobeY' in cmd.cmd.keywords else None)
+        gprobeRadius = (cmd.cmd.keywords['gprobeRadius'].values[0]
+                        if 'gprobeRadius' in cmd.cmd.keywords else None)
+
+        gprobeRA = (cmd.cmd.keywords['gprobeRA'].values[0]
+                    if 'gprobeRA' in cmd.cmd.keywords else None)
+        gprobeDec = (cmd.cmd.keywords['gprobeDec'].values[0]
+                     if 'gprobeDec' in cmd.cmd.keywords else None)
+
+        if gprobeX is None or gprobeY is None or gprobeRadius is None:
+            cmd.fail('text=%s' % qstr('Missing gprobe information.'))
+            return
+
+        # Fakes cart, plate, and plugging information.
+        cartridge = self.fakeCartNumber
+        plate = -99
+        pointing = 'A'
+        fscanMJD = -999
+        fscanID = 1
+        design_ha = 0.
+        survey = 'NONE'
+        surveyMode = 'NONE'
+
+        GOOD_PROBE = 0x00
+
+        gprobes = {}
+        gprobes[1] = GuiderState.GProbe(int(1))
+        gprobes[1].gprobebits = int(GOOD_PROBE, 16)
+
+        # Fakes the gprobeKey information
+        gprobeKey = [
+            self.fakeCartNumber,
+            1,                    # gprobe_id
+            True,                 # exists
+            gprobeX,
+            gprobeY,
+            gprobeRadius,
+            0,                    # Rotation
+            0,                    # x_ferrule_offset
+            0,                    # y_ferrule_offset
+            0,                    # focus_offset
+            'GUIDE'               # fiber_type
+            ]
+
+        gprobes[1].from_platedb_gprobe(gprobeKey)
+
+        # Fakes gprobeInfoKey
+        gprobeInfoKey = [
+            1,
+            gprobeRA,
+            gprobeDec,
+            0,            # xFocal
+            0,            # yFocal
+            90,           # phi
+            0             # throughput
+            ]
+
+        gprobes[1].from_platedb_guideInfo(gprobeInfoKey)
+
+        queue.put(Msg(Msg.LOAD_CARTRIDGE, cmd=cmd,
+                  cartridge=cartridge, plate=plate, pointing=pointing,
+                  fscanMJD=fscanMJD, fscanID=fscanID,
+                  boresight_ra=gprobeRA, boresight_dec=gprobeDec,
+                  design_ha=design_ha, survey=survey, surveyMode=surveyMode,
+                  gprobes=gprobes))
