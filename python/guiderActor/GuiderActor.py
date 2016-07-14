@@ -218,14 +218,30 @@ class GuiderActorLCO(GuiderActor):
         # This lets guiderImageAnalysis know to ignore dark frames.
         actorState.bypassDark = 'guider_dark' in bypassedNames
 
-        # tccModel = actorState.models['tcc']
-        # axisCmdState = tccModel.keyVarDict['axisCmdState']
-        # if any(x.lower() != 'tracking' for x in axisCmdState):
-        #     if 'axes' in bypassedNames:
-        #         cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
-        #     else:
-        #         cmd.warn('text="TCC motion aborted guiding"')
-        #         return False
+        tccModel = actorState.models['tcc']
+        axisCmdState = tccModel.keyVarDict['axisCmdState']
+
+        raState, decState, rotState = axisCmdState
+
+        # At LCO rotator does not guide, so we check that it is halted.
+        if (raState.lower() != 'tracking' or decState.lower() != 'tracking' or
+                rotState.lower() != 'halted'):
+            if 'axes' in bypassedNames:
+                cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
+            else:
+                cmd.warn('text="TCC motion aborted guiding"')
+                return False
+
+        mirror2CmdState = tccModel.keyVarDict['secState'][0]
+        if mirror2CmdState.lower() != 'done':
+            cmd.warn('text="Secondary mirror state: {0}. Aborted guiding."'
+                     .format(mirror2CmdState))
+            return False
+
+        scaleCmdState = tccModel.keyVarDict['threadringState'][0]
+        if scaleCmdState.lower() != 'done':
+            cmd.warn('text="Scaling ring state: {0}. Aborted guiding."'.format(scaleCmdState))
+            return False
 
         return True
 
