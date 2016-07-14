@@ -233,6 +233,10 @@ class GuiderActorLCO(GuiderActor):
         tccModel = actorState.models['tcc']
         axisCmdState = tccModel.keyVarDict['axisCmdState']
 
+        if None in axisCmdState:
+            cmd.warn('text="Could not get axisCmdState. Is the TCC connected?"')
+            return False
+
         raState, decState, rotState = map(lambda xx: xx.lower(), axisCmdState)
 
         # At LCO rotator does not guide, so we check that it is halted.
