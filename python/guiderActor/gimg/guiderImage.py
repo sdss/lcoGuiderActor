@@ -1193,14 +1193,16 @@ class GuiderImageAnalysis(object):
 
         fibers = []
         # For each fake gprobe, we create a fiber matching position and radius.
-        for gprobe in gprobes:
+        for gprobeID in gprobes:
+
+            gprobe = gprobes[gprobeID]
 
             xCenter = gprobe.xCenter
             yCenter = gprobe.yCenter
             radius = gprobe.radius
 
-            fiber = Fiber(gprobe.id, xCenter, yCenter, radius, -1,
-                          label=gprobe.id)
+            fiber = Fiber(gprobeID, xCenter, yCenter, radius, -1,
+                          label=gprobeID)
             fiber.gProbe = gprobe
             fibers.append(fiber)
 
@@ -1217,7 +1219,7 @@ class GuiderImageAnalysis(object):
 
             self.cmd.diag(
                 'text={0}'.format(qstr('fiber {0:d} ({1:g},{2:g},{3:g})'
-                                       .format((gprobe.id, xx, yy, rr)))))
+                                       .format((gprobeID, xx, yy, rr)))))
 
         # For now, let's just make the flat the original image, binned to
         # the desired binning.
