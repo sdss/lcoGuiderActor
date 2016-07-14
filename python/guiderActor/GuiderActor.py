@@ -243,12 +243,14 @@ class GuiderActorLCO(GuiderActor):
                 cmd.warn('text="TCC motion aborted guiding"')
                 return False
 
+        # Checks the state of the secondary mirror. Fails if it's moving.
         mirror2CmdState = tccModel.keyVarDict['secState'][0]
         if mirror2CmdState.lower() != 'done':
             cmd.warn('text="Secondary mirror state: {0}. Aborted guiding."'
                      .format(mirror2CmdState))
             return False
 
+        # Checks the state of the scaling ring. Fails if it's moving.
         scaleCmdState = tccModel.keyVarDict['threadringState'][0]
         if scaleCmdState.lower() != 'done':
             cmd.warn('text="Scaling ring state: {0}. Aborted guiding."'.format(scaleCmdState))
