@@ -1211,9 +1211,9 @@ class GuiderImageAnalysis(object):
             mask[mask_fiber] = True
 
             # We print the unbinned parameters of the fake fibre
-            xx = (gprobe.xCenter + 0.25) * binning
-            yy = (gprobe.yCenter + 0.25) * binning
-            rr = gprobe.radius * binning
+            xx = (xCenter + 0.25) * binning
+            yy = (yCenter + 0.25) * binning
+            rr = radius * binning
 
             self.cmd.diag(
                 'text={0}'.format(qstr('fiber {0:d} ({1:g},{2:g},{3:g})'
