@@ -232,7 +232,7 @@ class GuiderImageAnalysis(object):
             # TODO: the lower is what makes sense from over-exposed flats and the ecam.
             bias = np.median(image[:,(1039/binning):])
         else:
-            self.cmd.warn('text=%s'%qstr("Cheating with bais level! No overscan was found!"))
+            self.cmd.warn('text=%s'%qstr("Cheating with bias level! No overscan was found!"))
             ir = image.ravel()
             I = np.argsort(ir)
             bias = ir[I[int(0.3 * len(ir))]]
