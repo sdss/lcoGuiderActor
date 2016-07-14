@@ -1184,6 +1184,57 @@ class GuiderImageAnalysis(object):
         hdulist = self._get_basic_hdulist(image, hdr, bg)
         return hdulist
 
+    def create_fibers_fake_gprobe(self, image, flatFileName, gprobes, hdr):
+        """Processes a flat that has a single synthetic gprobe."""
+
+        binning = self.binning
+        mask = np.zeros((image.shape[0] / self.binning,
+                         image.shape[1] / self.binning))
+
+        fibers = []
+        # For each fake gprobe, we create a fiber matching position and radius.
+        for gprobe in gprobes:
+
+            xCenter = gprobe.xCenter
+            yCenter = gprobe.yCenter
+            radius = gprobe.radius
+
+            fiber = Fiber(gprobe.id, xCenter, yCenter, radius, -1,
+                          label=gprobe.id)
+            fiber.gProbe = gprobe
+            fibers.append(fiber)
+
+            # Adds the fiber to the mask
+            yGrid, xGrid = np.ogrid[-yCenter:mask.shape[0] - yCenter,
+                                    -xCenter:mask.shape[1] - xCenter]
+            mask_fiber = xGrid ** 2 + yGrid ** 2 <= radius ** 2
+            mask[mask_fiber] = True
+
+            # We print the unbinned parameters of the fake fibre
+            xx = (gprobe.xCenter + 0.25) * binning
+            yy = (gprobe.yCenter + 0.25) * binning
+            rr = gprobe.radius * binning
+
+            self.cmd.diag(
+                'text={0}'.format(qstr('fiber {0:d} ({1:g},{2:g},{3:g})'
+                                       .format((gprobe.id, xx, yy, rr)))))
+
+        # For now, let's just make the flat the original image, binned to
+        # the desired binning.
+        # LCOHACK: apply background and flatscale here
+        flat = bin_image(image, self.binning)
+
+        mask = np.where(mask, 0, self.mask_masked)
+        mask = mask.astype(np.uint8)
+
+        hdulist = self._getProcGimgHDUList(hdr, gprobes, fibers, flat, mask)
+
+        if hdulist is None:
+            self.cmd.warn('text=%s' %
+                          qstr('Failed to create processed flat file'))
+
+        return hdulist, gprobes
+
     def analyzeFlat(self, flatFileName, gprobes, cmd=None, setPoint=None):
         """
         Return (flat,mask,fibers): with the processed flat, mask to apply
@@ -1220,7 +1271,15 @@ class GuiderImageAnalysis(object):
         # because they are so short and have ~20k counts and are unbinned.
 
         if self.camera == 'gcamera':
-            hdulist,gprobes = self._find_fibers_in_flat(image, flatFileName, gprobes, hdr)
+            # If cart is 99, we don't want to detect fibres from the image. We
+            # create a fibre that matches the gprobe.
+            if hdr['FLATCART'] == 99:
+                hdulist, gprobes = self.create_fibers_fake_gprobe(image, flatFileName,
+                                                                  gprobes, hdr)
+            else:
+                hdulist, gprobes = self._find_fibers_in_flat(image, flatFileName,
+                                                             gprobes, hdr)
+
         elif self.camera == 'ecamera':
             hdulist = self._process_ecam_flat(image, flatFileName, hdr)
             gprobes = None
