@@ -1187,6 +1187,8 @@ class GuiderImageAnalysis(object):
     def create_fibers_fake_gprobe(self, image, flatFileName, gprobes, hdr):
         """Processes a flat that has a single synthetic gprobe."""
 
+        self.rot_cval = self.flat_clip[0]
+
         binning = self.binning
         mask = np.zeros((image.shape[0] / self.binning,
                          image.shape[1] / self.binning))
@@ -1201,8 +1203,8 @@ class GuiderImageAnalysis(object):
             yCenter = gprobe.yCenter
             radius = gprobe.radius
 
-            fiber = Fiber(gprobeID, xCenter, yCenter, radius, -1,
-                          label=gprobeID)
+            fiber = Fiber(gprobe.id, xCenter, yCenter, radius, -1,
+                          label=gprobe.id)
             fiber.gProbe = gprobe
             fibers.append(fiber)
 
@@ -1219,7 +1221,7 @@ class GuiderImageAnalysis(object):
 
             self.cmd.diag(
                 'text={0}'.format(qstr('fiber {0:d} ({1:g},{2:g},{3:g})'
-                                       .format((gprobeID, xx, yy, rr)))))
+                                       .format(gprobe.id, xx, yy, rr))))
 
         # For now, let's just make the flat the original image, binned to
         # the desired binning.
