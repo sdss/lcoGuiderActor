@@ -221,11 +221,10 @@ class GuiderActorLCO(GuiderActor):
         tccModel = actorState.models['tcc']
         axisCmdState = tccModel.keyVarDict['axisCmdState']
 
-        raState, decState, rotState = axisCmdState
+        raState, decState, rotState = map(lambda xx: xx.lower(), axisCmdState)
 
         # At LCO rotator does not guide, so we check that it is halted.
-        if (raState.lower() != 'tracking' or decState.lower() != 'tracking' or
-                rotState.lower() != 'halted'):
+        if raState != 'tracking' or decState != 'tracking' or rotState != 'halted':
             if 'axes' in bypassedNames:
                 cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
             else:
