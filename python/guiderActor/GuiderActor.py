@@ -191,6 +191,18 @@ class GuiderActorAPO(GuiderActor):
                 cmd.warn('text="TCC motion aborted guiding"')
                 return False
 
+        # Checks the state of the primary and secondary mirrors
+        mirror2CmdState = tccModel.keyVarDict['secState'][0]
+        if mirror2CmdState.lower() != 'done':
+            cmd.warn('text="Secondary mirror state: {0}. Aborted guiding."'
+                     .format(mirror2CmdState))
+            return False
+
+        primaryCmdState = tccModel.keyVarDict['primState'][0]
+        if primaryCmdState.lower() != 'done':
+            cmd.warn('text="Primary mirror state: {0}. Aborted guiding."'.format(primaryCmdState))
+            return False
+
         return True
 
     def getLoadedCartridge(self, cmd, actorState):
