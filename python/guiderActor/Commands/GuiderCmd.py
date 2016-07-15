@@ -263,7 +263,7 @@ class GuiderCmd(object):
         """Reprocess a single file."""
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.REPROCESS_FILE, cmd=cmd,
-                                                                filename=cmd.cmd.keywords["filename"].values[0]))
+                                                                filename=cmd.cmd.keywords["file"].values[0]))
 
     def loadPlateFiles(self, cmd):
         """Read in cartridge and plugmap files. """
