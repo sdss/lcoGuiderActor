@@ -102,7 +102,7 @@ class GuiderImageAnalysis(object):
     mask_badpixels = 2
     mask_masked    = 4 # ie, outside the guide fiber
 
-    def __init__(self, setPoint, location):
+    def __init__(self, setPoint, location, bigFiberRadius, zeropoint):
         """
         New GuiderImageAnalysis instances are ready to accept files for processing.
 
@@ -155,11 +155,13 @@ class GuiderImageAnalysis(object):
         # gcamFiberInfo.par file) the larger fibers to be ACQUIRE,
         # though they are declared to have radii of 14.1 pixels (vs
         # 8.5 for the GUIDE fibers).  We therefore cut on this radius.
-        self.bigFiberRadius = 12.
+        self.bigFiberRadius = bigFiberRadius
 
         # The factor by which guider images are binned down.
         # That is, unbinned (flat) images are this factor bigger in
         # each dimension.
+        # TODO: this is confusing. Either we should change the name of this
+        # attribute or use the binning from the gimgs.
         self.binning = 2
 
         # The pixel scale of the guider camera, when binned by "binning"
@@ -172,7 +174,7 @@ class GuiderImageAnalysis(object):
         # The photometric zero-point for (g + r)/2 band was 25.34
         # This was calibrated vs MJD 55246, with AZ~=73 deg, airmass~=1.046
         # Masayuki zero average point 25.70 for use for his color transform
-        self.zeropoint = 25.70
+        self.zeropoint = zeropoint
 
         # TODO: readnoise and ccd gain should be set in the config file,
         # or even better, written by gcameraICC and read from the header.

@@ -113,6 +113,9 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         set_telescope(self.config, gState)
         set_gcamera(self.config, gState)
 
+        # Sets the value of the bigFiberRadius
+        gState.bigFiberRadius = float(self.config.get('gprobes', 'bigFiberRadius'))
+
     def getLoadedCartridge(self, cmd, actor, actorState=None):
         """Returns the value of instrumentNum from actor."""
 
