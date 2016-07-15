@@ -44,7 +44,7 @@ class FakeCommand(object):
     def fail(self, text):
         self._respond('f', text)
     def error(self, text):
-        self._respong('e', text)
+        self._respond('e', text)
 
 
 def processOneFile(gState, guiderFile):
