@@ -47,7 +47,8 @@ class FakeCommand(object):
         self._respond('e', text)
 
 
-def processOneFile(gState, guiderFile, guiderImageAnalysis):
+def processOneFile(gState, guiderFile, guiderImageAnalysis
+                   ):
     queues = dict(MASTER=Queue.Queue())
 
     guideStep(None, queues, gState.cmd, guiderFile, True, guiderImageAnalysis)
