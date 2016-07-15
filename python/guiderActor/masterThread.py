@@ -1062,7 +1062,8 @@ def main(actor, queues):
     time.sleep(3)
     setPoint = actorState.models["gcamera"].keyVarDict["cooler"][0]
     print 'Initial gcamera setPoint:',setPoint
-    guiderImageAnalysis = GuiderImageAnalysis(setPoint, actorState.actor.location)
+    guiderImageAnalysis = GuiderImageAnalysis(setPoint, actorState.actor.location,
+                                              gState.bigFiberRadius, gState.zeropoint)
 
     while True:
         try:

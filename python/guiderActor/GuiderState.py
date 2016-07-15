@@ -315,6 +315,8 @@ class GuiderState(object):
         # Will contain [id]:gProbe pairs
         self.gprobes = {}
 
+        self.bigFiberRadius = np.nan
+
         # PIDs for various axes, and their default, on-initialization values.
         self.pid = {}
         self.pid_defaults = {}
