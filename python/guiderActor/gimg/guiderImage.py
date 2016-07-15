@@ -144,7 +144,7 @@ class GuiderImageAnalysis(object):
         self.saturationLevel = 0xF000    #62,000
 
         # The value to replace saturated pixels by.
-        #self.saturationReplacement = 0xA000
+        # self.saturationReplacement = 0xA000
         self.saturationReplacement = 0xF000 #62,000
 
         # TODO: everything below here should come either from the gimg files,
@@ -161,26 +161,18 @@ class GuiderImageAnalysis(object):
         # That is, unbinned (flat) images are this factor bigger in
         # each dimension.
         # TODO: this is confusing. Either we should change the name of this
-        # attribute or use the binning from the gimgs.
+        # attribute or use the binning from the gimgs (JSG).
         self.binning = 2
 
         # The pixel scale of the guider camera, when binned by "binning"
-        # In arcsec/pixel
-        if self.location == 'APO':
-            self.pixelscale = 0.428
-        elif self.location == 'LCO':
-            self.pixelscale = 0.2834
+        # In arcsec/pixel. This is set from the gimg.
+        self.pixelscale = np.nan
 
-        # The photometric zero-point for (g + r)/2 band was 25.34
-        # This was calibrated vs MJD 55246, with AZ~=73 deg, airmass~=1.046
-        # Masayuki zero average point 25.70 for use for his color transform
         self.zeropoint = zeropoint
 
-        # TODO: readnoise and ccd gain should be set in the config file,
-        # or even better, written by gcameraICC and read from the header.
-        self.readNoise = 10.4 # electrons RMS, from: http://www.ccd.com/alta_f47.html
-        self.ccdGain = 1.4 # e-/ADU, taken from ipGGuide.h
-    #...
+        # These values are set from the gimg when GuiderImageAnalysis is called
+        self.readNoise = np.nan
+        self.ccdGain = np.nan
 
     def __call__(self, cmd, gimgfn, gprobes, setPoint, bypassDark=False, camera='gcamera'):
         """
@@ -648,6 +640,37 @@ class GuiderImageAnalysis(object):
             self.cmd.error('text=%s'%qstr('Fully saturated! Please reduce exposure time or wait for the excess light to go away.'))
             raise GuiderExceptions.GuiderError
         image[sat] = self.saturationReplacement
+
+        # Sets the pixelScale, gain, and read noise from the header. In case
+        # the values are not in the header (for re-reduction of old images),
+        # we use old values.
+
+        if 'PIXELSC' in hdr:
+            self.pixelscale = hdr['PIXELSC']
+        else:
+            if self.location == 'APO':
+                self.pixelscale = 0.428
+            elif self.location == 'LCO':
+                self.pixelscale = 0.2834
+            self.cmd.warn('text={0}'.format(
+                qstr('PIXELSC not found in image header. Using {0:.3f} arcsec.'
+                     .format(self.pixelscale))))
+
+        if 'READNOIS' in hdr:
+            self.readNoise = hdr['READNOIS']
+        else:
+            self.readNoise = 10.4
+            self.cmd.warn('text={0}'.format(
+                qstr('READNOIS not found in image header. Using {0:.1f}.'
+                     .format(self.pixelscale))))
+
+        if 'GAIN' in hdr:
+            self.ccdGain = hdr['GAIN']
+        else:
+            self.ccdGain = 1.4
+            self.cmd.warn('text={0}'.format(
+                qstr('GAIN not found in image header. Using {0:.1f}.'
+                     .format(self.pixelscale))))
 
         return image,hdr,sat
     #...
