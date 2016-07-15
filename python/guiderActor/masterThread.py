@@ -47,12 +47,15 @@ class FakeCommand(object):
         self._respond('e', text)
 
 
-def processOneFile(gState, guiderFile):
+def processOneFile(gState, guiderFile, guiderImageAnalysis):
     queues = dict(MASTER=Queue.Queue())
 
-    guideStep(None, queues, gState.cmd, guiderFile, True)
+    guideStep(None, queues, gState.cmd, guiderFile, True, guiderImageAnalysis)
 
-def processOneProcFile(gState, guiderFile, cartFile, plateFile, actor=None, queues=None, cmd=None, guideCmd=None):
+def processOneProcFile(gState, guiderFile, cartFile, plateFile, actor=None,
+                       queues=None, cmd=None, guideCmd=None,
+                       guiderImageAnalysis):
+
     gState.setGuideMode('axes', False)
     gState.setGuideMode('focus', False)
     gState.setGuideMode('scale', False)
@@ -62,7 +65,7 @@ def processOneProcFile(gState, guiderFile, cartFile, plateFile, actor=None, queu
     if not queues: queues = dict(MASTER=Queue.Queue())
 
     gState.cmd = guideCmd
-    guideStep(None, queues, cmd, gState, guiderFile, True)
+    guideStep(None, queues, cmd, gState, guiderFile, True, guiderImageAnalysis)
 
 def send_decenter_status(cmd, gState, frameNo):
     """Output the decenter status keywords, including the most recent frame number."""
@@ -1185,13 +1188,13 @@ def main(actor, queues):
                 if not msg.success:
                     msg.cmd.fail('text="something went wrong when taking the dark"')
                     continue
-                dark_finished(msg,guiderImageAnalysis,actorState,gState)
+                dark_finished(msg,guiderImageAnalysis,actorState,gState, guiderImageAnalysis)
 
             elif msg.type == Msg.FLAT_FINISHED:
                 if not msg.success:
                     msg.cmd.fail('text="something went wrong when taking the flat"')
                     continue
-                flat_finished(msg,guiderImageAnalysis,actorState,gState)
+                flat_finished(msg,guiderImageAnalysis,actorState,gState, guiderImageAnalysis)
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.startFrame = None # clear the start frame: don't need it any more!
