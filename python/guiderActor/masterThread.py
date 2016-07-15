@@ -1360,6 +1360,22 @@ def main(actor, queues):
                 decenters = getattr(msg,'decenters',{})
                 set_decenter(msg.cmd, decenters, gState, enable)
 
+            elif msg.type == Msg.ONESTEP:
+
+                if gState.cartridge <= 0:
+                    msg.cmd.fail('text="no valid cartridge is loaded"')
+                    continue
+
+                camera = ('ecamera' if gState.plateType == 'ecamera'
+                          else 'gcamera')
+                gState.expTime = msg.expTime
+
+                queues[GCAMERA].put(Msg(Msg.EXPOSE,
+                                        gState.cmd,
+                                        replyQueue=queues[MASTER],
+                                        expTime=gState.expTime,
+                                        camera=camera))
+
             elif msg.type == Msg.STATUS:
                 # Try to generate status even after we have failed.
                 cmd = msg.cmd if msg.cmd.alive else actor.bcast
