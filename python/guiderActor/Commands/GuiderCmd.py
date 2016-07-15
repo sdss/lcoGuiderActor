@@ -679,7 +679,7 @@ class GuiderCmd(object):
             0,                    # x_ferrule_offset
             0,                    # y_ferrule_offset
             0,                    # focus_offset
-            'GUIDE'               # fiber_type
+            'ACQUIRE'             # fiber_type
             ]
 
         gprobes[1].from_platedb_gprobe(gprobeKey)
