@@ -56,6 +56,8 @@ def processOneFile(gState, guiderFile, guiderImageAnalysis):
 def processOneProcFile(gState, guiderFile, cartFile, plateFile, guiderImageAnalysis,
                        actor=None, queues=None, cmd=None, guideCmd=None):
 
+    # TODO: I'm reasonably sure this does not work. Fix it or remove it (JSG)
+
     gState.setGuideMode('axes', False)
     gState.setGuideMode('focus', False)
     gState.setGuideMode('scale', False)
@@ -1116,6 +1118,7 @@ def main(actor, queues):
                 msg.cmd.finish('text="I do hope that succeeded."')
 
             elif msg.type == Msg.READ_PLATE_FILES:
+                # TODO: I'm reasonably sure this does not work. Fix it or remove it (JSG)
                 processOneProcFile(gState, msg.filename, actor, queues, cmd=msg.cmd)
                 msg.cmd.finish('text="I do so hope that succeeded."')
 
