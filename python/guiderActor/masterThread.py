@@ -50,7 +50,7 @@ class FakeCommand(object):
 def processOneFile(gState, guiderFile, guiderImageAnalysis):
     queues = dict(MASTER=Queue.Queue())
 
-    guideStep(None, queues, gState.cmd, guiderFile, True, guiderImageAnalysis)
+    guideStep(None, queues, gState.cmd, gState, guiderFile, True, guiderImageAnalysis)
 
 
 def processOneProcFile(gState, guiderFile, cartFile, plateFile, guiderImageAnalysis,
