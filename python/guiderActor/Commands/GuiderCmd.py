@@ -107,7 +107,8 @@ class GuiderCmd(object):
             ('makeMovie', '[<movieMJD>] <start> <end>', self.makeMovie),
             ('findstar', '[<time>] [<bin>]', self.ecam_findstar),
             ('sendfield', '', self.sendfield),
-            ('loadFakeGProbe', '[<gprobeX>] [<gprobeY>] [<gprobeRadius>] [<gprobeRA>] [<gprobeDec>]', self.loadFakeGProbe)
+            ('loadFakeGProbe', '[<gprobeX>] [<gprobeY>] [<gprobeRadius>] [<gprobeRA>] [<gprobeDec>]', self.loadFakeGProbe),
+            ('oneStep', '[<time>]', self.oneStep)
             ]
 
         self.fakeCartNumber = 99
@@ -703,3 +704,11 @@ class GuiderCmd(object):
                   boresight_ra=gprobeRA, boresight_dec=gprobeDec,
                   design_ha=design_ha, survey=survey, surveyMode=surveyMode,
                   gprobes=gprobes))
+
+    def oneStep(self, cmd):
+        """Centers stars in acquisition gprobes."""
+
+        expTime = (cmd.cmd.keywords['time'].values[0]
+                   if 'time' in cmd.cmd.keywords else 0.5)
+        myGlobals.actorState.queues[guiderActor.MASTER].put(
+            Msg(Msg.ONESTEP, cmd=cmd, expTime=expTime))
