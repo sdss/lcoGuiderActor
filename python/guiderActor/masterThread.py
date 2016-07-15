@@ -981,10 +981,11 @@ def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
         failMsg = "No cart/plate information: please load cartridge and try again."
         cmd.fail('guideState=failed; text="%s"' % failMsg)
         return
-    if not actorState.actor.guidingIsOK(cmd, actorState, force=force):
-        failMsg = "Not ok to guide in current state."
-        cmd.fail('guideState=failed; text="%s"' % failMsg)
-        return
+    #LCO HACK!
+    # if not actorState.actor.guidingIsOK(cmd, actorState, force=force):
+    #     failMsg = "Not ok to guide in current state."
+    #     cmd.fail('guideState=failed; text="%s"' % failMsg)
+    #     return
 
     if (expTime is not None and gState.expTime != expTime):
         gState.expTime = expTime
@@ -1111,6 +1112,8 @@ def main(actor, queues):
                 start_guider(msg.cmd, gState, actorState, queues, camera=camera, stack=stack, expTime=expTime, force=force)
 
             elif msg.type == Msg.REPROCESS_FILE:
+                if gState.cmd is None:
+                    gState.cmd = msg.cmd
                 processOneFile(gState, msg.filename, guiderImageAnalysis)
                 msg.cmd.finish('text="I do hope that succeeded."')
 
