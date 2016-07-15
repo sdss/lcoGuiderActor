@@ -1194,13 +1194,13 @@ def main(actor, queues):
                 if not msg.success:
                     msg.cmd.fail('text="something went wrong when taking the dark"')
                     continue
-                dark_finished(msg,guiderImageAnalysis,actorState,gState, guiderImageAnalysis)
+                dark_finished(msg,guiderImageAnalysis,actorState,gState)
 
             elif msg.type == Msg.FLAT_FINISHED:
                 if not msg.success:
                     msg.cmd.fail('text="something went wrong when taking the flat"')
                     continue
-                flat_finished(msg,guiderImageAnalysis,actorState,gState, guiderImageAnalysis)
+                flat_finished(msg,guiderImageAnalysis,actorState,gState)
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.startFrame = None # clear the start frame: don't need it any more!
