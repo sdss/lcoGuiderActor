@@ -16,7 +16,7 @@ class Msg(actorcore.Actor.Msg):
     HIGH = 2
     MEDIUM = 4
     NORMAL = 6
-    
+
     # Command types; use classes so that the unique IDs are automatically generated
     class START_GUIDING(): pass
     class STOP_GUIDING(): pass
@@ -43,7 +43,8 @@ class Msg(actorcore.Actor.Msg):
     class SET_REFRACTION(): pass
     class STAR_IN_FIBER(): pass
     class MAKE_MOVIE(): pass
-    
+    class ONESTEP(): pass
+
     def __init__(self, type, cmd, **data):
         self.type = type
         self.cmd = cmd
