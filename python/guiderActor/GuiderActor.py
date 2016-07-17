@@ -117,17 +117,18 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         gState.bigFiberRadius = float(self.config.get('gprobes', 'bigFiberRadius'))
         gState.zeropoint = float(self.config.get('telescope', 'zeroPoint'))
 
-    def getLoadedCartridge(self, cmd, actor, actorState=None):
+    def getLoadedCartridge(self, cmd, actor, command='info', actorState=None):
         """Returns the value of instrumentNum from actor."""
 
-        instrumentNumKey = actorState.models[actor].keyVarDict["instrumentNum"]
+        instrumentNumKey = actorState.models[actor].keyVarDict['instrumentNum']
         cmdVar = actorState.actor.cmdr.call(actor=actor,
                                             forUserCmd=cmd,
-                                            cmdStr="info",
+                                            cmdStr=command,
                                             keyVars=[instrumentNumKey])
 
         if cmdVar.didFail:
-            cmd.fail('text=\"Failed to ask {0} for info on cartridges\"'.format(actor))
+            cmd.fail('text=\"Failed to ask {0} for info on cartridges\"'
+                     .format(actor))
             return
 
         loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
@@ -217,7 +218,7 @@ class GuiderActorAPO(GuiderActor):
         """
 
         return super(GuiderActorAPO, self).getLoadedCartridge(
-            cmd, 'mcp', actorState=actorState)
+            cmd, 'mcp', command='info', actorState=actorState)
 
 
 class GuiderActorLCO(GuiderActor):
@@ -276,7 +277,7 @@ class GuiderActorLCO(GuiderActor):
         """
 
         return super(GuiderActorLCO, self).getLoadedCartridge(
-            cmd, 'tcc', actorState=actorState)
+            cmd, 'tcc', command='show status', actorState=actorState)
 
 
 class GuiderActorLocal(GuiderActor):
