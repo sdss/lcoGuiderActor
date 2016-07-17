@@ -16,8 +16,6 @@ import guiderActor
 import GuiderState
 from guiderActor import myGlobals
 
-import warnings
-
 
 def set_default_pids(config, gState):
     """Set the PID value defaults from the config file."""
