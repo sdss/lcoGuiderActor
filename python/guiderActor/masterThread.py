@@ -1362,13 +1362,22 @@ def main(actor, queues):
 
             elif msg.type == Msg.ONESTEP:
 
+                actorState = guiderActor.myGlobals.actorState
+
                 if gState.cartridge <= 0:
                     msg.cmd.fail('text="no valid cartridge is loaded"')
                     continue
 
+                if not actorState.actor.guidingIsOK(cmd, actorState, force=force):
+                    failMsg = "Not ok to guide in current state."
+                    cmd.fail('guideState=failed; text="%s"' % failMsg)
+                    return
+
                 camera = ('ecamera' if gState.plateType == 'ecamera'
                           else 'gcamera')
                 gState.expTime = msg.expTime
+                gState.cmd = cmd
+                oneExposure = True
 
                 queues[GCAMERA].put(Msg(Msg.EXPOSE,
                                         gState.cmd,
