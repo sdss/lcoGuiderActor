@@ -230,6 +230,12 @@ class GuiderImageAnalysis(object):
             ir = image.ravel()
             I = np.argsort(ir)
             bias = ir[I[int(0.3 * len(ir))]]
+            # LCOHACK: this does not seem to work well. For now, let's just put a hardcoded
+            # value in here.
+            if image.shape[0] > 1000:
+                bias = 315.
+            else:
+                bias = image.mean()
         self.imageBias = bias
     #...
 
