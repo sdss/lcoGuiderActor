@@ -275,7 +275,7 @@ class GuiderActorLCO(GuiderActor):
         """
 
         return super(GuiderActorLCO, self).getLoadedCartridge(
-            cmd, 'tcc', command='show status', actorState=actorState)
+            cmd, 'tcc', command='device status', actorState=actorState)
 
 
 class GuiderActorLocal(GuiderActor):
