@@ -232,6 +232,7 @@ class GuiderActorLCO(GuiderActor):
 
         bypassedNames = actorState.models["sop"].keyVarDict["bypassedNames"]
         # This lets guiderImageAnalysis know to ignore dark frames.
+
         actorState.bypassDark = 'guider_dark' in bypassedNames
 
         tccModel = actorState.models['tcc']
@@ -257,12 +258,13 @@ class GuiderActorLCO(GuiderActor):
             cmd.warn('text="Secondary mirror state: {0}. Aborted guiding."'
                      .format(mirror2CmdState))
             return False
-
+        
+        # LCOHACK: disabling this part untils the scaling ring is connected
         # Checks the state of the scaling ring. Fails if it's moving.
-        scaleCmdState = tccModel.keyVarDict['threadringState'][0]
-        if scaleCmdState.lower() != 'done':
-            cmd.warn('text="Scaling ring state: {0}. Aborted guiding."'.format(scaleCmdState))
-            return False
+        # scaleCmdState = tccModel.keyVarDict['threadringState'][0]
+        # if scaleCmdState.lower() != 'done':
+        #     cmd.warn('text="Scaling ring state: {0}. Aborted guiding."'.format(scaleCmdState))
+        #     return False
 
         return True
 
