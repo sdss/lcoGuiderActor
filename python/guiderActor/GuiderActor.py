@@ -125,7 +125,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
                                             keyVars=[instrumentNumKey])
 
         if cmdVar.didFail:
-            cmd.fail('text=\"Failed to ask {0} for info on cartridges\"'
+            cmd.warn('text=\"Failed to ask {0} for info on cartridges\"'
                      .format(actor))
             return
 
