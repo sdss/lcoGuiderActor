@@ -312,6 +312,9 @@ class GuiderCmd(object):
         actorState = guiderActor.myGlobals.actorState
 
         loadedCartridge = self.actor.getLoadedCartridge(cmd, actorState)
+        if loadedCartridge is None:
+            cmd.fail('text="failed retrieving the number of the cart on the telescope."')
+            return
 
         cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
 
