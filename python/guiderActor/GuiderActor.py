@@ -120,11 +120,6 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
         instrumentNumKey = actorState.models[actor].keyVarDict['instrumentNum']
 
-        # LCOHACK: the call to TCC seems to hang the actor at LCO. For now,
-        # let's just return the instrumentNum value currently in the keyword.
-        if actor == 'tcc':
-            return instrumentNumKey[0]
-
         cmdVar = actorState.actor.cmdr.call(actor=actor,
                                             forUserCmd=cmd,
                                             cmdStr=command,
@@ -135,7 +130,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
                      .format(actor))
             return
 
-        loadedCartridge = cmdVar.getLastKeyVarData(instrumentNumKey)[0]
+        loadedCartridge = actorState.models[actor].keyVarDict['instrumentNum'][0]
 
         return loadedCartridge
 
@@ -281,7 +276,7 @@ class GuiderActorLCO(GuiderActor):
         """
 
         return super(GuiderActorLCO, self).getLoadedCartridge(
-            cmd, 'tcc', command='device status', actorState=actorState)
+            cmd, 'tcc', command='device status tcs', actorState=actorState)
 
 
 class GuiderActorLocal(GuiderActor):
