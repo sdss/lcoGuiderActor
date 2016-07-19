@@ -102,6 +102,8 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         self.actorState.timeout = 60  # timeout on message queues
         gState = self.actorState.gState
 
+        self.actorState.bypassDark = False
+
         for what in self.config.options("enable"):
             enable = {"True": True, "False": False}[self.config.get('enable', what)]
             gState.setGuideMode(what, enable)
@@ -117,7 +119,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
     def getLoadedCartridge(self, cmd, actor, command='info', actorState=None):
         """Returns the value of instrumentNum from actor."""
-
+        
         instrumentNumKey = actorState.models[actor].keyVarDict['instrumentNum']
 
         cmdVar = actorState.actor.cmdr.call(actor=actor,
