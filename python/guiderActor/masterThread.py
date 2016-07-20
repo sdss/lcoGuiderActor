@@ -981,7 +981,8 @@ def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
         failMsg = "No cart/plate information: please load cartridge and try again."
         cmd.fail('guideState=failed; text="%s"' % failMsg)
         return
-    #LCO HACK!
+    # LCOHACK: we want to continue taking exposures even if something is
+    # wrong.
     # if not actorState.actor.guidingIsOK(cmd, actorState, force=force):
     #     failMsg = "Not ok to guide in current state."
     #     cmd.fail('guideState=failed; text="%s"' % failMsg)
@@ -1162,9 +1163,11 @@ def main(actor, queues):
                 #
                 # Is there anything to indicate that we shouldn't be guiding?
                 #
-                if not actorState.actor.guidingIsOK(msg.cmd, actorState, force=force):
-                    queues[MASTER].put(Msg(Msg.STOP_GUIDING, gState.cmd))
-                    continue
+                # LCOHACK: does not check whether we should keep guiding, just
+                # go for it.
+                # if not actorState.actor.guidingIsOK(msg.cmd, actorState, force=force):
+                #     queues[MASTER].put(Msg(Msg.STOP_GUIDING, gState.cmd))
+                #     continue
                 #
                 # Start the next exposure
                 #
@@ -1190,6 +1193,15 @@ def main(actor, queues):
                                         expType="dark", expTime=msg.expTime,
                                         stack=msg.stack, camera=camera))
 
+            elif msg.type == Msg.TAKE_BIAS:
+                camera = ('ecamera'
+                          if gState.plateType == 'ecamera' else 'gcamera')
+                queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd,
+                                        replyQueue=queues[MASTER],
+                                        expType='bias',
+                                        stack=msg.stack,
+                                        camera=camera))
+
             elif msg.type == Msg.DARK_FINISHED:
                 if not msg.success:
                     msg.cmd.fail('text="something went wrong when taking the dark"')
@@ -1201,6 +1213,13 @@ def main(actor, queues):
                     msg.cmd.fail('text="something went wrong when taking the flat"')
                     continue
                 flat_finished(msg,guiderImageAnalysis,actorState,gState)
+
+            elif msg.type == Msg.BIAS_FINISHED:
+                if not msg.success:
+                    msg.cmd.fail(
+                        'text="something went wrong when taking the bias"')
+                    continue
+                msg.cmd.inform('text="bias was sucessful!"')
 
             elif msg.type == Msg.LOAD_CARTRIDGE:
                 gState.startFrame = None # clear the start frame: don't need it any more!

@@ -22,6 +22,9 @@ def expose(cmd, actorState, replyQueue, expTime, stack=1, cartridge=None, expTyp
         responseMsg = Msg.FLAT_FINISHED
     elif expType == "dark":
         responseMsg = Msg.DARK_FINISHED
+    elif expType == 'bias':
+        responseMsg = Msg.BIAS_FINISHED
+        cmdStr = 'bias stack={0}'.format(stack)
     else:
         responseMsg = Msg.EXPOSURE_FINISHED
 
@@ -58,13 +61,13 @@ def main(actor, queues):
             qlen = queues[GCAMERA].qsize()
             if qlen > 0 and msg.cmd:
                 msg.cmd.diag("gcamera thread has %d items after a .get()" % (qlen))
-                
+
             if msg.type == Msg.EXIT:
                 if msg.cmd:
                     msg.cmd.inform('text="Exiting thread %s"' % (threading.current_thread().name))
 
                 return
-            
+
             elif msg.type == Msg.EXPOSE:
                 camera = getattr(msg,'camera','gcamera')
                 expType = getattr(msg,'expType','expose')
@@ -78,7 +81,7 @@ def main(actor, queues):
                     msg.cmd.respond('text="Request to abort an exposure when none are in progress"')
                 with queues[GCAMERA].mutex:
                     queues[GCAMERA].queue.clear()
-                
+
             else:
                 raise ValueError, ("Unknown message type %s" % msg.type)
 
@@ -86,4 +89,3 @@ def main(actor, queues):
             actor.bcast.diag('text="gcamera alive"')
         except Exception, e:
             actor.bcast.error('text="gcamera thread got unexpected exception: %s"' % (e))
-            
