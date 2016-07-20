@@ -248,6 +248,7 @@ class GuiderImageAnalysis(object):
                 self.cmd.diag('text="reading bias level from {0}"'
                               .format(bias_fn))
                 bias = np.median(fits.getdata(bias_fn))
+                self.biasLevel = bias
                 self.cmd.diag('text="bias level={0:.1f}"'.format(bias))
 
         self.imageBias = bias
