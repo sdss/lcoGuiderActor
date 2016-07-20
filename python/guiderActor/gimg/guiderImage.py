@@ -245,6 +245,8 @@ class GuiderImageAnalysis(object):
                 # TODO: for now I'm using the entire image, but probably it
                 # could be trimmed a bit to avoid edge problems. Alternatively,
                 # and better, we could use the whole image. (JSG)
+                self.cmd.diag('text="reading bias level from {0}"'
+                              .format(bias_fn))
                 bias = np.median(fits.getdata(bias_fn))
                 self.cmd.diag('text="bias level={0:.1f}"'.format(bias))
 
