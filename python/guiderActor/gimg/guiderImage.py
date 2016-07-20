@@ -232,6 +232,8 @@ class GuiderImageAnalysis(object):
             # At LCO the gimgs don't have overscan but we have bias images.
             hdr_bias_fn = hdr['BIASFILE']
             if hdr_bias_fn == self.biasFile and self.biasLevel is not None:
+                self.cmd.diag('text="Using stored bias level={0:.1f}"'
+                              .format(bias))
                 bias = self.biasLevel
             else:
                 bias_fn = os.path.join(os.path.dirname(filename),
@@ -244,6 +246,7 @@ class GuiderImageAnalysis(object):
                 # could be trimmed a bit to avoid edge problems. Alternatively,
                 # and better, we could use the whole image. (JSG)
                 bias = np.median(fits.getdata(bias_fn))
+                self.cmd.diag('text="bias level={0:.1f}"'.format(bias))
 
         self.imageBias = bias
 
