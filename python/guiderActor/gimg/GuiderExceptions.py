@@ -1,7 +1,7 @@
 from opscore.utility.qstr import qstr
 
 __all__ = ['GuiderError', 'BadDarkError', 'FlatError', 'NoFibersFoundError',
-           'BadReadError', 'raiseGuiderError']
+           'BadReadError', 'raiseGuiderError', 'BadBiasError']
 
 
 # for guider-related exception handling
@@ -12,6 +12,11 @@ class GuiderError(Exception):
 
 class BadDarkError(GuiderError):
     """An exception due to a problem processing a dark."""
+    pass
+
+
+class BadBiasError(GuiderError):
+    """An exception due to a problem processing a bias."""
     pass
 
 
