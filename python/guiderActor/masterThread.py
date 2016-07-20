@@ -1197,6 +1197,7 @@ def main(actor, queues):
                 camera = ('ecamera'
                           if gState.plateType == 'ecamera' else 'gcamera')
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd,
+                                        expTime=0.0,
                                         replyQueue=queues[MASTER],
                                         expType='bias',
                                         stack=msg.stack,
