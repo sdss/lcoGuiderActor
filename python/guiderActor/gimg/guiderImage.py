@@ -129,6 +129,9 @@ class GuiderImageAnalysis(object):
         self.processedFlat = None
         self.darkTemperature = None
 
+        self.biasFile = None
+        self.biasLevel = None
+
         # amount we let the gcamera temperature vary from the setPoint
         self.deltaTemp = 3.0
 
@@ -207,13 +210,13 @@ class GuiderImageAnalysis(object):
             return -99
         return -2.5 * np.log10(flux / self.exptime) + self.zeropoint
 
-    def find_bias_level(self,image,binning=1):
+    def find_bias_level(self, image, hdr, filename, binning=1):
         """
         Find the bias level of the image.
         Set binning to the number of binned pixels in x and y.
 
-        If there is no overscan region (expected to be 24 extra columns unbinned)
-        then we use a kludged overscan.
+        If there is no overscan region (expected to be 24 extra columns
+        unbinned) uses a bias image.
         """
         # The overscan region is an extra 24 columns (12 after binning)
         if image.shape[1] == 1048/binning:
@@ -226,17 +229,25 @@ class GuiderImageAnalysis(object):
             # TODO: the lower is what makes sense from over-exposed flats and the ecam.
             bias = np.median(image[:,(1039/binning):])
         else:
-            self.cmd.warn('text=%s'%qstr("Cheating with bias level! No overscan was found!"))
-            ir = image.ravel()
-            I = np.argsort(ir)
-            bias = ir[I[int(0.3 * len(ir))]]
-            # LCOHACK: this does not seem to work well. For now, let's just put a hardcoded
-            # value in here.
-            if image.shape[0] > 1000:
-                bias = 315.
+            # At LCO the gimgs don't have overscan but we have bias images.
+            hdr_bias_fn = hdr['BIASFILE']
+            if hdr_bias_fn == self.biasFile and self.biasLevel is not None:
+                bias = self.biasLevel
             else:
-                bias = image.mean()
+                bias_fn = os.path.join(os.path.dirname(filename),
+                                       os.path.basename(hdr_bias_fn))
+                if not os.path.exists(bias_fn):
+                    raise GuiderExceptions.BadBiasErrork(
+                        'Could not find a bias image to use.')
+
+                # TODO: for now I'm using the entire image, but probably it
+                # could be trimmed a bit to avoid edge problems. Alternatively,
+                # and better, we could use the whole image. (JSG)
+                bias = np.median(fits.getdata(bias_fn))
+
         self.imageBias = bias
+
+        return bias
     #...
 
     def findDarkAndFlat(self, gimgfn, fitsheader):
@@ -635,7 +646,7 @@ class GuiderImageAnalysis(object):
         sat = (image.astype(int) >= self.saturationLevel)
         nSat = sat.sum()
 
-        image = self.applyBias(image,binning)
+        image = self.applyBias(image, hdr, filename, binning)
         # Occasionally there is a bad read from the camera.
         # In this case, the bias level is ~35,000, and the stddev is low.
         # We can just reject such frames, as they are useless.
@@ -852,9 +863,9 @@ class GuiderImageAnalysis(object):
             self._find_stars_gcam(image, mask, fibers)
             return self.fibers
 
-    def applyBias(self,image,binning):
+    def applyBias(self, image, hdr, filename, binning):
         """Apply a bias correction to the image, and return the image and bias level."""
-        self.find_bias_level(image,binning=binning)
+        self.find_bias_level(image, hdr, filename, binning=binning)
         self.cmd.diag('text=%s'%qstr('subtracting bias level: %g' % self.imageBias))
         image = image - self.imageBias
         return image
