@@ -119,7 +119,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
     def getLoadedCartridge(self, cmd, actor, command='info', actorState=None):
         """Returns the value of instrumentNum from actor."""
-        
+
         instrumentNumKey = actorState.models[actor].keyVarDict['instrumentNum']
 
         cmdVar = actorState.actor.cmdr.call(actor=actor,
@@ -226,8 +226,9 @@ class GuiderActorLCO(GuiderActor):
     """LCO version of this actor."""
     location = 'LCO'
 
-    def guidingIsOK(self, cmd, actorState, force=False):
+    def guidingIsOK(self, cmd, actorState, force=True):
         """Is it OK to be guiding?"""
+        #LCO HACK!!!!! force true
 
         if force:
             return True

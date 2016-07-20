@@ -87,6 +87,7 @@ class GuiderCmd(object):
             ("showCartridge", "", self.showCartridge),
             ("loadPlateFiles", "<cartfile> <plugfile>", self.loadPlateFiles),
             ("reprocessFile", "<file>", self.reprocessFile),
+            ('bias', '[<stack>]', self.bias),
             ("flat", "[<time>]", self.flat),
             ("dark", "[<time>] [<stack>]", self.dark),
             ('ping', '', self.ping),
@@ -153,6 +154,20 @@ class GuiderCmd(object):
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 0.5
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_FLAT, cmd=cmd,
                                                                 expTime=expTime))
+
+    def bias(self, cmd):
+        """Takes a stack of bias images."""
+
+        stack = (cmd.cmd.keywords['stack'].values[0]
+                 if 'stack' in cmd.cmd.keywords else 7)
+
+        if stack < 5:
+            cmd.fail('text="bias requires a minimum stack of 5 images."')
+            return
+
+        myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_BIAS,
+                                                                cmd=cmd,
+                                                                stack=stack))
 
     def dark(self, cmd):
         """
