@@ -23,9 +23,11 @@ class Msg(actorcore.Actor.Msg):
     class EXPOSE(): pass
     class EXPOSURE_FINISHED(): pass
     class TAKE_FLAT(): pass
+    class TAKE_BIAS(): pass
     class FLAT_FINISHED(): pass
     class TAKE_DARK(): pass
     class DARK_FINISHED(): pass
+    class BIAS_FINISHED(): pass
     class ENABLE_FIBER(): pass
     class LOAD_CARTRIDGE(): pass
     class SET_GUIDE_MODE(): pass
