@@ -232,9 +232,9 @@ class GuiderImageAnalysis(object):
             # At LCO the gimgs don't have overscan but we have bias images.
             hdr_bias_fn = hdr['BIASFILE']
             if hdr_bias_fn == self.biasFile and self.biasLevel is not None:
+                bias = self.biasLevel
                 self.cmd.diag('text="Using stored bias level={0:.1f}"'
                               .format(bias))
-                bias = self.biasLevel
             else:
                 bias_fn = os.path.join(os.path.dirname(filename),
                                        os.path.basename(hdr_bias_fn))
@@ -734,8 +734,8 @@ class GuiderImageAnalysis(object):
             return
 
         # shift the centers back into the data frame.
-        fiber.xs = stampFrameCoords[0] + star.xyCtr[0]
-        fiber.ys = stampFrameCoords[1] + star.xyCtr[1]
+        fiber.xs = stampFrameCoords[0] + star.xyCtr[0] + 0.5  # LCOHACK: added 0.5
+        fiber.ys = stampFrameCoords[1] + star.xyCtr[1] + 0.5  # LCOHACK: added 0.5
         fiber.xyserr = np.hypot(*star.xyErr)
         try:
             shape = PyGuide.StarShape.starShape(image, mask, star.xyCtr, 100)
@@ -1344,3 +1344,4 @@ class GuiderImageAnalysis(object):
         # Now read that file we just wrote...
         self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes)
         self.currentFlatName = flatFileName
+                 
