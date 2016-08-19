@@ -26,7 +26,7 @@ def asinh(inputArray, scale_min=None, scale_max=None, non_linear=2.0):
     Taken from:
         http://dept.astro.lsa.umich.edu/~msshin/science/code/Python_fits_image/img_scale.py
     """
-    
+
     imageData=np.array(inputArray, copy=True)
     if scale_min == None:
         scale_min = imageData.min()
@@ -39,13 +39,13 @@ def asinh(inputArray, scale_min=None, scale_max=None, non_linear=2.0):
     imageData[indices0] = 0.0
     imageData[indices2] = 1.0
     imageData[indices1] = np.arcsinh((imageData[indices1] - scale_min)/non_linear)/factor
-    
+
     return imageData
 #...
 
 def makeGProbeName(gprobeNum, gprobeBits):
     """Construct a guide probe name from its number and gProbeBits
-    
+
     Inputs:
     gprobeNum: guide probe number (an integer, though a string will do)
     gprobeBits: guide probe bits; if None then the above/below focus suffix is not added
@@ -69,23 +69,23 @@ class ImageMaker(object):
         self.cmap1 = 'gray'
         self.cmap2 = 'gist_ncar'
         self.aspect = 'auto' # normal vs. equal?
-        
+
         # ErrPixPerArcSec = 40 # pixels per arcsec of error on the plug plate
         # scale_min = 5.
         self.scale_max = 30000.
-        
+
         self.width = 512*2. # 10px buffer
         self.height = 512.
         self.dpi = 100.
         self.qscale = 10.
         self.assembler = assembleImage.AssembleImage(1,0)
-        
+
         self.index = os.path.splitext(infile)[0].split('-')[-1]
         data = pyfits.open(infile)
         self.plate = data[0].header.get('PLATEID')
         self.cart =  data[0].header.get('CARTID')
-            
-        
+
+
         self.guiderView = asinh(data[0].data,scale_min=5.,scale_max=self.scale_max,non_linear=10.)
         self.guiderSat = np.nonzero(data[1].data == 1)
         self.guiderBad = np.nonzero(data[1].data == 2)
@@ -96,7 +96,7 @@ class ImageMaker(object):
         except assembleImage.NoPlateInfo:
             # just try to continue if we have no plate info.
             self.plateInfo = None
-        
+
         hdr = data[0].header
         self.seeing = hdr.get('seeing')
         self.offset = tuple(np.array((hdr.get('dra'),hdr.get('ddec'),hdr.get('drot')))*3600.)
@@ -105,12 +105,12 @@ class ImageMaker(object):
         self.rms = hdr.get('gdrms')
         self.time = hdr.get('date-obs')
         self.ccdtemp = hdr.get('ccdtemp')
-        
+
         self._guide_locations()
         # dictionaries to hold information about the probes in each view
         self._labels(self.plateInfo.stampList)
     #...
-    
+
     def _config_plateView(self):
         """Configure the plateView from an assembleImage plateInfo."""
         plateView = self.plateInfo.plateImageArr
@@ -149,7 +149,7 @@ class ImageMaker(object):
         else:
             disabled = None
         return loc1,probeName,loc2,fwhm,disabled
-    
+
     def _guide_labels(self,stamp):
         """Return the location positions1/2, probe names, and fwhm for the guider view."""
         center = stamp.gpCtr
@@ -164,7 +164,7 @@ class ImageMaker(object):
         else:
             disabled = None
         return loc1,probeName,loc2,'%4.2f"'%fwhm,disabled
-    
+
     def _guide_locations(self):
         """Makes a list of approximate fiber locations in the guider view."""
         self.guiderLocations = {} # fiber number: location pairs
@@ -190,7 +190,7 @@ class ImageMaker(object):
         # make numpy arrays out of all of them
         for x in self.guiderLocations:
             self.guiderLocations[x] = np.array(self.guiderLocations[x])
-    
+
     def __call__(self,outfile,cmap_name=None):
         """Save an image to outfile."""
         if not cmap_name:
@@ -201,7 +201,7 @@ class ImageMaker(object):
         cmap2._lut[0,:] = (0,0,0,1)
         cmap2.set_bad((0,0.15,0)) # mark the masked pixels (not fibers) with dark green
         cmap2.set_under((0.05,0.05,0.05)) # mark everything outside the fibers as dull-gray
-        
+
         fig = plt.figure(figsize=(self.width/self.dpi,self.height/self.dpi),dpi=self.dpi,frameon=False)
 
         self._make_guide_view(fig,cmap)
@@ -273,7 +273,7 @@ class ImageMaker(object):
             except IndexError:
                 continue
 
-def make_images(gimgdir,start,end,tempdir,cmap=None,verbose=False):
+def make_images(gimgdir,start,end,tempdir,cmap=None,verbose=False, skipcals=False):
     """Generate all jpegs from the processed guider files in gimgdir from start to end."""
     # not guaranteed to have every number from start to end, so we have to count.
     count = 0
@@ -281,6 +281,10 @@ def make_images(gimgdir,start,end,tempdir,cmap=None,verbose=False):
     for i in range(start,end):
         infile = os.path.join(gimgdir,gimgbase%i)
         if os.path.exists(infile):
+            if skipcals:
+                image_type = pyfits.getheader(infile)['IMAGETYP']
+                if image_type != 'object':
+                    continue
             outfile = os.path.join(tempdir,tempbase%count)
             imageMaker = ImageMaker(infile)
             imageMaker(outfile,cmap_name=cmap)
@@ -345,7 +349,8 @@ def do_work(opts,gimgdir,start,end):
         #prof = cProfile.Profile()
         #count,files = prof.runcall(make_images,gimgdir,start,end,tempdir,cmap=opts.cmap)
         #prof.dump_stats('images.profile')
-        count,files = make_images(gimgdir,start,end,tempdir,cmap=opts.cmap,verbose=opts.verbose)
+        count,files = make_images(gimgdir,start,end,tempdir,cmap=opts.cmap,verbose=opts.verbose,
+                                  skipcals=opts.skipcals)
         time1 = time.time()
         if opts.verbose:
             print 'Seconds to make %d pngs: %5.1f'%(count,time1-time0)
@@ -372,7 +377,7 @@ def do_work(opts,gimgdir,start,end):
 def main(argv=None):
     from optparse import OptionParser
     if argv is None: argv = sys.argv[1:]
-	
+
     usage = '%prog [OPTIONS] DIR STARTNUM ENDNUM'
     usage += '\n\nGenerate a movie of the guider images in DIR from STARTNUM to ENDNUM.'
     usage += '\nResulting movie is written to DIR as an x264 compressed .mp4.'
@@ -383,6 +388,8 @@ def main(argv=None):
                       help='Frame rate of output video (%default).')
     #parser.add_option('--raw',dest='raw',default='""',
     #                  help='Raw commands to pass on to ffmpeg directly (%default)')
+    parser.add_option('--skipcals', dest='skipcals', action='store_true',
+                      help='If set, skips calibration images in the frame range.')
     parser.add_option('--cmap',dest='cmap',default='hsv',
                       help='Colormap used to make the images (log10 scaled) from the fits data (%default).')
     parser.add_option('--outdir',dest='outdir',default=None,
@@ -400,7 +407,7 @@ def main(argv=None):
     except (IndexError,ValueError):
         parser.error('Need DIR STARTNUM ENDNUM. Pass -h or --help for more information.')
         return -1
-	
+
     return do_work(opts,gimgdir,start,end)
 #...
 
