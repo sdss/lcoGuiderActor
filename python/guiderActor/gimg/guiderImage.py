@@ -1021,6 +1021,13 @@ class GuiderImageAnalysis(object):
         # Make the mask a bit smaller than the thresholded fibers.
         mask = binary_erosion(T, iterations=3)
 
+        # Checks that the fibres have a good average number of counts
+        image_masked = image[mask]
+        fibers_mean = np.median(image_masked)
+        if fibers_mean < 1e4:
+            self.cmd.error('text="average number of counts in fibres < 1e4."')
+            raise GuiderExceptions.FlatError
+
         # Make an annular/ring mask around thresholded fibers
         # NOTE: where is this used? Why is it assigned to a Numpy attribute.
         np.ringmask = binary_dilation(T, iterations=5)
