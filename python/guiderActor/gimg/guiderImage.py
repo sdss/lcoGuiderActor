@@ -395,6 +395,8 @@ class GuiderImageAnalysis(object):
             for pid_coeff in ['Kp', 'Ti', 'Td', 'Imax', 'nfilt']:
                 pid_value = getattr(gState.pid[axis], pid_coeff)
                 fitsName = '{0}_{1}'.format(axis, pid_coeff)
+                if len(fitsName) > 8:
+                    fitsName = fitsName[0:8]
                 comment = 'PID {0} {1} coefficient'.format(axis, pid_coeff)
                 c = actorFits.makeCard(cmd, fitsName, pid_value, comment)
                 cards.append(c)
