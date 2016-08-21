@@ -314,7 +314,7 @@ class GuiderImageAnalysis(object):
         header["CUNIT1%s" % wcsName] = ("PIXEL", "Column unit")
         header["CUNIT2%s" % wcsName] = ("PIXEL", "Row unit")
 
-    def fillPrimaryHDU(self, cmd, models, imageHDU, frameInfo, objectname):
+    def fillPrimaryHDU(self, cmd, models, imageHDU, gState, frameInfo, objectname):
         """ Add in all the site and environment keywords. """
         try:
             imageHDU.header['SEEING'] = (
@@ -324,7 +324,7 @@ class GuiderImageAnalysis(object):
             imageHDU.header['GCAMSCAL'] = (frameInfo.guideCameraScale, 'guide camera plate scale (mm/pixel)')
             imageHDU.header['PLATSCAL'] = (frameInfo.plugPlateScale, 'plug plate scale (mm/degree)')
                         # Do this first, before we need the models.
-            guiderCards = self.getGuideloopCards(cmd, frameInfo)
+            guiderCards = self.getGuideloopCards(cmd, frameInfo, gState)
             actorFits.extendHeader(cmd, imageHDU.header, guiderCards)
             self.addPixelWcs(imageHDU.header)
 
@@ -341,7 +341,7 @@ class GuiderImageAnalysis(object):
             self.cmd.error('text=%s'%qstr('!!!!! failed to fill out primary HDU  !!!!! (%s)' % (e)))
             raise e
 
-    def getGuideloopCards(self, cmd, frameInfo):
+    def getGuideloopCards(self, cmd, frameInfo, gState):
         defs = (('guideAxes','guideAxe','guiding on Ra/Dec/Rot?'),
                 ('guideFocus','guideFoc','guiding on Focus?'),
                 ('guideScale','guideScl','guiding on Scale?'),
@@ -389,6 +389,18 @@ class GuiderImageAnalysis(object):
                 cards.append(c)
             except Exception as e:
                 self.cmd.warn('text=%s'%qstr('failed to make guider card %s=%s (%s)' % (name, val, e)))
+
+        # LCOHACK: adds PID terms to the header
+        for axis in ['raDec', 'rot', 'scale', 'focus']:
+            for pid_coeff in ['Kp', 'Ti', 'Td', 'Imax', 'nfilt']:
+                pid_value = getattr(gState.pid[axis], pid_coeff)
+                fitsName = '{0}_{1}'.format(axis, pid_coeff)
+                if len(fitsName) > 8:
+                    fitsName = fitsName[0:8]
+                comment = 'PID {0} {1} coefficient'.format(axis, pid_coeff)
+                c = actorFits.makeCard(cmd, fitsName, pid_value, comment)
+                cards.append(c)
+
         return cards
 
     def rotate_one_fiber(self, image, mask, fiber, r):
@@ -568,10 +580,13 @@ class GuiderImageAnalysis(object):
             raise e
         return hdulist
 
-    def writeFITS(self, models, cmd, frameInfo, gprobes, output_verify='warn'):
+    def writeFITS(self, models, cmd, frameInfo, gState, output_verify='warn'):
         """
         Write a fits file containing the processed results for this exposure.
         """
+
+        gprobes = gState.gprobes
+
         if not self.fibers and self.camera != 'ecamera':
             raise Exception('must call findStars() before writeFITS()')
         image = self.guiderImage
@@ -590,7 +605,7 @@ class GuiderImageAnalysis(object):
                 hdulist.append(fits.ImageHDU(self.maskImage))
                 doCompress = False
             imageHDU = hdulist[0]
-            self.fillPrimaryHDU(cmd, models, imageHDU, frameInfo, objectname)
+            self.fillPrimaryHDU(cmd, models, imageHDU, gState, frameInfo, objectname)
             directory,filename = os.path.split(procpath)
             actorFits.writeFits(cmd, hdulist, directory, filename,
                                 doCompress=doCompress, chmod=0644,
@@ -1351,4 +1366,3 @@ class GuiderImageAnalysis(object):
         # Now read that file we just wrote...
         self.flatImage,self.flatMask,self.flatFibers = self.readProcessedFlat(flatout, gprobes)
         self.currentFlatName = flatFileName
-                 
