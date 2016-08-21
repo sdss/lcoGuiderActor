@@ -749,8 +749,8 @@ class GuiderImageAnalysis(object):
             return
 
         # shift the centers back into the data frame.
-        fiber.xs = stampFrameCoords[0] + star.xyCtr[0] + 0.5  # LCOHACK: added 0.5
-        fiber.ys = stampFrameCoords[1] + star.xyCtr[1] + 0.5  # LCOHACK: added 0.5
+        fiber.xs = stampFrameCoords[0] + star.xyCtr[0]
+        fiber.ys = stampFrameCoords[1] + star.xyCtr[1]
         fiber.xyserr = np.hypot(*star.xyErr)
         try:
             shape = PyGuide.StarShape.starShape(image, mask, star.xyCtr, 100)
