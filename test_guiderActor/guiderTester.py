@@ -83,6 +83,7 @@ class GuiderTester(TestHelper.ActorTester):
 
         self.verbose = True
         self.name = 'guider'
+        self.attachCmdSets = False
         super(GuiderTester, self).setUp()
 
         myGlobals.actorState = self.actorState
@@ -93,13 +94,13 @@ class GuiderTester(TestHelper.ActorTester):
         if self.actorState.actor.location is None:
             self.actorState.actor.location = 'APO'
 
-        self.gi = guiderImage.GuiderImageAnalysis(
-            self.setPoint_good, self.actorState.actor.location)
-
         gState = GuiderState.GuiderState()
         self.gState = gState
         myGlobals.actorState.gState = self.gState
         myGlobals.actorState.actorConfig = self.actor.config
+
+        self.gi = self._call_gi(self.setPoint_good,
+                                self.actorState.actor.location)
 
         GuiderActor.set_default_pids(self.actor.config, self.gState)
         GuiderActor.set_pid_scaling(self.actor.config, self.gState)
@@ -154,8 +155,8 @@ class GuiderTester(TestHelper.ActorTester):
         if setpoint is None:
             setpoint = self.setPoint_good
 
-        return self.gi(self.cmd, filename, self.gState.gprobes,
-                       setpoint, *args)
+        return guiderImage.GuiderImageAnalysis(
+            self.cmd, filename, self.gState.gprobes, setpoint, *args)
 
     def _remove_file(self, filename):
         if os.path.exists(filename):
