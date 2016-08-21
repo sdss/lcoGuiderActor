@@ -405,6 +405,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     # Don't need to do anything else with ecam images.
     if camera == 'ecamera':
         # No more processing needed, so just write the file.
+        # LCOHACK: replaced gprobes with gState in writeFITS to output PID coefficients
         guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
         return frameInfo
 
@@ -468,6 +469,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         else:
             guideCmd.warn('text="Telescope moved during exposure -- skipping this image."')
 
+        # LCOHACK: replaced gprobes with gState in writeFITS to output PID coefficients
         guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
 
         if oneExposure:
@@ -569,6 +571,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
     # don't bother with focus/scale!
     if nStar <= 1 or gState.centerUp:
+        # LCOHACK: replaced gprobes with gState in writeFITS to output PID coefficients
         guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
@@ -693,6 +696,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         x = None
 
     # Write output fits file for TUI
+    # LCOHACK: replaced gprobes with gState in writeFITS to output PID coefficients
     guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
     return frameInfo
 #...
