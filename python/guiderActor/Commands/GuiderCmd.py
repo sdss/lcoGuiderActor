@@ -444,7 +444,8 @@ class GuiderCmd(object):
         if pointing != 'A':
             cmd.warn('text="pointing name is %s, but we are using pointing #1. This is probably OK."' % (pointing))
 
-        self.addGuideOffsets(cmd, plate, pointingID, gprobes)
+        # LCOHACK: disabling refraction correction
+        # self.addGuideOffsets(cmd, plate, pointingID, gprobes)
 
         # Send that information off to the master thread
         #
