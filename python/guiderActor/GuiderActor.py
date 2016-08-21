@@ -226,9 +226,8 @@ class GuiderActorLCO(GuiderActor):
     """LCO version of this actor."""
     location = 'LCO'
 
-    def guidingIsOK(self, cmd, actorState, force=True):
+    def guidingIsOK(self, cmd, actorState, force=False):
         """Is it OK to be guiding?"""
-        #LCO HACK!!!!! force true
 
         if force:
             return True
@@ -262,12 +261,11 @@ class GuiderActorLCO(GuiderActor):
                      .format(mirror2CmdState))
             return False
 
-        # LCOHACK: disabling this part untils the scaling ring is connected
         # Checks the state of the scaling ring. Fails if it's moving.
-        # scaleCmdState = tccModel.keyVarDict['threadringState'][0]
-        # if scaleCmdState.lower() != 'done':
-        #     cmd.warn('text="Scaling ring state: {0}. Aborted guiding."'.format(scaleCmdState))
-        #     return False
+        scaleCmdState = tccModel.keyVarDict['threadringState'][0]
+        if scaleCmdState.lower() != 'done':
+            cmd.warn('text="Scaling ring state: {0}. Aborted guiding."'.format(scaleCmdState))
+            return False
 
         return True
 

@@ -981,12 +981,10 @@ def start_guider(cmd, gState, actorState, queues, camera='gcamera', stack=1,
         failMsg = "No cart/plate information: please load cartridge and try again."
         cmd.fail('guideState=failed; text="%s"' % failMsg)
         return
-    # LCOHACK: we want to continue taking exposures even if something is
-    # wrong.
-    # if not actorState.actor.guidingIsOK(cmd, actorState, force=force):
-    #     failMsg = "Not ok to guide in current state."
-    #     cmd.fail('guideState=failed; text="%s"' % failMsg)
-    #     return
+
+    if not actorState.actor.guidingIsOK(cmd, actorState, force=force):
+        cmd.fail('guideState=failed; text="Not ok to guide in current state."')
+        return
 
     if (expTime is not None and gState.expTime != expTime):
         gState.expTime = expTime
