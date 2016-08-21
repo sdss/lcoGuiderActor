@@ -232,6 +232,19 @@ class TestCalibrations(TestGuiderImage):
         self._check_overwriting(inFile, self.outFile,
                                 self.gi.analyzeFlat, [self.gState.gprobes])
 
+    def test_analyzeFlat_too_faint(self):
+        """Checks that guiderImage fails for a flat with < 1e4 counts."""
+
+        # We init this with random probes because we don't care about them.
+        # This should fail before guiderImage does something with the fibres.
+        self.init_probes(mjd=57357, plateid=7660, fscan_mjd=57356, fscan_id=1)
+
+        inFile, __ = getTestImagePaths('lco-gcam', 57621, 'gimg-0016.fits.gz')
+
+        self.gi.setPoint = -10.
+        with self.assertRaises(GuiderExceptions.FlatError):
+            self.gi.analyzeFlat(inFile, self.gState.gprobes, cmd=self.cmd)
+
 
 class TestCallAPO(TestGuiderImage):
     """Tests calls to GuiderImage with APO guider data."""
