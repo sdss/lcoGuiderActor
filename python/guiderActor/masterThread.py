@@ -405,7 +405,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     # Don't need to do anything else with ecam images.
     if camera == 'ecamera':
         # No more processing needed, so just write the file.
-        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
         return frameInfo
 
     #
@@ -468,7 +468,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         else:
             guideCmd.warn('text="Telescope moved during exposure -- skipping this image."')
 
-        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
 
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
@@ -569,7 +569,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
     # don't bother with focus/scale!
     if nStar <= 1 or gState.centerUp:
-        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
+        guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.cmd = None
@@ -693,7 +693,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         x = None
 
     # Write output fits file for TUI
-    guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState.gprobes, output_verify=output_verify)
+    guiderImageAnalysis.writeFITS(actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
     return frameInfo
 #...
 
