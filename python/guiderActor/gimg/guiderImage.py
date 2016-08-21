@@ -239,7 +239,7 @@ class GuiderImageAnalysis(object):
                 bias_fn = os.path.join(os.path.dirname(filename),
                                        os.path.basename(hdr_bias_fn))
                 if not os.path.exists(bias_fn):
-                    raise GuiderExceptions.BadBiasErrork(
+                    raise GuiderExceptions.BadBiasError(
                         'Could not find a bias image to use.')
 
                 # TODO: for now I'm using the entire image, but probably it
