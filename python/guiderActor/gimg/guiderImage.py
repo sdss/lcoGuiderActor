@@ -1043,6 +1043,9 @@ class GuiderImageAnalysis(object):
             self.cmd.error('text="average number of counts in fibres < 1e4."')
             raise GuiderExceptions.FlatError
 
+        self.cmd.inform('text="average number of counts in fibres = {0:.1f}"'
+                        .format(fibers_mean))
+
         # Make an annular/ring mask around thresholded fibers
         # NOTE: where is this used? Why is it assigned to a Numpy attribute.
         np.ringmask = binary_dilation(T, iterations=5)
