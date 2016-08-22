@@ -356,9 +356,9 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     actorState = guiderActor.myGlobals.actorState
 
     # Gets the min/max offsets from the configuration
-    scale_offset_min = actorState.actorConfig.getfloat('offsets', 'scale_offset_min')
-    scale_offset_mult_min = actorState.actorConfig.getfloat('offsets', 'scale_offset_min')
-    scale_offset_mult_max = actorState.actorConfig.getfloat('offsets', 'scale_offset_max')
+    scale_offset_min = actorState.actorConfig.getfloat('offsets', 'scale_offset_mult_min')
+    scale_offset_mult_min = actorState.actorConfig.getfloat('offsets', 'scale_offset_mult_min')
+    scale_offset_mult_max = actorState.actorConfig.getfloat('offsets', 'scale_offset_mult_max')
 
     focus_offset_min = actorState.actorConfig.getfloat('offsets', 'focus_offset_min')
 
