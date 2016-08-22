@@ -192,15 +192,17 @@ class GuiderCmd(object):
         if not axis:
             cmd.fail("text=\"Impossible condition in setPID\"")
 
+        # TODO: should Imax and nfilt default to zero? (JSG)
         Kp = cmd.cmd.keywords["Kp"].values[0]
         Ti = cmd.cmd.keywords["Ti"].values[0] if "Ti" in cmd.cmd.keywords else 0
         Td = cmd.cmd.keywords["Td"].values[0] if "Td" in cmd.cmd.keywords else 0
         Imax = cmd.cmd.keywords["Imax"].values[0] if "Imax" in cmd.cmd.keywords else 0
         nfilt = cmd.cmd.keywords["nfilt"].values[0] if "nfilt" in cmd.cmd.keywords else 0
+        ncorr = cmd.cmd.keywords['ncorr'].values[0] if 'ncorr' in cmd.cmd.keywords else 1
 
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.SET_PID, cmd=cmd, axis=axis,
                                                                 Kp=Kp, Ti=Ti, Td=Td, Imax=Imax,
-                                                                nfilt=nfilt))
+                                                                nfilt=nfilt, ncorr=ncorr))
 
     def guideOn(self, cmd):
         """Turn guiding on"""
