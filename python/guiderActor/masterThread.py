@@ -453,8 +453,9 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     guideCmd.diag('text="LST=%0.4f RA=%0.4f HA=%0.4f desHA=%0.4f dHA=%0.4f"' %
                   (LST, RA, HA, gState.design_ha,frameInfo.dHA))
 
+    # LCOHACK: commenting this as probably we don't need it at LCO
     # scale the PID values to function better at high alt.
-    scale_pid_with_alt(guideCmd, gState, actorState)
+    # scale_pid_with_alt(guideCmd, gState, actorState)
 
     # Set the decenter parameters in frameInfo, so they don't get lost if decentering
     # changes during processing.
