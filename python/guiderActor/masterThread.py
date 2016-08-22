@@ -694,7 +694,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
         if gState.guideFocus and not blockFocusMove:
             # Checks that the offset is not too small
-            if np.abs(offsetFocus) < focus_offset_min:
+            if numpy.abs(offsetFocus) < focus_offset_min:
                 cmd.warn('text="NOT applying too small focus offset=%0.5f"' % (offsetFocus))
             else:
                 # Sets the right direction in which the focus offset moves the focus
