@@ -310,10 +310,14 @@ def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRo
             cmd.warn('text="Failed to issue offset"')
 
         if offsetRot:
-            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=cmd,
-                                     cmdStr="offset guide %f, %f, %g"%(0.0, 0.0, -offsetRot))
-        if cmdVar.didFail:
-            cmd.warn('text="Failed to issue offset in rotator"')
+            if numpy.abs(offsetRot) < rotMinimum:
+                cmd.warn('text="not applying this absurdly small rotation change of {0:g} deg"'
+                         .format(-offsetRot))
+            else:
+                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=cmd,
+                                         cmdStr="offset guide %f, %f, %g"%(0.0, 0.0, -offsetRot))
+                if cmdVar.didFail:
+                    cmd.warn('text="Failed to issue offset in rotator"')
 
     elif gState.centerUp:
         # If we are in the middle of an fk5InFiber (or other TCC track/pterr),
