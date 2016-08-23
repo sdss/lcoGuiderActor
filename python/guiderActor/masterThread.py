@@ -297,7 +297,6 @@ def apply_tcc_corr(cmd, axis, cmdStr, gState, actor):
         cmdVar = actor.cmdr.call(actor='tcc', forUserCmd=cmd, cmdStr=cmdStr)
         if cmdVar.didFail:
             cmd.warn('text="Failed to issue offset"')
-        # We have applied the correction so we reset corr_count for this axis
         gState.pid[axis].corr_count = 0
     else:
         cmd.warn('text="would have applied {0} but this is iteration {1} of {2}."'
@@ -321,10 +320,12 @@ def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRo
     offsetRot = rotDirection * offsetRot
 
     if gState.guideAxes:
+        gState.pid['raDec'].update_count()  # Updates exposure count for raDec
         radec_cmdStr = 'offset arc {0:f}, {1:f}'.format(-offsetRa, -offsetDec)
         apply_tcc_corr(cmd, 'raDec', radec_cmdStr, gState, actor)
 
         if offsetRot:
+            gState.pid['rot'].update_count()  # Updates exposure count for rot
             if numpy.abs(offsetRot) < rotMinimum:
                 cmd.warn('text="not applying this absurdly small rotation change of {0:g} deg"'
                          .format(-offsetRot))
@@ -631,6 +632,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     blockFocusMove = False
 
     if gState.guideScale:
+        gState.pid['scale'].update_count()  # Updates exposure count for scale
         # This should be a tiny bit bigger than one full M1 axial step.
         if abs(offsetScale) < scale_offset_min:
             cmd.diag('text="skipping small scale change=%0.8f"' % (offsetScale))
@@ -708,6 +710,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
 
         if gState.guideFocus and not blockFocusMove:
+            gState.pid['focus'].update_count()  # Updates exposure count for focus
             # Checks that the offset is not too small
             if numpy.abs(offsetFocus) < focus_offset_min:
                 cmd.warn('text="NOT applying too small focus offset=%0.5f"' % (offsetFocus))
