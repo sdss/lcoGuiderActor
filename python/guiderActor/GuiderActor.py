@@ -235,6 +235,15 @@ class GuiderActorLCO(GuiderActor):
         if force:
             return True
 
+        # Forces the TCC to output the status of the axes
+        cmdVar = actorState.actor.cmdr.call(actor='tcc',
+                                            forUserCmd=cmd,
+                                            cmdStr='device status')
+
+        if cmdVar.didFail:
+            cmd.warn('text=\"Failed to get tcc status\"')
+            return False
+
         bypassedNames = actorState.models["sop"].keyVarDict["bypassedNames"]
         # This lets guiderImageAnalysis know to ignore dark frames.
 
