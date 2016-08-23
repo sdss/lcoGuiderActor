@@ -293,7 +293,7 @@ def apply_tcc_corr(cmd, axis, cmdStr, gState, actor):
     ncorr = gState.pid[axis].ncorr
     corr_count = gState.pid[axis].corr_count
 
-    if ncorr == corr_count:
+    if corr_count >= ncorr:
         cmdVar = actor.cmdr.call(actor='tcc', forUserCmd=cmd, cmdStr=cmdStr)
         if cmdVar.didFail:
             cmd.warn('text="Failed to issue offset"')
