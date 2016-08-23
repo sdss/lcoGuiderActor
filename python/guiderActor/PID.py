@@ -24,7 +24,7 @@ class PID(object):
             self.nfilt = nfilt              # number of inputs to smooth over.
 
         # The number of iterations after which a correction will be applied.
-        self.ncorr = ncorr
+        self.ncorr = int(ncorr) if ncorr else ncorr
         self.corr_count = 0  # A counter that updates each iteration.
 
         self.histlen = 0
@@ -145,7 +145,7 @@ class PID(object):
             self.nfilt = nfilt
 
         if ncorr is not None:
-            self.ncorr = ncorr
+            self.ncorr = int(ncorr)
 
         if needReset:
             self.reset()
