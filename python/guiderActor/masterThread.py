@@ -298,10 +298,11 @@ def apply_tcc_corr(cmd, axis, cmdStr, gState, actor):
         if cmdVar.didFail:
             cmd.warn('text="Failed to issue offset"')
         gState.pid[axis].corr_count = 0
+        return True
     else:
         cmd.warn('text="would have applied {0} but this is iteration {1} of {2}."'
                  .format(cmdStr, corr_count, ncorr))
-
+        return False
 
 def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRot):
     """Finish the calculation for the ra/dec/rot corrections and apply them."""
@@ -646,7 +647,9 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
             else:
                 # blockFocusMove = True
                 scale_cmdStr = 'set scale={0:.9f} /mult'.format(offsetScale)
-                apply_tcc_corr(cmd, 'scale', scale_cmdStr, gState, actor)
+                result_scale = apply_tcc_corr(cmd, 'scale', scale_cmdStr, gState, actor)
+                if result_scale:
+                    offsetScale = 0.0
 
     #Evaluate RMS on fit over fibers used in fits here
     #FIXME--PH not calculated yet
@@ -721,7 +724,9 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
                 tccOffsetFocus = focusDirection * offsetFocus
 
                 focus_cmdStr = 'set focus={0:f}/incremental'.format(tccOffsetFocus)
-                apply_tcc_corr(cmd, 'scale', focus_cmdStr, gState, actor)
+                result_focus = apply_tcc_corr(cmd, 'scale', focus_cmdStr, gState, actor)
+                if result_focus:
+                    offsetScale = 0.0
 
     except numpy.linalg.LinAlgError:
         guideCmd.respond("focusError=%g" % (numpy.nan))
