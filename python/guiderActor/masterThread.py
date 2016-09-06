@@ -295,6 +295,10 @@ def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRo
     axisDirection = actorConfig.getint('telescope', 'axisDirection')
     rotDirection = actorConfig.getint('telescope', 'rotDirection')
 
+    rotMinimum = actorConfig.getfloat('offsets', 'rotation_min')
+
+    # Axis conventions are different at APO and LCO. Here we set them right
+    # for each observatory.
     offsetRa = axisDirection * offsetRa
     offsetDec = axisDirection * offsetDec
     offsetRot = rotDirection * offsetRot
