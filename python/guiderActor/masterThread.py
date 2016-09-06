@@ -343,6 +343,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         output_verify: passed on to the fits writer. See the pyfits docs for more.
         camera: set to 'ecamera' to not search for fibers and skip fiber-related processing.
     """
+
     # Setup to solve for the axis and maybe scale offsets.  We work consistently
     # in mm on the focal plane, only converting to angles to command the TCC.
     guideCameraScale = gState.gcameraMagnification*gState.gcameraPixelSize*1e-3 # mm/pixel
@@ -353,6 +354,14 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
     frameInfo = GuiderState.FrameInfo(frameNo,arcsecPerMM,guideCameraScale,gState.plugPlateScale)
 
     actorState = guiderActor.myGlobals.actorState
+
+    # Gets the min/max offsets from the configuration
+    scale_offset_min = actorState.actorConfig.getfloat('offsets', 'scale_offset_min')
+    scale_offset_mult_min = actorState.actorConfig.getfloat('offsets', 'scale_offset_min')
+    scale_offset_mult_max = actorState.actorConfig.getfloat('offsets', 'scale_offset_max')
+
+    focus_offset_min = actorState.actorConfig.getfloat('offsets', 'focus_offset_min')
+
     guideCmd = gState.cmd
     guideCmd.respond("processing=%s" % inFile)
 
@@ -601,14 +610,14 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
     if gState.guideScale:
         # This should be a tiny bit bigger than one full M1 axial step.
-        if abs(offsetScale) < 3.4e-7:
+        if abs(offsetScale) < scale_offset_min:
             cmd.diag('text="skipping small scale change=%0.8f"' % (offsetScale))
         else:
             # Clip to the motion we think is too big to apply at once.
             offsetScale = 1 + max(min(offsetScale, 2e-6), -2e-6)
 
             # Last chance to bailout.
-            if offsetScale < 0.9995 or offsetScale > 1.0005:
+            if offsetScale < scale_offset_mult_min or offsetScale > scale_offset_mult_max:
                 cmd.warn('text="NOT setting scarily large scale=%0.8f"' % (offsetScale))
             else:
                 # blockFocusMove = True
@@ -679,16 +688,20 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         guideCmd.respond("focusChange=%g, %s" % (offsetFocus, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
 
         if gState.guideFocus and not blockFocusMove:
-            # Sets the right direction in which the focus offset moves the focus
-            # on the telescope.
-            focusDirection = actorState.actorConfig.getint('telescope', 'focusDirection')
-            tccOffsetFocus = focusDirection * offsetFocus
-            cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                     cmdStr="set focus=%f/incremental" % (tccOffsetFocus),
-                                     timeLim=20)
+            # Checks that the offset is not too small
+            if np.abs(offsetFocus) < focus_offset_min:
+                cmd.warn('text="NOT applying too small focus offset=%0.5f"' % (offsetFocus))
+            else:
+                # Sets the right direction in which the focus offset moves the focus
+                # on the telescope.
+                focusDirection = actorState.actorConfig.getint('telescope', 'focusDirection')
+                tccOffsetFocus = focusDirection * offsetFocus
+                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
+                                         cmdStr="set focus=%f/incremental" % (tccOffsetFocus),
+                                         timeLim=20)
 
-            if cmdVar.didFail:
-                guideCmd.warn('text="Failed to issue focus offset"')
+                if cmdVar.didFail:
+                    guideCmd.warn('text="Failed to issue focus offset"')
     except numpy.linalg.LinAlgError:
         guideCmd.respond("focusError=%g" % (numpy.nan))
         guideCmd.respond("focusChange=%g, %s" % (numpy.nan, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
