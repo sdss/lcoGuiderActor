@@ -285,7 +285,24 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     A[0, 1] += d*ivar
 
     A[1, 1] += d*d*ivar
-#...
+
+
+def apply_tcc_corr(cmd, axis, cmdStr, gState, actor):
+    """Checks whether we should correct this iteration and commands the TCC."""
+
+    ncorr = gState.pid[axis].ncorr
+    corr_count = gState.pid[axis].corr_count
+
+    if ncorr == corr_count:
+        cmdVar = actor.cmdr.call(actor='tcc', forUserCmd=cmd, cmdStr=cmdStr)
+        if cmdVar.didFail:
+            cmd.warn('text="Failed to issue offset"')
+        # We have applied the correction so we reset corr_count for this axis
+        gState.pid[axis].corr_count = 0
+    else:
+        cmd.warn('text="would have applied {0} but this is iteration {1} of {2}."'
+                 .format(cmdStr, corr_count, ncorr))
+
 
 def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRot):
     """Finish the calculation for the ra/dec/rot corrections and apply them."""
@@ -304,20 +321,16 @@ def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRo
     offsetRot = rotDirection * offsetRot
 
     if gState.guideAxes:
-        cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=cmd,
-                                 cmdStr="offset arc %f, %f"%(-offsetRa, -offsetDec))
-        if cmdVar.didFail:
-            cmd.warn('text="Failed to issue offset"')
+        radec_cmdStr = 'offset arc {0:f}, {1:f}'.format(-offsetRa, -offsetDec)
+        apply_tcc_corr(cmd, 'raDec', radec_cmdStr, gState, actor)
 
         if offsetRot:
             if numpy.abs(offsetRot) < rotMinimum:
                 cmd.warn('text="not applying this absurdly small rotation change of {0:g} deg"'
                          .format(-offsetRot))
             else:
-                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=cmd,
-                                         cmdStr="offset guide %f, %f, %g"%(0.0, 0.0, -offsetRot))
-                if cmdVar.didFail:
-                    cmd.warn('text="Failed to issue offset in rotator"')
+                rot_cmdStr = 'offset guide 0.0, 0.0, {0:g}'.format(-offsetRot)
+                apply_tcc_corr(cmd, 'rot', rot_cmdStr, gState, actor)
 
     elif gState.centerUp:
         # If we are in the middle of an fk5InFiber (or other TCC track/pterr),
@@ -630,10 +643,8 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
                 cmd.warn('text="NOT setting scarily large scale=%0.8f"' % (offsetScale))
             else:
                 # blockFocusMove = True
-                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                         cmdStr="set scale=%.9f /mult" % (offsetScale))
-                if cmdVar.didFail:
-                    guideCmd.warn('text="Failed to issue scale change"')
+                scale_cmdStr = 'set scale={0:.9f} /mult'.format(offsetScale)
+                apply_tcc_corr(cmd, 'scale', scale_cmdStr, gState, actor)
 
     #Evaluate RMS on fit over fibers used in fits here
     #FIXME--PH not calculated yet
@@ -705,12 +716,10 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
                 # on the telescope.
                 focusDirection = actorState.actorConfig.getint('telescope', 'focusDirection')
                 tccOffsetFocus = focusDirection * offsetFocus
-                cmdVar = actor.cmdr.call(actor="tcc", forUserCmd=guideCmd,
-                                         cmdStr="set focus=%f/incremental" % (tccOffsetFocus),
-                                         timeLim=20)
 
-                if cmdVar.didFail:
-                    guideCmd.warn('text="Failed to issue focus offset"')
+                focus_cmdStr = 'set focus={0:f}/incremental'.format(tccOffsetFocus)
+                apply_tcc_corr(cmd, 'scale', focus_cmdStr, gState, actor)
+
     except numpy.linalg.LinAlgError:
         guideCmd.respond("focusError=%g" % (numpy.nan))
         guideCmd.respond("focusChange=%g, %s" % (numpy.nan, "enabled" if (gState.guideFocus and not blockFocusMove) else "disabled"))
@@ -1251,7 +1260,9 @@ def main(actor, queues):
                 load_cartridge(msg, queues, gState, actorState)
 
             elif msg.type == Msg.SET_PID:
-                gState.pid[msg.axis].setPID(Kp=msg.Kp, Ti=msg.Ti, Td=msg.Td, Imax=msg.Imax, nfilt=msg.nfilt)
+                gState.pid[msg.axis].setPID(Kp=msg.Kp, Ti=msg.Ti, Td=msg.Td,
+                                            Imax=msg.Imax, nfilt=msg.nfilt,
+                                            ncorr=msg.ncorr)
 
                 if msg.cmd:
                     queues[MASTER].put(Msg(Msg.STATUS, msg.cmd, finish=True))

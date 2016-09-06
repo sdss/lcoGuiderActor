@@ -8,7 +8,8 @@ import numpy
 
 class PID(object):
     """A class to handle PID loops"""
-    def __init__(self, dt, Kp, Ti, Td, Imax=-1, nfilt=1, tfilt=None):
+    def __init__(self, dt, Kp, Ti, Td, Imax=-1, nfilt=1, tfilt=None, ncorr=1):
+
         self.dt = dt                    # Time between PID updates
         self.Kp = Kp                    # Proportional term
         self.Ti = Ti                    # Integral time
@@ -22,12 +23,17 @@ class PID(object):
         else:
             self.nfilt = nfilt              # number of inputs to smooth over.
 
+        # The number of iterations after which a correction will be applied.
+        self.ncorr = ncorr
+        self.corr_count = 0  # A counter that updates each iteration.
+
         self.histlen = 0
-        
+
         self._x = None                  # previous value of the error, x
-        
+
     def __str__(self):
-        return "K_P=%g T_i=%g T_d=%g tfilt=%s nfilt=%d" % (self.Kp, self.Ti, self.Td, self.tfilt, self.nfilt)
+        return ('K_P={0:g} T_i={1:g} T_d={2:g} tfilt={3} nfilt={4:d} ncorr={5:d}'
+                .format(self.Kp, self.Ti, self.Td, self.tfilt, self.nfilt, self.ncorr))
 
     def filterX(self, x):
         """ Apply some smoothing/predictive filter to inputs. Dumb median now; kalman maybe later.
@@ -40,10 +46,10 @@ class PID(object):
 
         self.histlen = min(self.histlen+1, len(self._xhist))
         return numpy.median(self._xhist[-self.histlen:])
-    
+
     def update(self, x, dt = None):
         """GIven a new sample of the error, x, return the PID update"""
-        
+
         if dt is None:
             dt = self.dt
 
@@ -64,10 +70,12 @@ class PID(object):
 
         self._x = x
 
+        self.corr_count += 1
+
         correction = self._x + self.Td*self.Dx
         if self.Ti:
             correction += self.Ix
-            
+
         return self.Kp*correction
 
     def reset(self, dt=None):
@@ -77,6 +85,10 @@ class PID(object):
             self.dt = dt
             if self.tfilt:
                 self.nfilt = self.tfilt / dt
+
+        # NOTE: I'm not completely sure if this is ok, but I think if we reset the loop
+        # we also want to reset the counter (JSG)
+        self.corr_count = 0
 
     def ZieglerNichols(self, Kpc, Pc, loopType="PID"):
         """Perform Ziegler-Nichols tuning of a PID loop; Kpc is the critical proportional
@@ -98,9 +110,10 @@ class PID(object):
         else:
             raise RuntimeError, ("I don't know how to tune a %s loop" % loopType)
 
-    def setPID(self, dt=None, Kp=None, Ti=None, Td=None, Imax=None, nfilt=None, tfilt=None):
+    def setPID(self, dt=None, Kp=None, Ti=None, Td=None, Imax=None,
+               nfilt=None, tfilt=None, ncorr=None):
 
-        needReset = dt != None or Imax != None or nfilt != None or tfilt != None
+        needReset = (not dt or not Imax or not nfilt or not tfilt or not ncorr)
 
         if dt is not None:
             try:
@@ -118,7 +131,7 @@ class PID(object):
 
         if Td is not None:
             self.Td = Td
-            
+
         if Imax is not None:
             self.Imax = Imax
 
@@ -127,6 +140,9 @@ class PID(object):
             self.nfilt = tfilt / self.dt
         elif nfilt:
             self.nfilt = nfilt
+
+        if ncorr is not None:
+            self.ncorr = ncorr
 
         if needReset:
             self.reset()
