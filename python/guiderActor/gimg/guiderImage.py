@@ -392,7 +392,7 @@ class GuiderImageAnalysis(object):
 
         # LCOHACK: adds PID terms to the header
         for axis in ['raDec', 'rot', 'scale', 'focus']:
-            for pid_coeff in ['Kp', 'Ti', 'Td', 'Imax', 'nfilt']:
+            for pid_coeff in ['Kp', 'Ti', 'Td', 'Imax', 'nfilt', 'ncorr']:
                 pid_value = getattr(gState.pid[axis], pid_coeff)
                 fitsName = '{0}_{1}'.format(axis, pid_coeff)
                 if len(fitsName) > 8:
