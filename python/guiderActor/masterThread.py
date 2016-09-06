@@ -558,7 +558,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         frameInfo.offsetRot = offsetRot if (gState.guideAxes or gState.centerUp) else 0.0
 
         guideCmd.respond("axisError=%g, %g, %g" % (3600*dRA, 3600*dDec, 3600*dRot))
-        guideCmd.respond("axisChange=%g, %g, %g, %s" % (-3600*offsetRa, -3600*offsetDec, -3600*offsetRot,
+        guideCmd.respond("axisChange=%g, %g, %g, %s" % (3600*offsetRa, 3600*offsetDec, 3600*offsetRot,
                                                         "enabled" if gState.guideAxes else "disabled"))
         #calc FWHM with trimmed mean for 8 in focus fibers
         nFwhm = len(frameInfo.inFocusFwhm)
