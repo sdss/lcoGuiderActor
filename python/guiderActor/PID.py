@@ -70,13 +70,16 @@ class PID(object):
 
         self._x = x
 
-        self.corr_count += 1
-
         correction = self._x + self.Td*self.Dx
         if self.Ti:
             correction += self.Ix
 
         return self.Kp*correction
+
+    def update_count(self):
+        """Updates the count of iterations leading a real correction."""
+
+        self.corr_count += 1
 
     def reset(self, dt=None):
         """Reset the PID loop, in particular the I term. Optionally reset the sampling rate. """
