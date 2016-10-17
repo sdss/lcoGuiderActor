@@ -15,6 +15,9 @@ etc/guider.cfg -text
 etc/guiderActor.module -text
 etc/guider_APO.cfg -text
 etc/guider_LCO.cfg -text
+etc/plate9448_errs.txt -text
+etc/plate9449_errs.txt -text
+etc/plate9450_errs.txt -text
 python/guiderActor/Commands/GuiderCmd.py -text
 python/guiderActor/Commands/GuiderCmd_APO.py -text
 python/guiderActor/Commands/GuiderCmd_LOCAL.py -text
