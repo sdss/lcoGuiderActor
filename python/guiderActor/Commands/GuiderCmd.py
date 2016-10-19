@@ -14,6 +14,8 @@ from guiderActor import Msg, GuiderState
 import guiderActor
 import guiderActor.myGlobals as myGlobals
 
+import numpy as np
+
 
 class GuiderCmd(object):
     """ Wrap commands to the guider actor"""
@@ -446,8 +448,10 @@ class GuiderCmd(object):
         if pointing != 'A':
             cmd.warn('text="pointing name is %s, but we are using pointing #1. This is probably OK."' % (pointing))
 
-        # LCOHACK: disabling refraction correction
-        # self.addGuideOffsets(cmd, plate, pointingID, gprobes)
+        self.addGuideOffsets(cmd, plate, pointingID, gprobes)
+
+        # LCOHACK: test adding CMM errors to guide x/yFocal
+        self.add_cmm_offsets(cmd, plate, fscanID, pointing, gprobes)
 
         # Send that information off to the master thread
         #
@@ -499,6 +503,37 @@ class GuiderCmd(object):
                 gProbe.haOffsetTimes[wavelength] = offset[0].delha
                 gProbe.haXOffsets[wavelength] = offset[0].xfoff
                 gProbe.haYOffsets[wavelength] = offset[0].yfoff
+
+    def add_cmm_offsets(cmd, plate, fscan_id, pointing, gprobes):
+        """Gets the CMM offsets from a file in etc and adds them as gprobe x/yFocal."""
+
+        cmm_file = os.path.join(os.path.dirname(__file__), ('../../../etc/plate{0:04d}_errs.txt'
+                                                            .format(plate)))
+
+        if not os.path.exists(cmm_file):
+            cmd.inform('text="no CMM measurements found."')
+            return
+
+        cmm_data = np.loadtxt(cmm_file)
+
+        n_guides = 16
+        pointing_num = ['a', 'b', 'c', 'd'].index(pointing.lower())
+        pre_index = n_guides * 3 * pointing_num
+        fiberid_range = pre_index + np.arange(1 + (fscan_id - 1) * n_guides,
+                                              1 + fscan_id * n_guides)
+
+        cmd.inform('text="loading CMM offsets for range {0}."'.format(fiberid_range))
+
+        cmm_errors = cmm_data[fiberid_range][[2, 3]]
+
+        for gprobe in gprobes:
+            cmm_x_offset, cmm_y_offset = cmm_errors[gprobe.id - 1]
+            cmd.inform('text="gprobe={0}: CMM errors x={1:.3e}, y={2:.3e}"'
+                       .format(cmm_x_offset, cmm_y_offset))
+            gprobe.xFocal += cmm_x_offset
+            gprobe.yFocal += cmm_y_offset
+
+        return
 
     def setRefractionBalance(self, cmd):
         """Set refraction balance to a specific correction ratio, or based on plateType/surveyMode."""
