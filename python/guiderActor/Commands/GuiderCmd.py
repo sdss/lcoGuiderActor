@@ -504,14 +504,15 @@ class GuiderCmd(object):
                 gProbe.haXOffsets[wavelength] = offset[0].xfoff
                 gProbe.haYOffsets[wavelength] = offset[0].yfoff
 
-    def add_cmm_offsets(cmd, plate, fscan_id, pointing, gprobes):
+    def add_cmm_offsets(self, cmd, plate, fscan_id, pointing, gprobes):
         """Gets the CMM offsets from a file in etc and adds them as gprobe x/yFocal."""
 
-        cmm_file = os.path.join(os.path.dirname(__file__), ('../../../etc/plate{0:04d}_errs.txt'
-                                                            .format(plate)))
+        cmm_file = os.path.realpath(
+            os.path.join(os.path.dirname(__file__),
+                         '../../../etc/plate{0:04d}_errs.txt'.format(plate)))
 
         if not os.path.exists(cmm_file):
-            cmd.inform('text="no CMM measurements found."')
+            cmd.warn('text="no CMM measurements found."')
             return
 
         cmm_data = np.loadtxt(cmm_file)
@@ -524,14 +525,18 @@ class GuiderCmd(object):
 
         cmd.inform('text="loading CMM offsets for range {0}."'.format(fiberid_range))
 
-        cmm_errors = cmm_data[fiberid_range][[2, 3]]
+        cmm_errors = cmm_data[:, [2, 3]][fiberid_range]
 
-        for gprobe in gprobes:
-            cmm_x_offset, cmm_y_offset = cmm_errors[gprobe.id - 1]
-            cmd.inform('text="gprobe={0}: CMM errors x={1:.3e}, y={2:.3e}"'
-                       .format(cmm_x_offset, cmm_y_offset))
-            gprobe.xFocal += cmm_x_offset
-            gprobe.yFocal += cmm_y_offset
+        gprobe_ids = sorted(gprobes)
+        for gprobe_id in gprobe_ids:
+            if gprobe_id > len(cmm_errors):
+                cmd.warn('text="gprobe={0}: no CMM measurements found."'.format(gprobe_id))
+                continue
+            cmm_x_offset, cmm_y_offset = cmm_errors[gprobe_id - 1]
+            cmd.inform('text="gprobe={0}: CMM errors x={1:+.3e}, y={2:+.3e}"'
+                       .format(gprobe_id, cmm_x_offset, cmm_y_offset))
+            gprobes[gprobe_id].xFocal += cmm_x_offset
+            gprobes[gprobe_id].yFocal += cmm_y_offset
 
         return
 
