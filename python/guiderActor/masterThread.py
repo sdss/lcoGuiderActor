@@ -727,7 +727,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
                 tccOffsetFocus = focusDirection * offsetFocus
 
                 focus_cmdStr = 'set focus={0:f}/incremental'.format(tccOffsetFocus)
-                result_focus = apply_tcc_corr(cmd, 'scale', focus_cmdStr, gState, actor)
+                result_focus = apply_tcc_corr(cmd, 'focus', focus_cmdStr, gState, actor)
                 if result_focus:
                     offsetScale = 0.0
 
