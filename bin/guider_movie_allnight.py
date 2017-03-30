@@ -67,7 +67,7 @@ def guider_movie_allnight(mjd, ecam=False):
 
         header = fits.getheader(fn)
 
-        if 'CARTID' not in header:
+        if 'CARTID' not in header or header['IMAGETYP'].strip().lower() != 'object':
             continue
 
         cart_id = header['CARTID']
