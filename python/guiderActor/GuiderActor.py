@@ -16,6 +16,8 @@ import guiderActor
 import GuiderState
 from guiderActor import myGlobals
 
+from distutils import version
+
 
 def set_default_pids(config, gState):
     """Set the PID value defaults from the config file."""
@@ -80,6 +82,8 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         self.logger.setLevel(debugLevel)
         self.logger.propagate = True
 
+        self.check_versions()
+
         #guiderActor.myGlobals.actorState = actorcore.Actor.ActorState(self)
         #actorState = guiderActor.myGlobals.actorState
         #self.actorState = actorState
@@ -138,6 +142,15 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         loadedCartridge = actorState.models[actor].keyVarDict['instrumentNum'][0]
 
         return loadedCartridge
+
+    def check_versions(self):
+        """Checks whether library versions are ok.
+
+        This is not a mandatory method, but specific locations can override it if needed.
+
+        """
+
+        pass
 
 
 class GuiderActorAPO(GuiderActor):
@@ -228,6 +241,7 @@ class GuiderActorAPO(GuiderActor):
 class GuiderActorLCO(GuiderActor):
     """LCO version of this actor."""
     location = 'LCO'
+    astropy_max_version = '1.1.2'
 
     def guidingIsOK(self, cmd, actorState, force=False):
         """Is it OK to be guiding?"""
@@ -290,6 +304,20 @@ class GuiderActorLCO(GuiderActor):
 
         return super(GuiderActorLCO, self).getLoadedCartridge(
             cmd, 'tcc', command='device status scale', actorState=actorState)
+
+    def check_versions(self):
+        """Check that astropy is installed and it's the right version."""
+
+        try:
+            import astropy
+        except ImportError:
+            raise ImportError('cannot import astropy. '
+                              'Please, make sure astropy <= {0} '
+                              'is installed.'.format(self.astropy_max_version))
+
+        if (version.StrictVersion(astropy.__version__) >
+                version.StrictVersion(self.astropy_max_version)):
+            raise ValueError('astropy needs to be <= {0}'.format(self.astropy_max_version))
 
 
 class GuiderActorLocal(GuiderActor):
