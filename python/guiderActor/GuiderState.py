@@ -367,7 +367,7 @@ class GuiderState(object):
 
     def setRefractionBalance(self, plateType, surveyMode):
         """Set the refraction balance based on the survey name."""
-        if plateType == 'APOGEE' or plateType == 'APOGEE-2':
+        if plateType == 'APOGEE' or plateType == 'APOGEE-2' or plateType == 'APOGEE-2S':
             self.refractionBalance = 1
         elif (plateType == 'APOGEE&MaNGA' or plateType == 'APOGEE-2&MaNGA') and \
              (surveyMode == 'APOGEE lead'):
