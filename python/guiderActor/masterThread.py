@@ -669,7 +669,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
     # LCOHACK: for now, outputting the refraction corrected RMS as text. Maybe create a keyword?
     guideCmd.inform('text="Refraction corrected guideRMS: {0:.3f}"'.format(
-        np.sqrt(frameInfo.guideRaRMS + frameInfo.guideDecRMS)))
+        numpy.sqrt(frameInfo.guideRaRMS + frameInfo.guideDecRMS)))
 
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
