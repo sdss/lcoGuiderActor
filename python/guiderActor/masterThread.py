@@ -193,8 +193,6 @@ def _do_one_fiber(fiber, gState, cmd, frameInfo, haLimWarn):
                                                                         xRefractCorr*frameInfo.arcsecPerMM,
                                                                         yRefractCorr*frameInfo.arcsecPerMM))
 
-    # LCOTBD: I'm going to take a wild guess and assume that these corrections,
-    # if we were applying them at LCO, would be in the opposite direction.
     dRA -= xRefractCorr
     dDec -= yRefractCorr
 
