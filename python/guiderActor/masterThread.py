@@ -582,6 +582,8 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
 
         #rms position error prior to this frame's correction
         try:
+            guideRMSCorr = math.sqrt((frameInfo.guideRaRMS +
+                                      frameInfo.guideDecRMS) / frameInfo.nguideRMS) * arcsecPerMM
             frameInfo.guideRMS  = math.sqrt(frameInfo.guideRMS/frameInfo.nguideRMS) *arcsecPerMM
             frameInfo.guideXRMS = math.sqrt(frameInfo.guideXRMS/frameInfo.nguideRMS) *arcsecPerMM
             frameInfo.guideYRMS = math.sqrt(frameInfo.guideYRMS/frameInfo.nguideRMS) *arcsecPerMM
@@ -668,8 +670,7 @@ def guideStep(actor, queues, cmd, gState, inFile, oneExposure,
         frameInfo.guideRaRMS, frameInfo.guideDecRMS))
 
     # LCOHACK: for now, outputting the refraction corrected RMS as text. Maybe create a keyword?
-    guideCmd.inform('text="Refraction corrected guideRMS: {0:.3f}"'.format(
-        numpy.sqrt(frameInfo.guideRaRMS + frameInfo.guideDecRMS)))
+    guideCmd.inform('text="Refraction corrected guideRMS: {0:.3f}"'.format(guideRMSCorr))
 
     #
     # Now focus. If the ith star is d_i out of focus, and the RMS of an
