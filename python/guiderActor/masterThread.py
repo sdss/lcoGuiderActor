@@ -1384,6 +1384,11 @@ def main(actor, queues):
                 cmd = msg.cmd
 
                 scale = actorState.models["tcc"].keyVarDict["scaleFac"][0]
+
+                if scale is None:
+                    cmd.fail('text="cannot read current scale factor from TCC."')
+                    continue
+
                 if "delta" in cmd.cmd.keywords:
                     delta = float(cmd.cmd.keywords["delta"].values[0])
 
