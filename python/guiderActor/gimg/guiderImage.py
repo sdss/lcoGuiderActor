@@ -862,6 +862,13 @@ class GuiderImageAnalysis(object):
         # Mark negative pixels
         badpixels = (image < 0) & (mask == 0)
         mask[badpixels] |= self.mask_badpixels
+
+        # If the percentage of bad pixels is > 5%, there may have been a
+        # flip in the lenses. We issue a warning.
+        if np.sum(badpixels) / float(np.size(self.guiderImage)) > 0.05:
+            self.cmd.warn('text="more than 5% of the pixels are marked bad. '
+                          'Maybe take another guider flat?"')
+
         # Blank out masked pixels.
         image[mask > 0] = 0
 
