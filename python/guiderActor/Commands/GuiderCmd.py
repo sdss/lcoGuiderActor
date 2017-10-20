@@ -14,6 +14,9 @@ from guiderActor import Msg, GuiderState
 import guiderActor
 import guiderActor.myGlobals as myGlobals
 
+from fitPlateProfile import DuPontMeasurement, DuPontProfile, plt#, MeasRadii, DirThetaMapDuPont
+
+
 import numpy as np
 
 
@@ -450,8 +453,8 @@ class GuiderCmd(object):
 
         self.addGuideOffsets(cmd, plate, pointingID, gprobes)
 
-        # LCOHACK: test adding CMM errors to guide x/yFocal
-        self.add_cmm_offsets(cmd, plate, fscanID, pointing, gprobes)
+        # LCOHACK: test adding profile (focus) errors based on guide x/yFocal
+        self.add_prof_offsets(cmd, plate, gprobes)
 
         # Send that information off to the master thread
         #
@@ -503,6 +506,18 @@ class GuiderCmd(object):
                 gProbe.haOffsetTimes[wavelength] = offset[0].delha
                 gProbe.haXOffsets[wavelength] = offset[0].xfoff
                 gProbe.haYOffsets[wavelength] = offset[0].yfoff
+
+
+    def add_prof_offsets(self, cmd, plate, gprobes):
+        dpf = DuPontProfile()
+        dpf.getProfileFromDB(int(plate))
+        gprobe_ids = sorted(gprobes)
+        for gprobe_id in gprobe_ids:
+            xFocal = gprobes[gprobe_id].xFocal
+            yFocal = gprobes[gprobe_id].yFocal
+            profOffset = dpf.getErr(xFocal,yFocal)
+            gprobes[gprobe_id].focusOffset += profOffset
+
 
     def add_cmm_offsets(self, cmd, plate, fscan_id, pointing, gprobes):
         """Gets the CMM offsets from a file in etc and adds them as gprobe x/yFocal."""
