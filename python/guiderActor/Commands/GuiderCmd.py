@@ -335,13 +335,16 @@ class GuiderCmd(object):
 
         loadedCartridge = self.actor.getLoadedCartridge(cmd, actorState)
         if loadedCartridge is None:
-            cmd.fail('text="failed retrieving the number of the cart on the telescope."')
-            return
-
-        cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
+            if not force:
+                cmd.fail('text="failed retrieving the number of the cart on the telescope."')
+                return
+            else:
+                cmd.warn('text="failed retrieving the number of the cart on the telescope. Proceeding with force."')
+        else:
+            cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
 
         # Only auto-select the cart if a plate was not specified.
-        if cartridge < 0 and plate is None:
+        if cartridge is not None and cartridge < 0 and plate is None:
             cartridge = loadedCartridge
 
         if loadedCartridge != cartridge:
@@ -513,9 +516,13 @@ class GuiderCmd(object):
         dpf.getProfileFromDB(int(plate))
         gprobe_ids = sorted(gprobes)
         for gprobe_id in gprobe_ids:
+            if not gprobes[gprobe_id].exists:
+                #probably gprobe 17 or tritium?
+                continue
             xFocal = gprobes[gprobe_id].xFocal
             yFocal = gprobes[gprobe_id].yFocal
             profOffset = dpf.getErr(xFocal,yFocal)
+            profOffset = profOffset * 1000.0 # to microns.
             if np.isnan(profOffset):
                 cmd.warn("nan prof offset for gprobe %i, not adjusting focus offset"%gprobe_id)
             else:
