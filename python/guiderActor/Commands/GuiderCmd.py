@@ -526,8 +526,9 @@ class GuiderCmd(object):
             if np.isnan(profOffset):
                 cmd.warn("nan prof offset for gprobe %i, not adjusting focus offset"%gprobe_id)
             else:
-                cmd.warn("adjusting grobe %i focus offset by %.4f"%(gprobe_id, profOffset))
                 gprobes[gprobe_id].focusOffset += profOffset
+                cmd.warn("adjusting grobe %i focus offset by %.4f, total offset: %.4f"%(gprobe_id, profOffset, gprobes[gprobe_id].focusOffset))
+
 
 
     def add_cmm_offsets(self, cmd, plate, fscan_id, pointing, gprobes):
