@@ -516,7 +516,11 @@ class GuiderCmd(object):
             xFocal = gprobes[gprobe_id].xFocal
             yFocal = gprobes[gprobe_id].yFocal
             profOffset = dpf.getErr(xFocal,yFocal)
-            gprobes[gprobe_id].focusOffset += profOffset
+            if np.isnan(profOffset):
+                cmd.warn("nan prof offset for gprobe %i, not adjusting focus offset"%gprobe_id)
+            else:
+                cmd.warn("adjusting grobe %i focus offset by %.4f"%(gprobe_id, profOffset))
+                gprobes[gprobe_id].focusOffset += profOffset
 
 
     def add_cmm_offsets(self, cmd, plate, fscan_id, pointing, gprobes):
