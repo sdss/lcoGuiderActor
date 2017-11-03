@@ -526,7 +526,7 @@ class GuiderCmd(object):
             if np.isnan(profOffset):
                 cmd.warn("nan prof offset for gprobe %i, not adjusting focus offset"%gprobe_id)
             else:
-                gprobes[gprobe_id].focusOffset += profOffset
+                gprobes[gprobe_id].focusOffset -= profOffset
                 above, below, at = gprobes[gprobe_id].aboveFocus, gprobes[gprobe_id].belowFocus, gprobes[gprobe_id].atFocus
                 cmd.warn("adjusting grobe %i focus offset by %.4f, total offset: %.4f. Above: %s, Below: %s, At: %s"%(gprobe_id, profOffset, gprobes[gprobe_id].focusOffset, above, below, at))
 
