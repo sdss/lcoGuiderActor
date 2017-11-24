@@ -86,7 +86,7 @@ class GProbe(object):
         self.yFerruleOffset = gprobeKey[8]
         self.focusOffset = gprobeKey[9]
         self.fiber_type = gprobeKey[10]
-        self.checkTritium()
+        # self.checkTritium()
         self.haOffsetTimes = {}
         self.haXOffsets = {}
         self.haYOffsets = {}
@@ -225,6 +225,10 @@ class GProbe(object):
             raise ValueError("gprobebits must be set as an integer!")
         else:
             self._bits = value
+
+    @property
+    def tritium(self):
+        return self.fiber_type == 'TRITIUM'
 
     @property
     def ugriz(self):

@@ -752,6 +752,7 @@ class GuiderImageAnalysis(object):
         fiber.xs = stampFrameCoords[0] + star.xyCtr[0]
         fiber.ys = stampFrameCoords[1] + star.xyCtr[1]
         fiber.xyserr = np.hypot(*star.xyErr)
+
         try:
             shape = PyGuide.StarShape.starShape(image, mask, star.xyCtr, 100)
             if not shape.isOK:
@@ -791,14 +792,42 @@ class GuiderImageAnalysis(object):
 
             stamp = np.s_[y0:y1, x0:x1]
 
+            tritium_offset = []  # Stores flexure measurements using the tritium source(s)
+
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
                 stars = PyGuide.findStars(image[stamp], good_mask[stamp], saturated[stamp], ccdInfo, thresh=2)[0]
             except Exception as e:
                 self.cmd.warn('text=%s'%qstr('PyGuide.findStars failed on fiber %d with: %s.'%(fiber.fiberid,e)))
             else:
-                self._set_fiber_star(fiber, stars, image[stamp], good_mask[stamp],
-                                     stampFrameCoords)
+
+                # For not trititum sources we call _set_fiber_star to set xstar/ystar in the
+                # fibre to the values measured by PyGuide. For trititum sources, we compare it
+                # with the value in the fibre and determine an offset
+                if not fiber.gprobe.tritium:
+                    self._set_fiber_star(fiber, stars, image[stamp], good_mask[stamp],
+                                         stampFrameCoords)
+                else:
+                    if len(stars) == 0:
+                        self.cmd.warn('text="PyGuide.findStars did not '
+                                      'find a source for fiber {:d}."'.format(fiber.fiberid))
+                        continue
+
+                    xs = stampFrameCoords[0] + stars[0].xyCtr[0]
+                    ys = stampFrameCoords[1] + stars[0].xyCtr[1]
+
+                    tritium_offset.append([xs - fiber.xCenter, ys - fiber.yCenter])
+
+        if len(tritium_offset) > 0:
+            tritium_offset = tritium_offset.mean(axis=0)
+            if np.any(np.abs(tritium_offset) > 1):
+                self.cmd.warn('text="tritium sources detected an offset of '
+                              '({:.1f}, {:.1f}) pix."'.format(tritium_offset[0],
+                                                              tritium_offset[1]))
+
+                for fiber in fibers:
+                    fiber.xCenter += tritium_offset[0]
+                    fiber.yCenter += tritium_offset[1]
 
         self.fibers = fibers
 
@@ -1118,8 +1147,8 @@ class GuiderImageAnalysis(object):
         best = None
         FX = np.array([f.xcen for f in fibers])
         FY = np.array([f.ycen for f in fibers])
-        PX = np.array([p.xCenter for p in gprobes.values()])
-        PY = np.array([p.yCenter for p in gprobes.values()])
+        PX = np.array([p.xCenter for p in gprobes.values() if not gprobe.tritium])
+        PY = np.array([p.yCenter for p in gprobes.values() if not gprobe.tritium])
         (H,W) = image.shape
         for i,f in enumerate(fibers):
             for j,(px,py) in enumerate(zip(PX,PY)):
@@ -1190,6 +1219,57 @@ class GuiderImageAnalysis(object):
         fibers.sort(key=attrgetter('fiberid'))
         for f in fibers:
             self.cmd.diag('text=%s'%qstr('Fiber id %i at (%.1f, %.1f)' % (f.fiberid, f.xcen-dx, f.ycen-dy)))
+
+        good_mask = (mask & self.mask_masked) != 0
+        saturated = (mask & self.mask_saturated) != 0
+
+        # Now we deal with tritium/LED sources. We use PyGuide since these
+        # sources are point-like.
+        for gprobe in gprobes:
+
+            if not gprobe.tritium:
+                continue
+
+            ccdInfo = PyGuide.CCDInfo(self.imageBias, self.readNoise, self.ccdGain)
+
+            gprobe_xc = gprobe.xCenter
+            gprobe_yc = gprobe.xCenter
+            gprobe_r = gprobe.radius
+
+            # Calculates a stamp slice around the gprobe centre
+            y0 np.rint(gprobe_yc - gprobe_r).astype(np.int)
+            y1 = np.rint(gprobe_yc + gprobe_r + 1).astype(np.int)
+
+            x0 = np.rint(gprobe_xc - gprobe_r).astype(np.int)
+            x1 = np.rint(gprobe_xc + gprobe_r + 1).astype(np.int)
+
+            stampFrameCoords = (x0, y0)
+            stamp_slice = np.s_[y0:y1, x0:x1]
+
+            stamp = image[stamp_slice]
+
+            # For now we use empty masks. Maybe this will need to change.
+            mask = saturated = np.zeros(image.shape)
+
+            try:
+                stars = PyGuide.findStars(stamp, mask, saturated, ccdInfo, thresh=2)[0]
+                star = stars[0]
+                assert star.isOK
+            except Exception as ee:
+                self.cmd.warn('text="failed to find centroid for tritium gprobe {}: {}"'
+                              .format(gprobe.id, ee))
+            else:
+                fiber_x = stampFrameCoords[0] + star.xyCtr[0]
+                fiber_y = stampFrameCoords[1] + star.xyCtr[1]
+                fiber = Fiber(gprobe.id, fiber_x, fiber_y, 0, -1, label=-1)
+                fiber.gProbe = gprobe
+
+                fibers.append(fiber)
+
+                self.cmd.inform('text="found tritium source for '
+                                'gprobe {} at ({:.1f}, {:.1f})"'.format(gprobe.id,
+                                                                        fiber_x,
+                                                                        fiber_y))
 
         # Create the processed flat image.
         # NOTE: jkp: using float32 to keep the fits header happier.
