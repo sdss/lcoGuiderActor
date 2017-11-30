@@ -1225,7 +1225,7 @@ class GuiderImageAnalysis(object):
 
         # Now we deal with tritium/LED sources. We use PyGuide since these
         # sources are point-like.
-        for gprobe in gprobes:
+        for gprobe in gprobes.values():
 
             if not gprobe.tritium:
                 continue
