@@ -1259,8 +1259,8 @@ class GuiderImageAnalysis(object):
                 self.cmd.warn('text="failed to find centroid for tritium gprobe {}: {}"'
                               .format(gprobe.id, ee))
             else:
-                fiber_x = stampFrameCoords[0] + star.xyCtr[0]
-                fiber_y = stampFrameCoords[1] + star.xyCtr[1]
+                fiber_x = (stampFrameCoords[0] + star.xyCtr[0]) / BIN - 0.25
+                fiber_y = (stampFrameCoords[1] + star.xyCtr[1]) / BIN - 0.25
                 fiber = Fiber(gprobe.id, fiber_x, fiber_y, 0, -1, label=-1)
                 fiber.gProbe = gprobe
 
