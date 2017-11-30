@@ -1252,7 +1252,7 @@ class GuiderImageAnalysis(object):
             mask = saturated = np.zeros(stamp.shape)
 
             try:
-                stars = PyGuide.findStars(stamp, mask, saturated, ccdInfo, thresh=2)[0]
+                stars = PyGuide.findStars(stamp, mask, saturated, ccdInfo, thresh=2)
                 star = stars[0]
                 assert star.isOK
             except Exception as ee:
