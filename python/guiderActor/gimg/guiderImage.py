@@ -1147,8 +1147,8 @@ class GuiderImageAnalysis(object):
         best = None
         FX = np.array([f.xcen for f in fibers])
         FY = np.array([f.ycen for f in fibers])
-        PX = np.array([p.xCenter for p in gprobes.values() if not gprobe.tritium])
-        PY = np.array([p.yCenter for p in gprobes.values() if not gprobe.tritium])
+        PX = np.array([p.xCenter for p in gprobes.values() if not p.tritium])
+        PY = np.array([p.yCenter for p in gprobes.values() if not p.tritium])
         (H,W) = image.shape
         for i,f in enumerate(fibers):
             for j,(px,py) in enumerate(zip(PX,PY)):
