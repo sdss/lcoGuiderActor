@@ -1249,7 +1249,7 @@ class GuiderImageAnalysis(object):
             stamp = image[stamp_slice]
 
             # For now we use empty masks. Maybe this will need to change.
-            mask = saturated = np.zeros(image.shape)
+            mask = saturated = np.zeros(stamp.shape)
 
             try:
                 stars = PyGuide.findStars(stamp, mask, saturated, ccdInfo, thresh=2)[0]
