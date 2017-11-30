@@ -1237,7 +1237,7 @@ class GuiderImageAnalysis(object):
             gprobe_r = gprobe.radius
 
             # Calculates a stamp slice around the gprobe centre
-            y0 np.rint(gprobe_yc - gprobe_r).astype(np.int)
+            y0 = np.rint(gprobe_yc - gprobe_r).astype(np.int)
             y1 = np.rint(gprobe_yc + gprobe_r + 1).astype(np.int)
 
             x0 = np.rint(gprobe_xc - gprobe_r).astype(np.int)
