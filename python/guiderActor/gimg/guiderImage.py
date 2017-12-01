@@ -1232,9 +1232,9 @@ class GuiderImageAnalysis(object):
 
             ccdInfo = PyGuide.CCDInfo(self.imageBias, self.readNoise, self.ccdGain)
 
-            gprobe_xc = gprobe.xCenter
-            gprobe_yc = gprobe.xCenter
-            gprobe_r = gprobe.radius
+            gprobe_xc = gprobe.xCenter * 2
+            gprobe_yc = gprobe.yCenter * 2
+            gprobe_r = gprobe.radius * 2
 
             # Calculates a stamp slice around the gprobe centre
             y0 = np.rint(gprobe_yc - gprobe_r).astype(np.int)
@@ -1252,9 +1252,10 @@ class GuiderImageAnalysis(object):
             mask = saturated = np.zeros(stamp.shape)
 
             try:
-                stars = PyGuide.findStars(stamp, mask, saturated, ccdInfo, thresh=2)
+                stars = PyGuide.findStars(stamp, mask, saturated, ccdInfo, thresh=2)[0]
+                assert len(stars) > 0, 'no centroids found.'
                 star = stars[0]
-                assert star.isOK
+                assert star.isOK, 'centroid is not OK'
             except Exception as ee:
                 self.cmd.warn('text="failed to find centroid for tritium gprobe {}: {}"'
                               .format(gprobe.id, ee))
