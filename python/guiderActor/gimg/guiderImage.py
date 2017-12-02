@@ -1296,7 +1296,7 @@ class GuiderImageAnalysis(object):
             objflat = (image[obji] - background)   #should calc a local bkg here using ring mask
             flat[obji] += objflat
             # Do not use acquisition fibers, which have higher throughput than guide fibers.
-            if fiber.gProbe.fiber_type != 'GUIDE':
+            if fiber.gProbe.fiber_type not in ['GUIDE', 'TRITIUM']:
                 continue
             # so can't use fiberid as an index.
             all_median[i] = np.median(objflat)
