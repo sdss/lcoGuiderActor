@@ -1264,7 +1264,7 @@ class GuiderImageAnalysis(object):
                 fiber.gProbe = gprobe
                 fiber.gProbe.rotStar2Sky = 0.0
 
-                mask[stamp_slice] = 0
+                mask[stamp_slice] = 1
 
                 fibers.append(fiber)
 
