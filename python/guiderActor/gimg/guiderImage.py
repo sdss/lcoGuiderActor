@@ -1220,9 +1220,6 @@ class GuiderImageAnalysis(object):
         for f in fibers:
             self.cmd.diag('text=%s'%qstr('Fiber id %i at (%.1f, %.1f)' % (f.fiberid, f.xcen-dx, f.ycen-dy)))
 
-        good_mask = (mask & self.mask_masked) != 0
-        saturated = (mask & self.mask_saturated) != 0
-
         # Now we deal with tritium/LED sources. We use PyGuide since these
         # sources are point-like.
         for gprobe in gprobes.values():
@@ -1266,6 +1263,8 @@ class GuiderImageAnalysis(object):
 
                 fiber.gProbe = gprobe
                 fiber.gProbe.rotStar2Sky = 0.0
+
+                mask[stamp_slice] = 0
 
                 fibers.append(fiber)
 
