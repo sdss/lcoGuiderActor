@@ -1263,7 +1263,9 @@ class GuiderImageAnalysis(object):
                 fiber_x = (stampFrameCoords[0] + star.xyCtr[0]) / BIN - 0.25
                 fiber_y = (stampFrameCoords[1] + star.xyCtr[1]) / BIN - 0.25
                 fiber = Fiber(gprobe.id, fiber_x, fiber_y, 0, -1, label=-1)
+
                 fiber.gProbe = gprobe
+                fiber.gProbe.rotStar2Sky = 0.0
 
                 fibers.append(fiber)
 
