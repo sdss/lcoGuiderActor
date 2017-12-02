@@ -1222,6 +1222,7 @@ class GuiderImageAnalysis(object):
 
         # Now we deal with tritium/LED sources. We use PyGuide since these
         # sources are point-like.
+        n_tritium = 1
         for gprobe in gprobes.values():
 
             if not gprobe.tritium:
@@ -1259,12 +1260,15 @@ class GuiderImageAnalysis(object):
             else:
                 fiber_x = (stampFrameCoords[0] + star.xyCtr[0]) / BIN - 0.25
                 fiber_y = (stampFrameCoords[1] + star.xyCtr[1]) / BIN - 0.25
-                fiber = Fiber(gprobe.id, fiber_x, fiber_y, 0, -1, label=-1)
+                fiber = Fiber(gprobe.id, fiber_x, fiber_y, 0, -1, label=100 + n_tritium)
 
                 fiber.gProbe = gprobe
                 fiber.gProbe.rotStar2Sky = 0.0
 
                 mask[stamp_slice] = 1
+                fiber_labels[stamp_slice] = 100 + n_tritium
+
+                n_tritium += 1
 
                 fibers.append(fiber)
 
@@ -1296,7 +1300,7 @@ class GuiderImageAnalysis(object):
             objflat = (image[obji] - background)   #should calc a local bkg here using ring mask
             flat[obji] += objflat
             # Do not use acquisition fibers, which have higher throughput than guide fibers.
-            if fiber.gProbe.fiber_type not in ['GUIDE', 'TRITIUM']:
+            if fiber.gProbe.fiber_type != 'GUIDE':
                 continue
             # so can't use fiberid as an index.
             all_median[i] = np.median(objflat)
