@@ -1249,10 +1249,10 @@ class GuiderImageAnalysis(object):
             stamp = image[stamp_slice]
 
             # For now we use empty masks. Maybe this will need to change.
-            mask = saturated = np.zeros(stamp.shape)
+            stamp_mask = stamp_sat = np.zeros(stamp.shape)
 
             try:
-                stars = PyGuide.findStars(stamp, mask, saturated, ccdInfo, thresh=2)[0]
+                stars = PyGuide.findStars(stamp, stamp_mask, stamp_sat, ccdInfo, thresh=2)[0]
                 assert len(stars) > 0, 'no centroids found.'
                 star = stars[0]
                 assert star.isOK, 'centroid is not OK'
