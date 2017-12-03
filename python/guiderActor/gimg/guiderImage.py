@@ -410,7 +410,12 @@ class GuiderImageAnalysis(object):
         """
         xc = int(fiber.xcen + 0.5)
         yc = int(fiber.ycen + 0.5)
-        rot = -fiber.gProbe.rotStar2Sky
+
+        if fiber.gProbe.trititum:
+            rot = 0
+        else:
+            rot = -fiber.gProbe.rotStar2Sky
+
         self.cmd.diag('text=%s'%qstr("rotating fiber %d at (%d,%d) by %0.1f degrees" % (fiber.fiberid, xc, yc, rot)))
         # Rotate the fiber image
         stamp_slice = np.s_[yc-r:yc+r+1, xc-r:xc+r+1]
