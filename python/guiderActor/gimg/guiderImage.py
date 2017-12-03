@@ -600,25 +600,25 @@ class GuiderImageAnalysis(object):
         procpath = self.getProcessedOutputName(self.gimgfn)
         objectname = os.path.splitext(self.gimgfn)[0]
 
-        try:
-            if self.camera == 'gcamera':
-                hdulist = self._getProcGimgHDUList(hdr, gprobes, self.fibers, image, self.maskImage)
-                doCompress = True
-            elif self.camera == 'ecamera':
-                bg = np.median(image)#TODO: this is a poor choice for star-filled ecam images!
-                hdulist = self._get_basic_hdulist(image, hdr, bg)
-                hdulist.append(fits.ImageHDU(self.maskImage))
-                doCompress = False
-            imageHDU = hdulist[0]
-            self.fillPrimaryHDU(cmd, models, imageHDU, gState, frameInfo, objectname)
-            directory,filename = os.path.split(procpath)
-            actorFits.writeFits(cmd, hdulist, directory, filename,
-                                doCompress=doCompress, chmod=0644,
-                                checksum=True, output_verify=output_verify)
-            self.cmd.inform('file=%s/,%s' % (directory, filename))
-        except Exception as e:
-            cmd.error('text="failed to write FITS file %s: %r"' % (procpath, e))
-            raise e
+        # try:
+        if self.camera == 'gcamera':
+            hdulist = self._getProcGimgHDUList(hdr, gprobes, self.fibers, image, self.maskImage)
+            doCompress = True
+        elif self.camera == 'ecamera':
+            bg = np.median(image)#TODO: this is a poor choice for star-filled ecam images!
+            hdulist = self._get_basic_hdulist(image, hdr, bg)
+            hdulist.append(fits.ImageHDU(self.maskImage))
+            doCompress = False
+        imageHDU = hdulist[0]
+        self.fillPrimaryHDU(cmd, models, imageHDU, gState, frameInfo, objectname)
+        directory,filename = os.path.split(procpath)
+        actorFits.writeFits(cmd, hdulist, directory, filename,
+                            doCompress=doCompress, chmod=0644,
+                            checksum=True, output_verify=output_verify)
+        self.cmd.inform('file=%s/,%s' % (directory, filename))
+        # except Exception as e:
+        #     cmd.error('text="failed to write FITS file %s: %r"' % (procpath, e))
+            # raise e
 
     def _check_ccd_temp(self,header):
         """Return True if the gcamera CCDTEMP is within deltaTemp of setPoint and darkTemperature."""
