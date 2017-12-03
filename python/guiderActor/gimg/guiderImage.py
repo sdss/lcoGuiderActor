@@ -975,6 +975,10 @@ class GuiderImageAnalysis(object):
             for xi,yi,ri,fi in zip(x,y,radius,fiberid):
                 f = Fiber(fi, xi, yi, ri, 0)
                 f.gProbe = gprobes.get(fi)
+
+                if f.gProbe.tritium:
+                    f.gProbe.rotStar2Sky = 0.0
+
                 fibers.append(f)
 
         return (flat, mask, fibers)
