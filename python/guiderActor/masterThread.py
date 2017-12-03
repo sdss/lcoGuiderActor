@@ -90,6 +90,9 @@ def _check_fiber(fiber, gState, guideCmd):
         guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % fiber.fiberid)
         return False
 
+    if fiber.gProbe.tritium:
+        return False
+
     # Center up on acquisition fibers only.
     if gState.centerUp and fiber.gProbe.fiber_type != "ACQUIRE":
         guideCmd.diag('text="Gprobe %d is disabled during Center Up."' % fiber.fiberid)
