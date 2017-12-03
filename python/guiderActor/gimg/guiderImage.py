@@ -803,7 +803,7 @@ class GuiderImageAnalysis(object):
             try:
                 if fiber.gProbe.tritium:
                     stars = PyGuide.findStars(image[stamp], np.zeros(image[stamp].shape),
-                                              np.zeros(image[stamp].shape), ccdInfo, thresh=2)[0]
+                                              np.zeros(image[stamp].shape), ccdInfo)[0]
                 else:
                     stars = PyGuide.findStars(image[stamp], good_mask[stamp],
                                               saturated[stamp], ccdInfo, thresh=2)[0]
