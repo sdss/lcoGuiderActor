@@ -826,7 +826,7 @@ class GuiderImageAnalysis(object):
                     xs = stampFrameCoords[0] + stars[0].xyCtr[0]
                     ys = stampFrameCoords[1] + stars[0].xyCtr[1]
 
-                    tritium_offset.append([xs - fiber.xCenter, ys - fiber.yCenter])
+                    tritium_offset.append([xs - fiber.xcen, ys - fiber.ycen])
 
         if len(tritium_offset) > 0:
             tritium_offset = np.array(tritium_offset)
