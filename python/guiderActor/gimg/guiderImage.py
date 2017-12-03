@@ -804,7 +804,7 @@ class GuiderImageAnalysis(object):
                 # For not trititum sources we call _set_fiber_star to set xstar/ystar in the
                 # fibre to the values measured by PyGuide. For trititum sources, we compare it
                 # with the value in the fibre and determine an offset
-                if not fiber.gprobe.tritium:
+                if not fiber.gProbe.tritium:
                     self._set_fiber_star(fiber, stars, image[stamp], good_mask[stamp],
                                          stampFrameCoords)
                 else:
