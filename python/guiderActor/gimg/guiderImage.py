@@ -801,8 +801,12 @@ class GuiderImageAnalysis(object):
 
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
-                stars = PyGuide.findStars(image[stamp], good_mask[stamp],
-                                          saturated[stamp], ccdInfo, thresh=2)[0]
+                if fiber.gProbe.tritium:
+                    stars = PyGuide.findStars(image[stamp], np.zeros(image[stamp].shape),
+                                              np.zeros(image[stamp].shape), ccdInfo, thresh=2)[0]
+                else:
+                    stars = PyGuide.findStars(image[stamp], good_mask[stamp],
+                                              saturated[stamp], ccdInfo, thresh=2)[0]
             except Exception as e:
                 self.cmd.warn('text=%s'%qstr('PyGuide.findStars failed on fiber %d with: %s.'%(fiber.fiberid,e)))
             else:
