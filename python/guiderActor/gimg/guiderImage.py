@@ -781,6 +781,8 @@ class GuiderImageAnalysis(object):
             yc = fiber.ycen
             r = fiber.radius
 
+            print(fiber, xc, yc, r)
+
             # Calculates the stamp slice.
             y0, y1 = np.rint(yc - r).astype(np.int), np.rint(yc + r + 1).astype(np.int)
             x0, x1 = np.rint(xc - r).astype(np.int), np.rint(xc + r + 1).astype(np.int)
@@ -818,10 +820,10 @@ class GuiderImageAnalysis(object):
 
                     tritium_offset.append([xs - fiber.xCenter, ys - fiber.yCenter])
 
-        # if len(tritium_offset) > 0:
-        tritium_offset = np.array(tritium_offset)
-        tritium_offset = tritium_offset.mean(axis=0)
-        if np.any(np.abs(tritium_offset) > 1):
+        if len(tritium_offset) > 0:
+            tritium_offset = np.array(tritium_offset)
+            tritium_offset = tritium_offset.mean(axis=0)
+            # if np.any(np.abs(tritium_offset) > 1):
             self.cmd.warn('text="tritium sources detected an offset of '
                           '({:.1f}, {:.1f}) pix."'.format(tritium_offset[0],
                                                           tritium_offset[1]))
