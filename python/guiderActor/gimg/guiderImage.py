@@ -570,19 +570,19 @@ class GuiderImageAnalysis(object):
         bg = np.median(image[mask == 0])
         hdulist = self._get_basic_hdulist(image,primhdr,bg)
 
-        try:
-            fibers,bigs,smalls,stampSizes,stampInds = self._get_stamp_data(gprobes,fibers)
+        # try:
+        fibers,bigs,smalls,stampSizes,stampInds = self._get_stamp_data(gprobes,fibers)
 
-            hdulist.append(fits.ImageHDU(mask))
-            hdulist += self.getStampHDUs(smalls, bg, image, mask)
-            hdulist += self.getStampHDUs(bigs, bg, image, mask)
+        hdulist.append(fits.ImageHDU(mask))
+        hdulist += self.getStampHDUs(smalls, bg, image, mask)
+        hdulist += self.getStampHDUs(bigs, bg, image, mask)
 
-            hdulist.append(fits.new_table(self._get_HDU7_fields(fibers, stampSizes, stampInds)))
+        hdulist.append(fits.new_table(self._get_HDU7_fields(fibers, stampSizes, stampInds)))
 
-        except Exception as e:
-            self.cmd.warn('text=%s'%qstr('could not create header for proc- guider file: %s' % (e,)))
-            tback('guiderImage write', e)
-            raise e
+        # except Exception as e:
+        #     self.cmd.warn('text=%s'%qstr('could not create header for proc- guider file: %s' % (e,)))
+        #     tback('guiderImage write', e)
+        #     raise e
         return hdulist
 
     def writeFITS(self, models, cmd, frameInfo, gState, output_verify='warn'):
