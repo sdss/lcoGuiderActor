@@ -837,8 +837,8 @@ class GuiderImageAnalysis(object):
                                                           tritium_offset[1]))
 
             for fiber in fibers:
-                fiber.xCenter += tritium_offset[0]
-                fiber.yCenter += tritium_offset[1]
+                fiber.xcen += tritium_offset[0]
+                fiber.ycen += tritium_offset[1]
 
         self.fibers = fibers
 
