@@ -264,7 +264,7 @@ def _find_focus_one_fiber(fiber,gState,frameInfo,C,A,b):
     if fiber.gProbe is None:
         return
     gProbe = gState.gprobes[fiber.fiberid]
-    if not gProbe.enabled:
+    if not gProbe.enabled or gProbe.tritium:
         return
 
     # FIXME -- do we want to include ACQUISITION fibers?
