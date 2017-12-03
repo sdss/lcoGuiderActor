@@ -411,7 +411,7 @@ class GuiderImageAnalysis(object):
         xc = int(fiber.xcen + 0.5)
         yc = int(fiber.ycen + 0.5)
 
-        if fiber.gProbe.trititum:
+        if fiber.gProbe.tritium:
             rot = 0
         else:
             rot = -fiber.gProbe.rotStar2Sky
@@ -570,19 +570,19 @@ class GuiderImageAnalysis(object):
         bg = np.median(image[mask == 0])
         hdulist = self._get_basic_hdulist(image,primhdr,bg)
 
-        # try:
-        fibers,bigs,smalls,stampSizes,stampInds = self._get_stamp_data(gprobes,fibers)
+        try:
+            fibers,bigs,smalls,stampSizes,stampInds = self._get_stamp_data(gprobes,fibers)
 
-        hdulist.append(fits.ImageHDU(mask))
-        hdulist += self.getStampHDUs(smalls, bg, image, mask)
-        hdulist += self.getStampHDUs(bigs, bg, image, mask)
+            hdulist.append(fits.ImageHDU(mask))
+            hdulist += self.getStampHDUs(smalls, bg, image, mask)
+            hdulist += self.getStampHDUs(bigs, bg, image, mask)
 
-        hdulist.append(fits.new_table(self._get_HDU7_fields(fibers, stampSizes, stampInds)))
+            hdulist.append(fits.new_table(self._get_HDU7_fields(fibers, stampSizes, stampInds)))
 
-        # except Exception as e:
-        #     self.cmd.warn('text=%s'%qstr('could not create header for proc- guider file: %s' % (e,)))
-        #     tback('guiderImage write', e)
-        #     raise e
+        except Exception as e:
+            self.cmd.warn('text=%s'%qstr('could not create header for proc- guider file: %s' % (e,)))
+            tback('guiderImage write', e)
+            raise e
         return hdulist
 
     def writeFITS(self, models, cmd, frameInfo, gState, output_verify='warn'):
@@ -600,25 +600,25 @@ class GuiderImageAnalysis(object):
         procpath = self.getProcessedOutputName(self.gimgfn)
         objectname = os.path.splitext(self.gimgfn)[0]
 
-        # try:
-        if self.camera == 'gcamera':
-            hdulist = self._getProcGimgHDUList(hdr, gprobes, self.fibers, image, self.maskImage)
-            doCompress = True
-        elif self.camera == 'ecamera':
-            bg = np.median(image)#TODO: this is a poor choice for star-filled ecam images!
-            hdulist = self._get_basic_hdulist(image, hdr, bg)
-            hdulist.append(fits.ImageHDU(self.maskImage))
-            doCompress = False
-        imageHDU = hdulist[0]
-        self.fillPrimaryHDU(cmd, models, imageHDU, gState, frameInfo, objectname)
-        directory,filename = os.path.split(procpath)
-        actorFits.writeFits(cmd, hdulist, directory, filename,
-                            doCompress=doCompress, chmod=0644,
-                            checksum=True, output_verify=output_verify)
-        self.cmd.inform('file=%s/,%s' % (directory, filename))
-        # except Exception as e:
-        #     cmd.error('text="failed to write FITS file %s: %r"' % (procpath, e))
-            # raise e
+        try:
+            if self.camera == 'gcamera':
+                hdulist = self._getProcGimgHDUList(hdr, gprobes, self.fibers, image, self.maskImage)
+                doCompress = True
+            elif self.camera == 'ecamera':
+                bg = np.median(image)#TODO: this is a poor choice for star-filled ecam images!
+                hdulist = self._get_basic_hdulist(image, hdr, bg)
+                hdulist.append(fits.ImageHDU(self.maskImage))
+                doCompress = False
+            imageHDU = hdulist[0]
+            self.fillPrimaryHDU(cmd, models, imageHDU, gState, frameInfo, objectname)
+            directory,filename = os.path.split(procpath)
+            actorFits.writeFits(cmd, hdulist, directory, filename,
+                                doCompress=doCompress, chmod=0644,
+                                checksum=True, output_verify=output_verify)
+            self.cmd.inform('file=%s/,%s' % (directory, filename))
+        except Exception as e:
+            cmd.error('text="failed to write FITS file %s: %r"' % (procpath, e))
+            raise e
 
     def _check_ccd_temp(self,header):
         """Return True if the gcamera CCDTEMP is within deltaTemp of setPoint and darkTemperature."""
