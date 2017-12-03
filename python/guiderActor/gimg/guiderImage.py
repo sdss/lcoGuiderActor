@@ -819,6 +819,7 @@ class GuiderImageAnalysis(object):
                     tritium_offset.append([xs - fiber.xCenter, ys - fiber.yCenter])
 
         # if len(tritium_offset) > 0:
+        tritium_offset = np.array(tritium_offset)
         tritium_offset = tritium_offset.mean(axis=0)
         if np.any(np.abs(tritium_offset) > 1):
             self.cmd.warn('text="tritium sources detected an offset of '
