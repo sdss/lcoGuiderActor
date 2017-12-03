@@ -786,8 +786,6 @@ class GuiderImageAnalysis(object):
             yc = fiber.ycen
             r = fiber.radius
 
-            print(fiber, xc, yc, r)
-
             # Calculates the stamp slice.
             y0, y1 = np.rint(yc - r).astype(np.int), np.rint(yc + r + 1).astype(np.int)
             x0, x1 = np.rint(xc - r).astype(np.int), np.rint(xc + r + 1).astype(np.int)
@@ -803,7 +801,12 @@ class GuiderImageAnalysis(object):
 
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
-                stars = PyGuide.findStars(image[stamp], good_mask[stamp], saturated[stamp], ccdInfo, thresh=2)[0]
+                if fiber.gProbe.tritium:
+                    stars = PyGuide.findStars(image[stamp], np.zeros(image[stamp].shape),
+                                              np.zeros(image[stamp].shape), ccdInfo, thresh=2)[0]
+                else:
+                    stars = PyGuide.findStars(image[stamp], good_mask[stamp],
+                                              saturated[stamp], ccdInfo, thresh=2)[0]
             except Exception as e:
                 self.cmd.warn('text=%s'%qstr('PyGuide.findStars failed on fiber %d with: %s.'%(fiber.fiberid,e)))
             else:
