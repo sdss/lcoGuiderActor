@@ -113,7 +113,10 @@ def _do_one_fiber(fiber, gState, cmd, frameInfo, haLimWarn):
 
     # theta is the angle to rotate (x, y) on the ALTA to (ra, alt)
     # NOTE: We should never get here if rotStar2Sky is still nan.
-    theta = gProbe.rotStar2Sky
+    if gProbe.tritium:
+        theta = 0.
+    else:
+        theta = gProbe.rotStar2Sky
 
     #FIXME PH -- We should ignore gprobes not present on plate/pointing (MARVELS dual pointing)
     #               and ignore fibers not found in flat.
