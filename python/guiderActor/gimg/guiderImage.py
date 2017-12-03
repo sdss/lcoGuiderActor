@@ -801,12 +801,8 @@ class GuiderImageAnalysis(object):
 
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
-                if fiber.gProbe.tritium:
-                    stars = PyGuide.findStars(image[stamp], np.zeros(image[stamp].shape),
-                                              np.zeros(image[stamp].shape), ccdInfo)[0]
-                else:
-                    stars = PyGuide.findStars(image[stamp], good_mask[stamp],
-                                              saturated[stamp], ccdInfo, thresh=2)[0]
+                stars = PyGuide.findStars(image[stamp], good_mask[stamp],
+                                          saturated[stamp], ccdInfo, thresh=2)[0]
             except Exception as e:
                 self.cmd.warn('text=%s'%qstr('PyGuide.findStars failed on fiber %d with: %s.'%(fiber.fiberid,e)))
             else:
@@ -910,7 +906,7 @@ class GuiderImageAnalysis(object):
                           'Maybe take another guider flat?"')
 
         # Blank out masked pixels.
-        image[mask > 0] = 0
+        # image[mask > 0] = 0
 
         # images use a different rotation fill constant than flats.
         self.rot_cval = 0
@@ -930,6 +926,7 @@ class GuiderImageAnalysis(object):
         else:
             fibers = [f for f in self.flatFibers if not f.is_fake()]
             self._find_stars_gcam(image, mask, fibers)
+            image[mask > 0] = 0
             return self.fibers
 
     def applyBias(self, image, hdr, filename, binning):
