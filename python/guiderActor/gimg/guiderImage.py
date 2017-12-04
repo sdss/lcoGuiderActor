@@ -802,8 +802,7 @@ class GuiderImageAnalysis(object):
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
                 if fiber.gProbe.tritium:
-                    stars = PyGuide.findStars(image[stamp], np.zeros(image[stamp].shape),
-                                              np.zeros(image[stamp].shape), ccdInfo, thresh=2)[0]
+                    stars = PyGuide.findStars(image[stamp], None, None, ccdInfo, thresh=2)[0]
                 else:
                     stars = PyGuide.findStars(image[stamp], good_mask[stamp],
                                               saturated[stamp], ccdInfo, thresh=2)[0]
@@ -1263,11 +1262,8 @@ class GuiderImageAnalysis(object):
 
             stamp = image[stamp_slice]
 
-            # For now we use empty masks. Maybe this will need to change.
-            stamp_mask = stamp_sat = np.zeros(stamp.shape)
-
             try:
-                stars = PyGuide.findStars(stamp, stamp_mask, stamp_sat, ccdInfo, thresh=2)[0]
+                stars = PyGuide.findStars(stamp, None, None, ccdInfo, thresh=2)[0]
                 assert len(stars) > 0, 'no centroids found.'
                 star = stars[0]
                 assert star.isOK, 'centroid is not OK'
@@ -1295,7 +1291,7 @@ class GuiderImageAnalysis(object):
                                                                         fiber_x,
                                                                         fiber_y))
 
-                fwhm = self._get_pyguide_fwhm(stamp, stamp_mask, star)
+                fwhm = self._get_pyguide_fwhm(stamp, star)
 
                 if fwhm is False:
                     self.cmd.warn('text="cannot determine FWHM for gprobe {}."'
@@ -1367,7 +1363,7 @@ class GuiderImageAnalysis(object):
 
         return hdulist,gprobes
 
-    def _get_pyguide_fwhm(self, image, mask, star):
+    def _get_pyguide_fwhm(self, image, star, mask=None):
         """Returns the FWHM in arcsec from a PyGuide detection."""
 
         try:
