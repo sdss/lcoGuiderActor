@@ -1367,7 +1367,7 @@ class GuiderImageAnalysis(object):
 
         return hdulist,gprobes
 
-    def _get_pyguide_fwhm(image, mask, star):
+    def _get_pyguide_fwhm(self, image, mask, star):
         """Returns the FWHM in arcsec from a PyGuide detection."""
 
         try:
