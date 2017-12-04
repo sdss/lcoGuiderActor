@@ -1297,9 +1297,9 @@ class GuiderImageAnalysis(object):
                     self.cmd.warn('text="cannot determine FWHM for gprobe {}."'
                                   .format(gprobe.id))
                 else:
-                    fiber.fwhm = fwhm
+                    fiber.fwhm = fwhm / BIN
                     self.cmd.inform('text="gprobe {} has FWHM {:.2f} arcsec"'.format(gprobe.id,
-                                                                                     fwhm))
+                                                                                     fwhm / BIN))
 
         # Create the processed flat image.
         # NOTE: jkp: using float32 to keep the fits header happier.
