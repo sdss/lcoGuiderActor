@@ -801,6 +801,8 @@ class GuiderImageAnalysis(object):
 
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
+                # TODO: once the mask includes the tritium source we can remove this and use
+                # a single statement for all fibres. (JSG)
                 if fiber.gProbe.tritium:
                     stars = PyGuide.findStars(image[stamp], None, None, ccdInfo, thresh=2)[0]
                 else:
@@ -828,6 +830,9 @@ class GuiderImageAnalysis(object):
                     ys = stampFrameCoords[1] + star.xyCtr[1]
 
                     tritium_offset.append([xs - fiber.xcen, ys - fiber.ycen])
+
+                    # TODO: maybe we should output a measurement of the FWHM of
+                    # the LED here as well.
 
         if len(tritium_offset) > 0:
             tritium_offset = np.array(tritium_offset)
