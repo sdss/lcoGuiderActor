@@ -51,9 +51,9 @@ class GProbe(object):
     def checkFocus(self):
         """Set the above/below focus bits based on the focusOffset value."""
         # allow a small range of allowed focus offsets.
-        if self.focusOffset < -50:
+        if self.focusOffset < -150:
             self.aboveFocus = True
-        elif self.focusOffset > 50:
+        elif self.focusOffset > 150:
             self.belowFocus = True
         else:
             self.aboveFocus = False

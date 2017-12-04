@@ -14,6 +14,9 @@ from guiderActor import Msg, GuiderState
 import guiderActor
 import guiderActor.myGlobals as myGlobals
 
+from fitPlateProfile import DuPontMeasurement, DuPontProfile, plt#, MeasRadii, DirThetaMapDuPont
+
+
 import numpy as np
 
 
@@ -332,13 +335,16 @@ class GuiderCmd(object):
 
         loadedCartridge = self.actor.getLoadedCartridge(cmd, actorState)
         if loadedCartridge is None:
-            cmd.fail('text="failed retrieving the number of the cart on the telescope."')
-            return
-
-        cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
+            if not force:
+                cmd.fail('text="failed retrieving the number of the cart on the telescope."')
+                return
+            else:
+                cmd.warn('text="failed retrieving the number of the cart on the telescope. Proceeding with force."')
+        else:
+            cmd.inform("text=\"Cartridge %s is on the telescope\"" % loadedCartridge)
 
         # Only auto-select the cart if a plate was not specified.
-        if cartridge < 0 and plate is None:
+        if cartridge is not None and cartridge < 0 and plate is None:
             cartridge = loadedCartridge
 
         if loadedCartridge != cartridge:
@@ -450,8 +456,8 @@ class GuiderCmd(object):
 
         self.addGuideOffsets(cmd, plate, pointingID, gprobes)
 
-        # LCOHACK: test adding CMM errors to guide x/yFocal
-        self.add_cmm_offsets(cmd, plate, fscanID, pointing, gprobes)
+        # LCOHACK: test adding profile (focus) errors based on guide x/yFocal
+        self.add_prof_offsets(cmd, plate, gprobes)
 
         # Send that information off to the master thread
         #
@@ -503,6 +509,28 @@ class GuiderCmd(object):
                 gProbe.haOffsetTimes[wavelength] = offset[0].delha
                 gProbe.haXOffsets[wavelength] = offset[0].xfoff
                 gProbe.haYOffsets[wavelength] = offset[0].yfoff
+
+
+    def add_prof_offsets(self, cmd, plate, gprobes):
+        dpf = DuPontProfile()
+        dpf.getProfileFromDB(int(plate))
+        gprobe_ids = sorted(gprobes)
+        for gprobe_id in gprobe_ids:
+            if not gprobes[gprobe_id].exists:
+                #probably gprobe 17 or tritium?
+                continue
+            xFocal = gprobes[gprobe_id].xFocal
+            yFocal = gprobes[gprobe_id].yFocal
+            profOffset = dpf.getErr(xFocal,yFocal)
+            profOffset = profOffset * 1000.0 # to microns.
+            if np.isnan(profOffset):
+                cmd.warn("nan prof offset for gprobe %i, not adjusting focus offset"%gprobe_id)
+            else:
+                gprobes[gprobe_id].focusOffset -= profOffset
+                above, below, at = gprobes[gprobe_id].aboveFocus, gprobes[gprobe_id].belowFocus, gprobes[gprobe_id].atFocus
+                cmd.warn("adjusting grobe %i focus offset by %.4f, total offset: %.4f. Above: %s, Below: %s, At: %s"%(gprobe_id, profOffset, gprobes[gprobe_id].focusOffset, above, below, at))
+
+
 
     def add_cmm_offsets(self, cmd, plate, fscan_id, pointing, gprobes):
         """Gets the CMM offsets from a file in etc and adds them as gprobe x/yFocal."""
