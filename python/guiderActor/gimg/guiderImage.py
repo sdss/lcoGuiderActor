@@ -823,8 +823,10 @@ class GuiderImageAnalysis(object):
                                       'find a source for fiber {:d}."'.format(fiber.fiberid))
                         continue
 
-                    xs = stampFrameCoords[0] + stars[0].xyCtr[0]
-                    ys = stampFrameCoords[1] + stars[0].xyCtr[1]
+                    star = stars[0]
+
+                    xs = stampFrameCoords[0] + star.xyCtr[0]
+                    ys = stampFrameCoords[1] + star.xyCtr[1]
 
                     tritium_offset.append([xs - fiber.xcen, ys - fiber.ycen])
 
@@ -1236,8 +1238,7 @@ class GuiderImageAnalysis(object):
         for f in fibers:
             self.cmd.diag('text=%s'%qstr('Fiber id %i at (%.1f, %.1f)' % (f.fiberid, f.xcen-dx, f.ycen-dy)))
 
-        # Now we deal with tritium/LED sources. We use PyGuide since these
-        # sources are point-like.
+        # Now we deal with tritium/LED sources. We use PyGuide since these sources are point-like.
         n_tritium = 1
         for gprobe in gprobes.values():
 
@@ -1293,6 +1294,16 @@ class GuiderImageAnalysis(object):
                                 'gprobe {} at ({:.1f}, {:.1f})"'.format(gprobe.id,
                                                                         fiber_x,
                                                                         fiber_y))
+
+                fwhm = self._get_pyguide_fwhm(stamp, stamp_mask, star)
+
+                if fwhm is False:
+                    self.cmd.warn('text="cannot determine FWHM for gprobe {}."'
+                                  .format(gprobe.id))
+                else:
+                    fiber.fwhm = fwhm
+                    self.cmd.inform('text="gprobe {} has FWHM {:.2f} arcsec"'.format(gprobe.id,
+                                                                                     fwhm))
 
         # Create the processed flat image.
         # NOTE: jkp: using float32 to keep the fits header happier.
@@ -1355,6 +1366,22 @@ class GuiderImageAnalysis(object):
             self.cmd.warn('text=%s'%qstr('Failed to create processed flat file'))
 
         return hdulist,gprobes
+
+    def _get_pyguide_fwhm(image, mask, star):
+        """Returns the FWHM in arcsec from a PyGuide detection."""
+
+        try:
+            shape = PyGuide.StarShape.starShape(image, mask, star.xyCtr, 100)
+            if not shape.isOK:
+                self.cmd.warn('text="PyGuide.starShape failed with: {}."'.format(star.msgStr))
+                return False
+        except Exception as ee:
+            self.cmd.warn('text="PyGuide.starShape failed with Exception: {}."'.format(ee))
+            return False
+
+        fwhm_arcsec = self.pixels2arcsec(shape.fwhm)
+
+        return fwhm_arcsec
 
     def _process_ecam_flat(self, image, flatFileName, hdr):
         """
