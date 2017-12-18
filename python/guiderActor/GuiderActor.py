@@ -74,7 +74,11 @@ class GuiderActor(actorcore.Actor.SDSSActor):
             raise KeyError("Don't know my location: cannot return a working Actor!")
 
     def __init__(self, name, debugLevel=30, productName=None, makeCmdrConnection=True):
-        actorcore.Actor.Actor.__init__(self, name, productName=productName, makeCmdrConnection=makeCmdrConnection)
+
+        actorcore.Actor.Actor.__init__(self, name, productName=productName,
+                                       makeCmdrConnection=makeCmdrConnection,
+                                       configFile=(os.path.dirname(__file__) +
+                                                   '../../etc/guider.cfg'))
 
         self.version = guiderActor.__version__
 
