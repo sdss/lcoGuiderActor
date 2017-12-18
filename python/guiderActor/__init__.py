@@ -70,3 +70,5 @@ class Msg(actorcore.Actor.Msg):
         return self.priority - rhs.priority
 
 __all__ = ["MASTER", "GCAMERA", "MOVIE", "Msg"]
+
+__version__ = '1.0.0'

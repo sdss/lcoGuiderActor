@@ -76,8 +76,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
     def __init__(self, name, debugLevel=30, productName=None, makeCmdrConnection=True):
         actorcore.Actor.Actor.__init__(self, name, productName=productName, makeCmdrConnection=makeCmdrConnection)
 
-        self.headURL = ('$HeadURL: svn+ssh://sdss3svn@sdss3.org/repo/ops/actors/guiderActor/branches/lco/'
-                        'python/guiderActor/guiderActor_main.py $')
+        self.version = guiderActor.__version__
 
         self.logger.setLevel(debugLevel)
         self.logger.propagate = True
