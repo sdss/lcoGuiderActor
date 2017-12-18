@@ -2,6 +2,7 @@
 """An actor to run the guider"""
 
 import abc
+import os
 
 import opscore.actor.model
 import opscore.actor.keyvar
