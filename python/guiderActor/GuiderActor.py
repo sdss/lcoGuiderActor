@@ -77,9 +77,8 @@ class GuiderActor(actorcore.Actor.SDSSActor):
     def __init__(self, name, debugLevel=30, productName=None, makeCmdrConnection=True):
 
         actorcore.Actor.Actor.__init__(self, name, productName=productName,
-                                       makeCmdrConnection=makeCmdrConnection,
-                                       configFile=(os.path.dirname(__file__) +
-                                                   '/../../etc/guider.cfg'))
+                                       productDir=(os.path.dirname(__file__) + '/../../'),
+                                       makeCmdrConnection=makeCmdrConnection)
 
         self.version = guiderActor.__version__
 
