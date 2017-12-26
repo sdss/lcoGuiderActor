@@ -1304,10 +1304,13 @@ class GuiderImageAnalysis(object):
                     self.cmd.inform('text="gprobe {} has FWHM {:.2f} arcsec"'.format(gprobe.id,
                                                                                      fwhm / BIN))
 
-        if n_tritium == 0 and force is False:
-            msg = 'failed to find a LED source and force=False'
-            self.cmd.error('text="{}"'.format(msg))
-            raise GuiderExceptions.FlatError(msg)
+        if n_tritium == 0:
+            if force is False:
+                msg = 'failed to find a LED source and force=False'
+                self.cmd.error('text="{}"'.format(msg))
+                raise GuiderExceptions.FlatError(msg)
+            else:
+                self.cmd.warn('text="could not find any LED, but force=True so will carry on."')
 
         # Create the processed flat image.
         # NOTE: jkp: using float32 to keep the fits header happier.
