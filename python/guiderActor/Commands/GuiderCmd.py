@@ -93,7 +93,7 @@ class GuiderCmd(object):
             ("loadPlateFiles", "<cartfile> <plugfile>", self.loadPlateFiles),
             ("reprocessFile", "<file>", self.reprocessFile),
             ('bias', '[<stack>]', self.bias),
-            ("flat", "[<time>]", self.flat),
+            ("flat", "[<time>] [force]", self.flat),
             ("dark", "[<time>] [<stack>]", self.dark),
             ('ping', '', self.ping),
             ('restart', '', self.restart),
@@ -157,8 +157,9 @@ class GuiderCmd(object):
     def flat(self, cmd):
         """Take, and process, a guider flat."""
         expTime = cmd.cmd.keywords["time"].values[0] if "time" in cmd.cmd.keywords else 0.5
+        force = 'force' in cmd.cmd.keywords
         myGlobals.actorState.queues[guiderActor.MASTER].put(Msg(Msg.TAKE_FLAT, cmd=cmd,
-                                                                expTime=expTime))
+                                                                expTime=expTime, force=force))
 
     def bias(self, cmd):
         """Takes a stack of bias images."""

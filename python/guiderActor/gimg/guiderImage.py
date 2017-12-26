@@ -1065,7 +1065,7 @@ class GuiderImageAnalysis(object):
         self.currentDarkName = darkFileName
     #...
 
-    def _find_fibers_in_flat(self, image, flatFileName, gprobes, hdr):
+    def _find_fibers_in_flat(self, image, flatFileName, gprobes, hdr, force=False):
         """Identify the fibers in a flat image."""
         # TODO: FIXME -- we KNOW the area (ie, the number of pixels) of the
         # fibers -- we could choose the threshold appropriately.
@@ -1240,7 +1240,7 @@ class GuiderImageAnalysis(object):
             self.cmd.diag('text=%s'%qstr('Fiber id %i at (%.1f, %.1f)' % (f.fiberid, f.xcen-dx, f.ycen-dy)))
 
         # Now we deal with tritium/LED sources. We use PyGuide since these sources are point-like.
-        n_tritium = 1
+        n_tritium = 0
         for gprobe in gprobes.values():
 
             if not gprobe.tritium:
@@ -1303,6 +1303,11 @@ class GuiderImageAnalysis(object):
                     fiber.fwhm = fwhm / BIN
                     self.cmd.inform('text="gprobe {} has FWHM {:.2f} arcsec"'.format(gprobe.id,
                                                                                      fwhm / BIN))
+
+        if n_tritium == 0 and force is False:
+            msg = 'failed to find a LED source and force=False'
+            self.cmd.error('text="{}"'.format(msg))
+            raise GuiderExceptions.FlatError(msg)
 
         # Create the processed flat image.
         # NOTE: jkp: using float32 to keep the fits header happier.
@@ -1451,7 +1456,7 @@ class GuiderImageAnalysis(object):
 
         return hdulist, gprobes
 
-    def analyzeFlat(self, flatFileName, gprobes, cmd=None, setPoint=None):
+    def analyzeFlat(self, flatFileName, gprobes, cmd=None, setPoint=None, force=False):
         """
         Return (flat,mask,fibers): with the processed flat, mask to apply
         to the image and flat to mask everything but the fibers, and a list
@@ -1494,7 +1499,7 @@ class GuiderImageAnalysis(object):
                                                                   gprobes, hdr)
             else:
                 hdulist, gprobes = self._find_fibers_in_flat(image, flatFileName,
-                                                             gprobes, hdr)
+                                                             gprobes, hdr, force=force)
 
         elif self.camera == 'ecamera':
             hdulist = self._process_ecam_flat(image, flatFileName, hdr)
