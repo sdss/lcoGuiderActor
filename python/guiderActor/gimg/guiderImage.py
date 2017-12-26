@@ -34,6 +34,10 @@ class Fiber(object):
         self.radius = r
         self.illrad = illr
 
+        # Flexure values. To be updated, if needed, when we measure the LED position.
+        self.xFlex = 0.0
+        self.yFlex = 0.0
+
         self.reset_star_values()
 
         self.gProbe = None
@@ -493,6 +497,8 @@ class GuiderImageAnalysis(object):
                   ('fiberid', None,     'I', None),
                   ('xCenter', 'xcen',   'E', pixunit),
                   ('yCenter', 'ycen',   'E', pixunit),
+                  ('xFlex',   None,     'E', pixunits),
+                  ('yFlex',   None,     'E', pixunits),
                   ('xstar',   'xs',     'E', pixunit),
                   ('ystar',   'ys',     'E', pixunit),
                   ('dx',      None,     'E', 'residual in mm, guidercam frame'),
@@ -773,6 +779,8 @@ class GuiderImageAnalysis(object):
         except Exception as e:
             self.cmd.warn('text=%s'%qstr('PyGuide.starShape failed on fiber %d with Exception: %s.'%(fiber.fiberid,e)))
 
+        return fiber
+
     def _find_stars_gcam(self, image, mask, fibers):
         """Find the stars in a processed gcamera image."""
         ccdInfo = PyGuide.CCDInfo(self.imageBias,self.readNoise,self.ccdGain)
@@ -797,14 +805,13 @@ class GuiderImageAnalysis(object):
 
             stamp = np.s_[y0:y1, x0:x1]
 
-            tritium_offset = []  # Stores flexure measurements using the tritium source(s)
+            tritium_offsets = []  # Stores flexure measurements using the tritium source(s)
 
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
-                # TODO: once the mask includes the tritium source we can remove this and use
-                # a single statement for all fibres. (JSG)
                 if fiber.gProbe.tritium:
-                    stars = PyGuide.findStars(image[stamp], None, None, ccdInfo, thresh=2)[0]
+                    stars = PyGuide.findStars(image[stamp], None, saturated[stamp],
+                                              ccdInfo, thresh=2)[0]
                 else:
                     stars = PyGuide.findStars(image[stamp], good_mask[stamp],
                                               saturated[stamp], ccdInfo, thresh=2)[0]
@@ -819,32 +826,22 @@ class GuiderImageAnalysis(object):
                     self._set_fiber_star(fiber, stars, image[stamp], good_mask[stamp],
                                          stampFrameCoords)
                 else:
-                    if len(stars) == 0:
-                        self.cmd.warn('text="PyGuide.findStars did not '
-                                      'find a source for fiber {:d}."'.format(fiber.fiberid))
-                        continue
-
-                    star = stars[0]
-
-                    xs = stampFrameCoords[0] + star.xyCtr[0]
-                    ys = stampFrameCoords[1] + star.xyCtr[1]
-
-                    tritium_offset.append([xs - fiber.xcen, ys - fiber.ycen])
-
-                    # TODO: maybe we should output a measurement of the FWHM of
-                    # the LED here as well.
+                    if self._set_fiber_star(fiber, stars, image[stamp], None, stampFrameCoords):
+                        tritium_offsets.append([fiber.xs - fiber.xcen, fiber.ys - fiber.ycen])
 
         if len(tritium_offset) > 0:
-            tritium_offset = np.array(tritium_offset)
-            tritium_offset = tritium_offset.mean(axis=0)
+            tritium_offsets = np.array(tritium_offsets)
+            tritium_offset = tritium_offsets.mean(axis=0)
             if np.any(np.abs(tritium_offset) > 0.1):
                 self.cmd.warn('text="tritium sources detected an offset of '
                               '({:.1f}, {:.1f}) pix."'.format(tritium_offset[0],
                                                               tritium_offset[1]))
 
                 for fiber in fibers:
-                    fiber.xcen += tritium_offset[0]
-                    fiber.ycen += tritium_offset[1]
+                    fiber.xFlex = tritium_offset[0]
+                    fiber.yFlex = tritium_offset[1]
+                    fiber.xcen += fiber.xFlex
+                    fiber.ycen += fiber.yFlex
 
         self.fibers = fibers
 
@@ -1275,6 +1272,7 @@ class GuiderImageAnalysis(object):
             except Exception as ee:
                 self.cmd.warn('text="failed to find centroid for tritium gprobe {}: {}"'
                               .format(gprobe.id, ee))
+                gprobe.disabled = True
             else:
                 fiber_x = (stampFrameCoords[0] + star.xyCtr[0]) / BIN - 0.25
                 fiber_y = (stampFrameCoords[1] + star.xyCtr[1]) / BIN - 0.25
