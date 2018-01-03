@@ -80,8 +80,9 @@ def main(actor, queues):
                 expType = getattr(msg,'expType','expose')
                 cartridge = getattr(msg,'cartridge',None)
                 stack = getattr(msg,'stack',1)
+                force = getattr(msg, 'force', False)
                 expose(msg.cmd, myGlobals.actorState, msg.replyQueue, msg.expTime, stack=stack,
-                       cartridge=cartridge, expType=expType, camera=camera)
+                       cartridge=cartridge, expType=expType, camera=camera, force=force)
 
             elif msg.type == Msg.ABORT_EXPOSURE:
                 if not msg.quiet:
