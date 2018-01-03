@@ -497,8 +497,8 @@ class GuiderImageAnalysis(object):
                   ('fiberid', None,     'I', None),
                   ('xCenter', 'xcen',   'E', pixunit),
                   ('yCenter', 'ycen',   'E', pixunit),
-                  ('xFlex',   None,     'E', pixunits),
-                  ('yFlex',   None,     'E', pixunits),
+                  ('xFlex',   None,     'E', pixunit),
+                  ('yFlex',   None,     'E', pixunit),
                   ('xstar',   'xs',     'E', pixunit),
                   ('ystar',   'ys',     'E', pixunit),
                   ('dx',      None,     'E', 'residual in mm, guidercam frame'),
@@ -829,7 +829,7 @@ class GuiderImageAnalysis(object):
                     if self._set_fiber_star(fiber, stars, image[stamp], None, stampFrameCoords):
                         tritium_offsets.append([fiber.xs - fiber.xcen, fiber.ys - fiber.ycen])
 
-        if len(tritium_offset) > 0:
+        if len(tritium_offsets) > 0:
             tritium_offsets = np.array(tritium_offsets)
             tritium_offset = tritium_offsets.mean(axis=0)
             if np.any(np.abs(tritium_offset) > 0.1):
