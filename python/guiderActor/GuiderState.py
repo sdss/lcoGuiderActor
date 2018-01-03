@@ -142,7 +142,7 @@ class GProbe(object):
     @property
     def exists(self):
         """True if this probe is not broken and has a star defined."""
-        return False if ((self.broken) or (self.noStar)) else True
+        return False if self.broken else True
 
     @property
     def disabled(self):
