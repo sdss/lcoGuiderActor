@@ -809,7 +809,7 @@ class GuiderImageAnalysis(object):
 
             # use a medium threshold, since the stars might not be that bright when acquiring
             try:
-                if fiber.gProbe.tritium:
+                if fiber.gProbe.tritium and fiber.gProbe.disabled is False:
                     stars = PyGuide.findStars(image[stamp], None, saturated[stamp],
                                               ccdInfo, thresh=2)[0]
                 else:
@@ -822,7 +822,7 @@ class GuiderImageAnalysis(object):
                 # For not trititum sources we call _set_fiber_star to set xstar/ystar in the
                 # fibre to the values measured by PyGuide. For trititum sources, we compare it
                 # with the value in the fibre and determine an offset
-                if not fiber.gProbe.tritium:
+                if not fiber.gProbe.tritium and fiber.gProbe.disabled is False:
                     self._set_fiber_star(fiber, stars, image[stamp], good_mask[stamp],
                                          stampFrameCoords)
                 else:
