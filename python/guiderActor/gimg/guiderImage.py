@@ -62,6 +62,9 @@ class Fiber(object):
         self.dRA = np.nan
         self.dDec = np.nan
 
+        self.xFlex = 0.0
+        self.yFlex = 0.0
+
     def __str__(self):
         return ('Fiber id %i: center %g,%g; star %g,%g; radius %g' %
                 (self.fiberid, self.xcen, self.ycen, self.xs, self.ys, self.radius))
