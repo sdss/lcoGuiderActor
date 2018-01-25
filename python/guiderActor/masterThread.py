@@ -866,9 +866,9 @@ def make_movie(actorState, cmd, start):
     # This will prevent "This command has already finished" complaints.
     actorState.actor.callCommand("makeMovie start=%d end=%d"%(start,end))
     return True
-#...
 
-def cal_finished(msg, name, guiderImageAnalysis, actorState, gState):
+
+def cal_finished(msg, name, guiderImageAnalysis, actorState, gState, **kwargs):
     """Generic handling of finished dark/flat frame."""
     cmd = msg.cmd
     cmd.respond("processing=%s" % msg.filename)
@@ -889,7 +889,7 @@ def cal_finished(msg, name, guiderImageAnalysis, actorState, gState):
         guiderImageAnalysis.camera = camera
         setPoint = actorState.models[camera].keyVarDict["cooler"][0]
         if name == 'flat':
-            guiderImageAnalysis.analyzeFlat(msg.filename,gState.gprobes,cmd,setPoint)
+            guiderImageAnalysis.analyzeFlat(msg.filename, gState.gprobes, cmd, setPoint, **kwargs)
         elif name == 'dark':
             guiderImageAnalysis.analyzeDark(msg.filename,cmd,setPoint)
         else:
@@ -912,21 +912,24 @@ def cal_finished(msg, name, guiderImageAnalysis, actorState, gState):
     except Exception as e:
         tback.tback("cal_finished", e)
         cmd.fail('text="failed to save flat: %s"' % (e))
-#...
+
 
 def dark_finished(msg, guiderImageAnalysis, actorState, gState):
     """Process a finished dark frame."""
     cal_finished(msg,'dark',guiderImageAnalysis,actorState,gState)
 
-def flat_finished(msg, guiderImageAnalysis, actorState, gState):
+
+def flat_finished(msg, guiderImageAnalysis, actorState, gState, force=False):
     """Process a finished flat frame."""
+
     header = pyfits.getheader(msg.filename)
+
     darkfile = header.get('DARKFILE', None)
     if not darkfile:
         msg.cmd.fail("text=%s" % qstr("No dark image listed in flat header!!"))
         return
-    cal_finished(msg,'flat',guiderImageAnalysis,actorState,gState)
-#...
+
+    cal_finished(msg, 'flat', guiderImageAnalysis, actorState, gState, force=force)
 
 #
 # Actual guider commands, and sub-commands.
@@ -1238,7 +1241,8 @@ def main(actor, queues):
                 camera = 'ecamera' if gState.plateType == 'ecamera' else 'gcamera'
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd, replyQueue=queues[MASTER],
                                         expType="flat", expTime=msg.expTime,
-                                        cartridge=gState.cartridge, camera=camera))
+                                        cartridge=gState.cartridge, camera=camera,
+                                        force=msg.force))
 
             elif msg.type == Msg.TAKE_DARK:
                 camera = 'ecamera' if gState.plateType == 'ecamera' else 'gcamera'
@@ -1247,8 +1251,7 @@ def main(actor, queues):
                                         stack=msg.stack, camera=camera))
 
             elif msg.type == Msg.TAKE_BIAS:
-                camera = ('ecamera'
-                          if gState.plateType == 'ecamera' else 'gcamera')
+                camera = 'ecamera' if gState.plateType == 'ecamera' else 'gcamera'
                 queues[GCAMERA].put(Msg(Msg.EXPOSE, msg.cmd,
                                         expTime=0.0,
                                         replyQueue=queues[MASTER],
@@ -1260,13 +1263,14 @@ def main(actor, queues):
                 if not msg.success:
                     msg.cmd.fail('text="something went wrong when taking the dark"')
                     continue
-                dark_finished(msg,guiderImageAnalysis,actorState,gState)
+                dark_finished(msg, guiderImageAnalysis, actorState, gState)
 
             elif msg.type == Msg.FLAT_FINISHED:
                 if not msg.success:
                     msg.cmd.fail('text="something went wrong when taking the flat"')
                     continue
-                flat_finished(msg,guiderImageAnalysis,actorState,gState)
+                force = getattr(msg, 'force', False)
+                flat_finished(msg, guiderImageAnalysis, actorState, gState, force=force)
 
             elif msg.type == Msg.BIAS_FINISHED:
                 if not msg.success:

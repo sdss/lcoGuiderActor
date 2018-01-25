@@ -59,11 +59,6 @@ class GProbe(object):
             self.aboveFocus = False
             self.belowFocus = False
 
-    def checkTritium(self):
-        """If this probe is labeled a tritium star, disable it."""
-        if self.fiber_type == 'TRITIUM':
-            self.disabled =True
-
     def from_platedb_gprobe(self,gprobeKey):
         """
         Fill in data from the platedb.gprobe key.
@@ -86,7 +81,6 @@ class GProbe(object):
         self.yFerruleOffset = gprobeKey[8]
         self.focusOffset = gprobeKey[9]
         self.fiber_type = gprobeKey[10]
-        # self.checkTritium()
         self.haOffsetTimes = {}
         self.haXOffsets = {}
         self.haYOffsets = {}
