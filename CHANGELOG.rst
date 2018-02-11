@@ -7,7 +7,7 @@ Change Log
 This document records the main changes to the lcoGuiderActor code.
 
 
-.. _changelog-v1.0.1:
+.. _changelog-1.0.1:
 1.0.1 (2018-01-25)
 ------------------
 
@@ -25,7 +25,7 @@ Removed
 * Lots of obsolete files.
 
 
-.. _changelog-v1.0.0:
+.. _changelog-1.0.0:
 1.0.0 (2017-12-18)
 -------------------
 
