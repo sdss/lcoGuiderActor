@@ -455,7 +455,9 @@ class GuiderCmd(object):
         if pointing != 'A':
             cmd.warn('text="pointing name is %s, but we are using pointing #1. This is probably OK."' % (pointing))
 
-        self.addGuideOffsets(cmd, plate, pointingID, gprobes)
+        result = self.addGuideOffsets(cmd, plate, pointingID, gprobes)
+        if result is False:
+            return
 
         # LCOHACK: test adding profile (focus) errors based on guide x/yFocal
         self.add_prof_offsets(cmd, plate, gprobes)
@@ -477,18 +479,23 @@ class GuiderCmd(object):
         # Get .par file name in the platelist product.
         # plates/0046XX/004671/plateGuideOffsets-004671-p1-l16600.par
         for wavelength in (16600,):
+
             try:
                 path = os.path.join(os.environ['PLATELIST_DIR'],
                                     'plates',
                                     '%04dXX' % (int(plate/100)),
                                     '%06d' % (plate),
-                                    'plateGuideOffsets-%06d-p%d-l%05d.par' % (plate, pointingID, wavelength))
-            except:
-                cmd.warn('text="no refraction corrections for plate %d at %dA, could not locate PLATELIST_DIR"' % (plate, wavelength))
-                continue
+                                    'plateGuideOffsets-%06d-p%d-l%05d.par' % (plate, pointingID,
+                                                                              wavelength))
+            except KeyError:
+                cmd.error('text="no refraction corrections for plate %d at %dA, '
+                          'could not locate PLATELIST_DIR"' % (plate, wavelength))
+                return False
+
             if not os.path.exists(path):
-                cmd.warn('text="no refraction corrections for plate %d at %dA"' % (plate, wavelength))
-                continue
+                cmd.error('text="no refraction corrections for '
+                          'plate %d at %dA"' % (plate, wavelength))
+                return False
 
             try:
                 ygo = YPF.YPF(path)
@@ -511,6 +518,7 @@ class GuiderCmd(object):
                 gProbe.haXOffsets[wavelength] = offset[0].xfoff
                 gProbe.haYOffsets[wavelength] = offset[0].yfoff
 
+            failed = False
 
     def add_prof_offsets(self, cmd, plate, gprobes):
         dpf = DuPontProfile()

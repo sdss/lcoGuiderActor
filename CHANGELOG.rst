@@ -7,6 +7,16 @@ Change Log
 This document records the main changes to the lcoGuiderActor code.
 
 
+.. _changelog-1.0.2:
+1.0.2 (unreleased)
+------------------
+
+Fixed
+^^^^^
+
+* Ticket `#1433 <https://trac.sdss.org/ticket/1433>`__: lack of plateGuideOffset files should be fatal for APOGEE.
+
+
 .. _changelog-1.0.1:
 1.0.1 (2018-01-25)
 ------------------
