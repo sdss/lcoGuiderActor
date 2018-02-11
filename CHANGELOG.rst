@@ -13,7 +13,6 @@ This document records the main changes to the lcoGuiderActor code.
 
 Fixed
 ^^^^^
-
 * Ticket `#1433 <https://trac.sdss.org/ticket/1433>`__: lack of plateGuideOffset files should be fatal for APOGEE.
 
 
