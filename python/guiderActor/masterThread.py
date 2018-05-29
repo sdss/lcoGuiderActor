@@ -458,31 +458,25 @@ def guideStep(actor,
     try:
         setPoint = actorState.models[camera].keyVarDict['cooler'][0]
         guideCmd.inform('text="guideStep GuiderImageAnalysis.findStars()..."')
-        fibers = guiderImageAnalysis(
-            cmd,
-            inFile,
-            gState.gprobes,
-            setPoint=setPoint,
-            bypassDark=actorState.bypassDark,
-            camera=camera)
+        fibers = guiderImageAnalysis(cmd, inFile, gState.gprobes, setPoint=setPoint,
+                                     bypassDark=actorState.bypassDark, camera=camera)
         guideCmd.inform("text='GuiderImageAnalysis.findStars() got %i fibers'" % len(fibers))
     except GuiderExceptions.BadReadError as e:
         guideCmd.warn('text=%s' % qstr('Skipping badly formatted image.'))
         return frameInfo
     except GuiderExceptions.FlatError as e:
-        guideCmd.fail(
-            'guideState="failed"; text=%s' % qstr('Error reading/processing %s flat: %s' % (camera,
-                                                                                            e)))
+        guideCmd.fail('guideState="failed"; text=%s' %
+                      qstr('Error reading/processing %s flat: %s' % (camera, e)))
         gState.cmd = None
         return frameInfo
     except GuiderExceptions.GuiderError as e:
-        guideCmd.fail('guideState="failed"; text=%s' % qstr('Error processing %s image: %s' %
-                                                            (camera, e)))
+        guideCmd.fail('guideState="failed"; text=%s' %
+                      qstr('Error processing %s image: %s' % (camera, e)))
         gState.cmd = None
         return frameInfo
     except Exception as e:
-        guideCmd.fail('guideState="failed"; text=%s' % qstr(
-            'Unknown error in processing guide images: %s' % e))
+        guideCmd.fail('guideState="failed"; text=%s' %
+                      qstr('Unknown error in processing guide images: %s' % e))
         gState.cmd = None
         tback.tback('GuideTest', e)
         return frameInfo
