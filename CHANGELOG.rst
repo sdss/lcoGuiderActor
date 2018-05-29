@@ -21,6 +21,8 @@ Fixed
 ^^^^^
 * Ticket `#1433 <https://trac.sdss.org/ticket/1433>`__: lack of plateGuideOffset files should be fatal for APOGEE.
 
+`View changes <https://github.com/sdss/lcoGuiderActor/compare/1.0.1...HEAD>`__
+
 
 .. _changelog-1.0.1:
 1.0.1 (2018-01-25)
@@ -38,6 +40,8 @@ Removed
 ^^^^^^^
 * The ``checkTritium()`` function in ``GProbe``.
 * Lots of obsolete files.
+
+`View changes <https://github.com/sdss/lcoGuiderActor/compare/1.0.1...1.0.0>`__
 
 
 .. _changelog-1.0.0:
