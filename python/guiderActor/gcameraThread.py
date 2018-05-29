@@ -9,8 +9,7 @@ time, so they'll never conflict with each other.
 import Queue
 import threading
 
-from guiderActor import Msg, GCAMERA
-from guiderActor import myGlobals
+from guiderActor import GCAMERA, Msg, myGlobals
 
 
 def expose(cmd, actorState, replyQueue, expTime, stack=1, cartridge=None,
@@ -18,13 +17,13 @@ def expose(cmd, actorState, replyQueue, expTime, stack=1, cartridge=None,
     """Take an exposure with the e/gcamera, and succeed/fail as appropriate."""
 
     cmd.respond('text="starting %s exposure"' % camera)
-    filenameKey = actorState.models[camera].keyVarDict["filename"]
+    filenameKey = actorState.models[camera].keyVarDict['filename']
 
-    cmdStr = "{0} time={1} stack={2}".format(expType, expTime, stack)
-    if expType == "flat":
-        cmdStr += " cartridge={0}".format(cartridge)
+    cmdStr = '{0} time={1} stack={2}'.format(expType, expTime, stack)
+    if expType == 'flat':
+        cmdStr += ' cartridge={0}'.format(cartridge)
         responseMsg = Msg.FLAT_FINISHED
-    elif expType == "dark":
+    elif expType == 'dark':
         responseMsg = Msg.DARK_FINISHED
     elif expType == 'bias':
         responseMsg = Msg.BIAS_FINISHED
@@ -47,7 +46,7 @@ def expose(cmd, actorState, replyQueue, expTime, stack=1, cartridge=None,
 
     if cmdVar.didFail:
         cmd.warn('text="Failed to take {0} exposure"'.format(camera))
-        if cmdVar.lastReply and "Timeout" in cmdVar.lastReply.keywords:
+        if cmdVar.lastReply and 'Timeout' in cmdVar.lastReply.keywords:
             cmd.warn('text="{0} expose command exceeded time limit: {1}."'.format(camera, timeLim))
         replyQueue.put(Msg(responseMsg, cmd=cmd, success=False))
         return
@@ -67,7 +66,7 @@ def main(actor, queues):
             msg = queues[GCAMERA].get(timeout=timeout)
             qlen = queues[GCAMERA].qsize()
             if qlen > 0 and msg.cmd:
-                msg.cmd.diag("gcamera thread has %d items after a .get()" % (qlen))
+                msg.cmd.diag('gcamera thread has %d items after a .get()' % (qlen))
 
             if msg.type == Msg.EXIT:
                 if msg.cmd:
@@ -76,24 +75,25 @@ def main(actor, queues):
                 return
 
             elif msg.type == Msg.EXPOSE:
-                camera = getattr(msg,'camera','gcamera')
-                expType = getattr(msg,'expType','expose')
-                cartridge = getattr(msg,'cartridge',None)
-                stack = getattr(msg,'stack',1)
+                camera = getattr(msg, 'camera', 'gcamera')
+                expType = getattr(msg, 'expType', 'expose')
+                cartridge = getattr(msg, 'cartridge', None)
+                stack = getattr(msg, 'stack', 1)
                 force = getattr(msg, 'force', False)
                 expose(msg.cmd, myGlobals.actorState, msg.replyQueue, msg.expTime, stack=stack,
                        cartridge=cartridge, expType=expType, camera=camera, force=force)
 
             elif msg.type == Msg.ABORT_EXPOSURE:
                 if not msg.quiet:
-                    msg.cmd.respond('text="Request to abort an exposure when none are in progress"')
+                    msg.cmd.respond(
+                        'text="Request to abort an exposure when none are in progress"')
                 with queues[GCAMERA].mutex:
                     queues[GCAMERA].queue.clear()
 
             else:
-                raise ValueError, ("Unknown message type %s" % msg.type)
+                raise ValueError('Unknown message type %s' % msg.type)
 
         except Queue.Empty:
             actor.bcast.diag('text="gcamera alive"')
-        except Exception, e:
+        except Exception as e:
             actor.bcast.error('text="gcamera thread got unexpected exception: %s"' % (e))

@@ -3,26 +3,22 @@
 
 import abc
 import os
-
-import opscore.actor.model
-import opscore.actor.keyvar
+from distutils import version
 
 import actorcore.Actor
-
 import gcameraThread
-import masterThread
-import movieThread
-
 import guiderActor
 import GuiderState
+import masterThread
+import movieThread
+import opscore.actor.keyvar
+import opscore.actor.model
 from guiderActor import myGlobals
-
-from distutils import version
 
 
 def set_default_pids(config, gState):
     """Set the PID value defaults from the config file."""
-    axes = dict(RADEC="raDec", ROT="rot", FOCUS="focus", SCALE="scale")
+    axes = dict(RADEC='raDec', ROT='rot', FOCUS='focus', SCALE='scale')
     for axis in config.options('PID'):
         axis = axes[axis.upper()]
         Kp, Ti_min, Ti_max, Td, Imax, nfilt, ncorr = [float(v)
@@ -42,19 +38,19 @@ def set_pid_scaling(config, gState):
 
 def set_telescope(config, gState):
     """Set values related to the telescope from the config file."""
-    gState.plugPlateScale = float(config.get('telescope', "scale"))
-    gState.dSecondary_dmm = float(config.get('telescope', "dSecondary_dmm"))
-    gState.longitude = float(config.get('telescope', "longitude"))
-    gState.focalRatio = float(config.get('telescope', "focalRatio"))
+    gState.plugPlateScale = float(config.get('telescope', 'scale'))
+    gState.dSecondary_dmm = float(config.get('telescope', 'dSecondary_dmm'))
+    gState.longitude = float(config.get('telescope', 'longitude'))
+    gState.focalRatio = float(config.get('telescope', 'focalRatio'))
 
 
 def set_gcamera(config, gState):
     """Set values related to the guide camera from the config file."""
-    expTime = float(config.get('gcamera', "exposureTime"))
-    readTime = float(config.get('gcamera', "binnedReadTime"))
+    expTime = float(config.get('gcamera', 'exposureTime'))
+    readTime = float(config.get('gcamera', 'binnedReadTime'))
     masterThread.set_time(gState, expTime, 1, readTime)
-    gState.gcameraPixelSize = float(config.get('gcamera', "pixelSize"))
-    gState.gcameraMagnification = float(config.get('gcamera', "magnification"))
+    gState.gcameraPixelSize = float(config.get('gcamera', 'pixelSize'))
+    gState.gcameraMagnification = float(config.get('gcamera', 'magnification'))
 
 
 class GuiderActor(actorcore.Actor.SDSSActor):
@@ -66,7 +62,7 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         """Return the version of the actor based on our location."""
         location = GuiderActor._determine_location(location)
         if location == 'APO':
-            return GuiderActorAPO('guider', productName='guiderActor', **kwargs)
+            raise ValueError('this actor cannot run at APO.')
         elif location == 'LCO':
             return GuiderActorLCO('guider', productName='guiderActor', **kwargs)
         elif location == 'LOCAL':
@@ -87,22 +83,22 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
         self.check_versions()
 
-        #guiderActor.myGlobals.actorState = actorcore.Actor.ActorState(self)
-        #actorState = guiderActor.myGlobals.actorState
-        #self.actorState = actorState
-        #actorState.gState = GuiderState.GuiderState()
-        #actorState.actorConfig = self.config
-        #gState = actorState.gState
+        # guiderActor.myGlobals.actorState = actorcore.Actor.ActorState(self)
+        # actorState = guiderActor.myGlobals.actorState
+        # self.actorState = actorState
+        # actorState.gState = GuiderState.GuiderState()
+        # actorState.actorConfig = self.config
+        # gState = actorState.gState
 
         # Define thread list
-        self.threadList = [("master", guiderActor.MASTER, masterThread),
-                           ("gcamera", guiderActor.GCAMERA, gcameraThread),
-                           ("movie", guiderActor.MOVIE, movieThread), ]
+        self.threadList = [('master', guiderActor.MASTER, masterThread),
+                           ('gcamera', guiderActor.GCAMERA, gcameraThread),
+                           ('movie', guiderActor.MOVIE, movieThread), ]
 
         # Load other actor's models so we can send it commands
         # And ours: we use the models to generate the FITS cards.
         self.models = {}
-        for actor in ["gcamera", "ecamera", "mcp", "platedb", "sop", "tcc", "guider", "apo"]:
+        for actor in ['gcamera', 'ecamera', 'mcp', 'platedb', 'sop', 'tcc', 'guider', 'apo']:
             self.models[actor] = opscore.actor.model.Model(actor)
 
         self.actorState = actorcore.Actor.ActorState(self, self.models)
@@ -114,8 +110,8 @@ class GuiderActor(actorcore.Actor.SDSSActor):
 
         self.actorState.bypassDark = False
 
-        for what in self.config.options("enable"):
-            enable = {"True": True, "False": False}[self.config.get('enable', what)]
+        for what in self.config.options('enable'):
+            enable = {'True': True, 'False': False}[self.config.get('enable', what)]
             gState.setGuideMode(what, enable)
 
         set_default_pids(self.config, gState)
@@ -156,91 +152,6 @@ class GuiderActor(actorcore.Actor.SDSSActor):
         pass
 
 
-class GuiderActorAPO(GuiderActor):
-    """APO version of this actor."""
-    location = 'APO'
-
-    def guidingIsOK(self, cmd, actorState, force=False):
-        """Is it OK to be guiding?"""
-
-        if force:
-            return True
-
-        bypassedNames = actorState.models["sop"].keyVarDict["bypassedNames"]
-
-        ffsStatus = actorState.models["mcp"].keyVarDict["ffsStatus"]
-        open, closed = 0, 0
-        for s in ffsStatus:
-            if s is None:
-                cmd.warn('text="Failed to get state of flat field screen from MCP"')
-                break
-
-            open += int(s[0])
-            closed += int(s[1])
-
-        if open != 8:
-            msg = "FF petals aren\'t all open"
-            if 'ffs' in bypassedNames:
-                cmd.warn('text="%s; guidingIsOk failed, but ffs is bypassed in sop"' % msg)
-            else:
-                cmd.warn('text="%s; aborting guiding"' % msg)
-                return False
-
-        # This lets guiderImageAnalysis know to ignore dark frames.
-        actorState.bypassDark = 'guider_dark' in bypassedNames
-
-    #   should we allow guiding with lamps on if axes are disabled
-    #   check if lamps are actually ON
-        ffLamp = actorState.models["mcp"].keyVarDict["ffLamp"]
-        hgCdLamp = actorState.models["mcp"].keyVarDict["hgCdLamp"]
-        neLamp = actorState.models["mcp"].keyVarDict["neLamp"]
-        if (any(ffLamp) and 'lamp_ff' not in bypassedNames) or \
-           (any(hgCdLamp) and 'lamp_hgcd' not in bypassedNames) or \
-           (any(neLamp) and 'lamp_ne' not in bypassedNames):
-            cmd.warn('text="Calibration lamp on; aborting guiding"')
-            return False
-
-    #   check if non sensed lamps are commanded ON
-        uvLamp = actorState.models["mcp"].keyVarDict["uvLampCommandedOn"]
-        whtLamp = actorState.models["mcp"].keyVarDict["whtLampCommandedOn"]
-        if uvLamp.getValue() or whtLamp.getValue():
-            cmd.warn('text="Calibration lamp commanded on; aborting guiding"')
-            return False
-
-        tccModel = actorState.models['tcc']
-        axisCmdState = tccModel.keyVarDict['axisCmdState']
-        if any(x.lower() != 'tracking' for x in axisCmdState):
-            if 'axes' in bypassedNames:
-                cmd.warn('text="TCC motion failed, but axis motions are bypassed in sop"')
-            else:
-                cmd.warn('text="TCC motion aborted guiding"')
-                return False
-
-        # Checks the state of the primary and secondary mirrors
-        mirror2CmdState = tccModel.keyVarDict['secState'][0]
-        if mirror2CmdState.lower() != 'done':
-            cmd.warn('text="Secondary mirror state: {0}. Aborted guiding."'
-                     .format(mirror2CmdState))
-            return False
-
-        primaryCmdState = tccModel.keyVarDict['primState'][0]
-        if primaryCmdState.lower() != 'done':
-            cmd.warn('text="Primary mirror state: {0}. Aborted guiding."'.format(primaryCmdState))
-            return False
-
-        return True
-
-    def getLoadedCartridge(self, cmd, actorState):
-        """Returns the number of the cart loaded in the telescope.
-
-        At APO, this information is provided by the MCP.
-
-        """
-
-        return super(GuiderActorAPO, self).getLoadedCartridge(
-            cmd, 'mcp', command='info', actorState=actorState)
-
-
 class GuiderActorLCO(GuiderActor):
     """LCO version of this actor."""
     location = 'LCO'
@@ -261,7 +172,7 @@ class GuiderActorLCO(GuiderActor):
             cmd.warn('text=\"Failed to get tcc status\"')
             return False
 
-        bypassedNames = actorState.models["sop"].keyVarDict["bypassedNames"]
+        bypassedNames = actorState.models['sop'].keyVarDict['bypassedNames']
         # This lets guiderImageAnalysis know to ignore dark frames.
 
         actorState.bypassDark = 'guider_dark' in bypassedNames

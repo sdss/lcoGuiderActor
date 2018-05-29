@@ -1,5 +1,6 @@
 from opscore.utility.qstr import qstr
 
+
 __all__ = ['GuiderError', 'BadDarkError', 'FlatError', 'NoFibersFoundError',
            'BadReadError', 'raiseGuiderError', 'BadBiasError']
 

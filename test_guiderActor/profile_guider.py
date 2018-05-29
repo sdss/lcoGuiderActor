@@ -1,22 +1,21 @@
 #!/usr/bin/env python
 """Test the speed of guider image processing."""
 import cProfile
-import pstats
-import os
 import glob
+import os
+import pstats
 
+import guiderActor.myGlobals as myGlobals
+import guiderTester
 from actorcore import TestHelper
-
 from guiderActor import masterThread
 from guiderActor.gimg import guiderImage
-import guiderActor.myGlobals as myGlobals
-
-import guiderTester
 
 
 def updateModel(name, model):
     """Update the named actorState model with new parameters."""
     myGlobals.actorState.models[name] = TestHelper.Model(name, model)
+
 
 mjd = 57357
 
@@ -52,6 +51,7 @@ def timeit_gTester():
 def cleanup():
     for filename in glob.glob('?cam/proc-*.fits.gz'):
         os.remove(filename)
+
 
 prof = cProfile.Profile()
 # result = prof.runcall(gTester.gi,gTester.cmd,dataFile,gTester.gState.gprobes,-40)

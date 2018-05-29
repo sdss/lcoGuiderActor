@@ -6,8 +6,10 @@ the guider frames.
 
 import numpy
 
+
 class PID(object):
     """A class to handle PID loops"""
+
     def __init__(self, dt, Kp, Ti, Td, Imax=-1, nfilt=1, tfilt=None, ncorr=1):
 
         self.dt = dt                    # Time between PID updates
@@ -18,7 +20,7 @@ class PID(object):
         # NOTE: TODO: Imax is currently unused!
         self.Imax = Imax                # limit to abs(.Ix)
         self.tfilt = tfilt
-        if tfilt != None:
+        if tfilt is not None:
             self.nfilt = tfilt / self.dt
         else:
             self.nfilt = nfilt              # number of inputs to smooth over.
@@ -44,10 +46,10 @@ class PID(object):
             self._xhist[:-1] = self._xhist[1:]
         self._xhist[-1] = x
 
-        self.histlen = min(self.histlen+1, len(self._xhist))
+        self.histlen = min(self.histlen + 1, len(self._xhist))
         return numpy.median(self._xhist[-self.histlen:])
 
-    def update(self, x, dt = None):
+    def update(self, x, dt=None):
         """GIven a new sample of the error, x, return the PID update"""
 
         if dt is None:
@@ -60,8 +62,8 @@ class PID(object):
             x = self.filterX(x)
         else:
             x = self.filterX(x)
-            self.Dx = (x - self._x)/dt
-            self.Ix += dt*x / self.Ti # scale by Ti now
+            self.Dx = (x - self._x) / dt
+            self.Ix += dt * x / self.Ti  # scale by Ti now
 
         # NOTE: TODO: ignoring this because we are scaling Ti with altitude,
         # so to do this right, we'd have to think about how to use Imax in that case.
@@ -70,11 +72,11 @@ class PID(object):
 
         self._x = x
 
-        correction = self._x + self.Td*self.Dx
+        correction = self._x + self.Td * self.Dx
         if self.Ti:
             correction += self.Ix
 
-        return self.Kp*correction
+        return self.Kp * correction
 
     def update_count(self):
         """Updates the count of iterations leading a real correction."""
@@ -93,25 +95,25 @@ class PID(object):
         # we also want to reset the counter (JSG)
         self.corr_count = 0
 
-    def ZieglerNichols(self, Kpc, Pc, loopType="PID"):
+    def ZieglerNichols(self, Kpc, Pc, loopType='PID'):
         """Perform Ziegler-Nichols tuning of a PID loop; Kpc is the critical proportional
         gain that just starts to oscillate with period Pc"""
 
         Pc = float(Pc)
 
-        if loopType == "P":
-            self.Kp = 0.50*Kpc
+        if loopType == 'P':
+            self.Kp = 0.50 * Kpc
             self.Ti = self.Td = 0
-        elif loopType == "PI":
-            self.Kp = 0.45*Kpc
-            self.Ti = Pc/1.2
+        elif loopType == 'PI':
+            self.Kp = 0.45 * Kpc
+            self.Ti = Pc / 1.2
             self.Td = 0
-        elif loopType == "PID":
-            self.Kp = 0.60*Kpc
-            self.Ti = Pc/2
-            self.Td = Pc/8
+        elif loopType == 'PID':
+            self.Kp = 0.60 * Kpc
+            self.Ti = Pc / 2
+            self.Td = Pc / 8
         else:
-            raise RuntimeError, ("I don't know how to tune a %s loop" % loopType)
+            raise RuntimeError("I don't know how to tune a %s loop" % loopType)
 
     def setPID(self, dt=None, Kp=None, Ti=None, Td=None, Imax=None,
                nfilt=None, tfilt=None, ncorr=None):
@@ -120,9 +122,9 @@ class PID(object):
 
         if dt is not None:
             try:
-                1/dt
+                1 / dt
             except ZeroDivisionError:
-                raise RuntimeError, "You may not specify a time sample of 0s"
+                raise RuntimeError('You may not specify a time sample of 0s')
 
             self.dt = dt
 

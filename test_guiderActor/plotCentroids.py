@@ -11,14 +11,17 @@
 #       Initial version
 
 
-from __future__ import division
-from __future__ import print_function
-from matplotlib import pyplot as plt
-from astropy.io import fits
-from guiderTester import getTestFile
-from PyGuide import findStars, CCDInfo
-import numpy as np
+from __future__ import division, print_function
+
 import json
+
+import numpy as np
+from astropy.io import fits
+from matplotlib import pyplot as plt
+
+from guiderTester import getTestFile
+from PyGuide import CCDInfo, findStars
+
 
 # This script plots the contours for a processed guider image and overlays
 # the star centroids as measured using a number of methods.

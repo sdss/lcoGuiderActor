@@ -6,20 +6,17 @@
 # Created by José Sánchez-Gallego on 28 Mar 2017.
 
 
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
-
-import astropy.io.fits as fits
-
-from collections import OrderedDict
-from operator import itemgetter
-from itertools import groupby
+from __future__ import absolute_import, division, print_function
 
 import argparse
 import glob
 import os
 import sys
+from collections import OrderedDict
+from itertools import groupby
+from operator import itemgetter
+
+import astropy.io.fits as fits
 
 from guider_movie import do_work
 
@@ -43,7 +40,7 @@ def get_intervals(frame_list):
     """
 
     intervals = []
-    for kk, gg in groupby(enumerate(frame_list), lambda (ii, xx): ii - xx):
+    for kk, gg in groupby(enumerate(frame_list), lambda ii_xx: ii_xx[0] - ii_xx[1]):
         intervals.append(map(itemgetter(1), gg))
 
     return intervals

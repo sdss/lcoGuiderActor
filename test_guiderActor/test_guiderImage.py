@@ -13,18 +13,19 @@ Revision history:
 
 """
 
-from __future__ import division
-from __future__ import print_function
-import os
-import glob
-import unittest
-import pyfits
-import numpy as np
-import json
+from __future__ import division, print_function
 
-import guiderTester
-import guiderActor
+import glob
+import json
+import os
+import unittest
 from Queue import Queue
+
+import numpy as np
+import pyfits
+
+import guiderActor
+import guiderTester
 from guiderActor import GuiderState
 from guiderActor.gimg import GuiderExceptions
 from guiderActor.masterThread import guideStep
@@ -71,9 +72,9 @@ class TestGuiderImage(guiderTester.GuiderTester, unittest.TestCase):
 
         """
 
-        os.chmod(outFile, 0444)
+        os.chmod(outFile, 0o444)
         analyze(inFile, *args, cmd=self.cmd)
-        os.chmod(outFile, 0644)
+        os.chmod(outFile, 0o644)
         self._remove_file(outFile)
 
     def _test_call(self, mjd, plateid, fscan_mjd, fscan_id, frameid,

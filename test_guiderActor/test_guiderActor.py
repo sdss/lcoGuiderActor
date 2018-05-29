@@ -3,13 +3,11 @@
 
 import unittest
 
-from actorcore import Actor
-from opscore.actor import Model, KeyVarDispatcher
-from actorcore import TestHelper
-
 import guiderTester
-
+from actorcore import Actor, TestHelper
 from guiderActor import GuiderActor
+from opscore.actor import KeyVarDispatcher, Model
+
 
 logDirBase = 'temp/'
 
@@ -50,7 +48,8 @@ class GuiderActorTester(unittest.TestCase):
 class TestGuiderActor(GuiderActorTester):
     def test_init_fails(self):
         with self.assertRaises(KeyError):
-            self.guider = GuiderActor.GuiderActor.newActor(location='nonsense', makeCmdrConnection=False)
+            self.guider = GuiderActor.GuiderActor.newActor(
+                location='nonsense', makeCmdrConnection=False)
 
     def test_init_apo(self):
         self.guider = GuiderActor.GuiderActor.newActor(location='apo', makeCmdrConnection=False)
@@ -130,7 +129,8 @@ class TestGuidingIsOK_APO(GuiderActorTester, guiderTester.GuiderTester):
     def test_arclamps_on_bypassed(self):
         guiderTester.updateModel('mcp', TestHelper.mcpState['arcs'])
         guiderTester.updateModel('tcc', TestHelper.tccState['tracking'])
-        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(['ffs', 'lamp_hgcd', 'lamp_ne'])
+        self.actorState.models['sop'].keyVarDict['bypassedNames'].set(
+            ['ffs', 'lamp_hgcd', 'lamp_ne'])
         self._guidingIsOK(True, 1)
 
     def test_tcc_halted(self):
@@ -149,4 +149,3 @@ if __name__ == '__main__':
     verbosity = 2
 
     unittest.main(verbosity=verbosity)
-

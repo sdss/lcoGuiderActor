@@ -11,6 +11,12 @@ This document records the main changes to the lcoGuiderActor code.
 1.0.2 (unreleased)
 ------------------
 
+Refactored
+^^^^^^^^^^
+* Applied ``autopep8``, ``isort``, and ``unify`` to all files.
+* Removed references to APO.
+* Removed deprecated files.
+
 Fixed
 ^^^^^
 * Ticket `#1433 <https://trac.sdss.org/ticket/1433>`__: lack of plateGuideOffset files should be fatal for APOGEE.

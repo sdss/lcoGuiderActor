@@ -14,16 +14,14 @@ Example:
         unittest.main()
 """
 
+import json
 import os
 import unittest
 
-from actorcore import TestHelper
-
-from guiderActor.gimg import guiderImage
-from guiderActor import GuiderState
 import guiderActor.myGlobals as myGlobals
-from guiderActor import GuiderActor
-import json
+from actorcore import TestHelper
+from guiderActor import GuiderActor, GuiderState
+from guiderActor.gimg import guiderImage
 
 
 guiderImagesPath = os.path.realpath(os.environ['GUIDERIMAGES_DIR'])

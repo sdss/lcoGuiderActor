@@ -8,12 +8,7 @@
 # @Last modified by:   Brian
 # @Last Modified time: 2016-06-10 22:53:14
 
-from __future__ import print_function, division, absolute_import
-
-import opscore.protocols.keys as keys
-import opscore.protocols.types as types
-from opscore.utility.qstr import qstr
-import opscore.utility.YPF as YPF
+from __future__ import absolute_import, division, print_function
 
 from guiderActor.Commands import GuiderCmd
 
@@ -28,4 +23,3 @@ class GuiderCmd_LOCAL(GuiderCmd.GuiderCmd):
 
         # Define new commands for Local
         pass
-
