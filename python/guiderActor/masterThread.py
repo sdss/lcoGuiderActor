@@ -24,10 +24,11 @@ import guiderActor.myGlobals
 import opscore.utility.tback as tback
 import opscore.utility.YPF as YPF
 import RO
-from gimg import GuiderExceptions
-from gimg.guiderImage import GuiderImageAnalysis
 from guiderActor import GCAMERA, MASTER, GuiderState, Msg
 from opscore.utility.qstr import qstr
+
+from .gimg import GuiderExceptions
+from .gimg.guiderImage import GuiderImageAnalysis
 
 
 def adiff(a1, a2):
