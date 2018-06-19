@@ -12,6 +12,10 @@ This document records the main changes to the lcoGuiderActor code.
 1.0.2 (unreleased)
 ------------------
 
+Changed
+^^^^^^^
+* ``CCDInfo`` initialised with bias level zero given that the image passed has already been bias subtracted. Should address the problem with LED jitter.
+
 Refactored
 ^^^^^^^^^^
 * Applied ``autopep8``, ``isort``, and ``unify`` to all files.

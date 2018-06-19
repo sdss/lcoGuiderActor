@@ -775,7 +775,7 @@ class GuiderImageAnalysis(object):
 
     def _find_stars_ecam(self, image, mask):
         """Find the stars in a processed ecamera image."""
-        ccdInfo = PyGuide.CCDInfo(self.imageBias, self.readNoise, self.ccdGain)
+        ccdInfo = PyGuide.CCDInfo(0.0, self.readNoise, self.ccdGain)
         # set a high threshold, since we only care about obviously bright stars.
         # TODO: this threshold could be a configurable parameter, so the observer
         # can adjust it in the Pointing Data STUI script, and relax it when focusing.
@@ -843,7 +843,7 @@ class GuiderImageAnalysis(object):
 
     def _find_stars_gcam(self, image, mask, fibers):
         """Find the stars in a processed gcamera image."""
-        ccdInfo = PyGuide.CCDInfo(self.imageBias, self.readNoise, self.ccdGain)
+        ccdInfo = PyGuide.CCDInfo(0.0, self.readNoise, self.ccdGain)
         # findStars wants False for regions of good data
         good_mask = (mask & self.mask_masked) != 0
         saturated = (mask & self.mask_saturated) != 0
@@ -1343,7 +1343,7 @@ class GuiderImageAnalysis(object):
             if not gprobe.tritium:
                 continue
 
-            ccdInfo = PyGuide.CCDInfo(self.imageBias, self.readNoise, self.ccdGain)
+            ccdInfo = PyGuide.CCDInfo(0.0, self.readNoise, self.ccdGain)
 
             gprobe_xc = gprobe.xCenter * 2
             gprobe_yc = gprobe.yCenter * 2
