@@ -660,7 +660,8 @@ def guideStep(actor,
             gState.cmd = None
 
         apply_guide_offset(cmd, gState, actor, actorState,
-                           offsetRA=frameInfo.offsetRA, offsetDec=frameInfo.offsetDec,
+                           offsetRA=frameInfo.offsetRA,
+                           offsetDec=frameInfo.offsetDec,
                            offsetRot=frameInfo.offsetRot)
 
         return frameInfo
@@ -794,8 +795,10 @@ def guideStep(actor,
 
     # Applies all corrections
     apply_guide_offset(cmd, gState, actor, actorState,
-                       offsetRA=frameInfo.offsetRA, offsetDec=frameInfo.offsetDec,
-                       offsetRot=frameInfo.offsetRot, offsetScale=frameInfo.offsetScale,
+                       offsetRA=frameInfo.offsetRA,
+                       offsetDec=frameInfo.offsetDec,
+                       offsetRot=frameInfo.offsetRot,
+                       offsetScale=frameInfo.offsetScale,
                        offsetFocus=frameInfo.offsetFocus)
 
     return frameInfo
