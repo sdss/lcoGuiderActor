@@ -121,7 +121,7 @@ def scale_pid_with_alt(cmd, gState, actorState):
 
 def _check_fiber(fiber, gState, guideCmd):
     """Check whether the current fiber should currently be enabled."""
-    # necessary?
+
     if fiber.gProbe is None:
         guideCmd.warn('text="Gprobe %d was not listed in plugmap info"' % fiber.fiberid)
         return False
@@ -132,6 +132,8 @@ def _check_fiber(fiber, gState, guideCmd):
     if fiber.gProbe.disabled:
         guideCmd.diag('text="Gprobe %d is not enabled."' % fiber.fiberid)
         return fiber.gProbe.enabled
+
+    return True
 
 
 def _do_one_fiber(fiber, gState, cmd, frameInfo, haLimWarn):
