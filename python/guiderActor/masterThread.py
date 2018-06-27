@@ -360,10 +360,11 @@ def apply_guide_offset(cmd, gState, actor, actorState,
     rotDirection = actorConfig.getint('telescope', 'rotDirection')
     focusDirection = actorConfig.getint('telescope', 'focusDirection')
 
-    offsetRA = axisDirection * offsetRA
-    offsetDec = axisDirection * offsetDec
-    offsetRot = rotDirection * offsetRot
-    offsetFocus = focusDirection * offsetFocus
+    offsetRA = axisDirection * (offsetRA if offsetRA else 0.0)
+    offsetDec = axisDirection * (offsetDec if offsetDec else 0.0)
+    offsetRot = rotDirection * (offsetRot if offsetRot else 0.0)
+    offsetFocus = focusDirection * (offsetFocus if offsetFocus else 0.0)
+    offsetScale = offsetScale if offsetScale else 1.0
 
     cmdStr = 'guideoffset {0},{1},{2},{3},{4}'.format(-offsetRA, -offsetDec, -offsetRot,
                                                       offsetFocus, offsetScale)
