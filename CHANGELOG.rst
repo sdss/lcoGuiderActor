@@ -12,6 +12,11 @@ This document records the main changes to the lcoGuiderActor code.
 1.0.2 (unreleased)
 ------------------
 
+Added
+^^^^^
+* Reimplemented ``centerUp`` to use any available guide fibre. In this case, the full offset correction is applied.
+* ``guideStep`` now executes all the offsets at once making use of ``tcc guideoffset``.
+
 Changed
 ^^^^^^^
 * ``CCDInfo`` initialised with bias level zero given that the image passed has already been bias subtracted. Should address the problem with LED jitter.

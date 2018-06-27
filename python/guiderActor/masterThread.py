@@ -129,13 +129,8 @@ def _check_fiber(fiber, gState, guideCmd):
     if fiber.gProbe.tritium:
         return False
 
-    # Center up on acquisition fibers only.
-    if gState.centerUp and fiber.gProbe.fiber_type != 'ACQUIRE':
-        guideCmd.diag('text="Gprobe %d is disabled during Center Up."' % fiber.fiberid)
-        return False
-    else:
-        if fiber.gProbe.disabled:
-            guideCmd.diag('text="Gprobe %d is not enabled."' % fiber.fiberid)
+    if fiber.gProbe.disabled:
+        guideCmd.diag('text="Gprobe %d is not enabled."' % fiber.fiberid)
         return fiber.gProbe.enabled
 
 
@@ -322,69 +317,60 @@ def _find_focus_one_fiber(fiber, gState, frameInfo, C, A, b):
     A[1, 1] += d * d * ivar
 
 
-def apply_tcc_corr(cmd, axis, cmdStr, gState, actor):
-    """Checks whether we should correct this iteration and commands the TCC."""
+def apply_guide_offset(cmd, gState, actor, actorState,
+                       offsetRA=None, offsetDec=None, offsetRot=None,
+                       offsetScale=None, offsetFocus=None, header=None):
+    """Sends offset correction to the TCC.
 
-    ncorr = gState.pid[axis].ncorr
-    corr_count = gState.pid[axis].corr_count
+    Parameters
+    ----------
+    offsetRA : float, optional
+        The correction for RA, in degrees (the default is None, which skips the
+        correction in this axis).
+    offsetDec : float, optional
+        The correction in Dec, in degrees (the default is None, which skips the
+        correction in this axis).
+    offsetRot : float, optional
+        The correction in rotation, in degrees (the default is None, which
+        skips the correction in this axis).
+    offsetScale : float, optional
+        The correction in scale, as a multiplicative factor (the default is
+        None, which skips the correction in this axis).
+    offsetFocus : float, optional
+        The correction in focus, in microns (the default is None, which skips
+        the correction in this axis).
 
-    if corr_count >= ncorr:
-        cmdVar = actor.cmdr.call(actor='tcc', forUserCmd=cmd, cmdStr=cmdStr)
-        if cmdVar.didFail:
-            cmd.warn('text="Failed to issue offset"')
-        gState.pid[axis].corr_count = 0
-        return True
-    else:
-        cmd.warn('text="would have applied {0} but this is iteration {1} of {2}."'.format(
-            cmdStr, corr_count, ncorr))
+    Returns
+    -------
+    bool
+        True if successful. False otherwise.
+
+    """
+
+    # If all the offsets are None or 0.0, returns
+    if all([ii for ii in [offsetRA, offsetDec, offsetRot, offsetFocus, offsetScale]]):
+        cmd.warn('text="No corrections to apply."')
         return False
-
-
-def apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRot):
-    """Finish the calculation for the ra/dec/rot corrections and apply them."""
 
     # Changes the offset convention to match the telescope being commanded.
     actorConfig = guiderActor.myGlobals.actorState.actorConfig
     axisDirection = actorConfig.getint('telescope', 'axisDirection')
     rotDirection = actorConfig.getint('telescope', 'rotDirection')
+    focusDirection = actorConfig.getint('telescope', 'focusDirection')
 
-    rotMinimum = actorConfig.getfloat('offsets', 'rotation_min')
-
-    # Axis conventions are different at APO and LCO. Here we set them right
-    # for each observatory.
-    offsetRa = axisDirection * offsetRa
+    offsetRA = axisDirection * offsetRA
     offsetDec = axisDirection * offsetDec
     offsetRot = rotDirection * offsetRot
+    offsetFocus = focusDirection * offsetFocus
 
-    if gState.guideAxes:
-        gState.pid['raDec'].update_count()  # Updates exposure count for raDec
-        radec_cmdStr = 'offset arc {0:f}, {1:f}'.format(-offsetRa, -offsetDec)
-        apply_tcc_corr(cmd, 'raDec', radec_cmdStr, gState, actor)
+    cmdStr = 'guideoffset {0},{1},{2},{3},{4}'.format(-offsetRA, -offsetDec, -offsetRot,
+                                                      offsetFocus, offsetScale)
+    cmdVar = actor.cmdr.call(actor='tcc', forUserCmd=cmd, cmdStr=cmdStr)
+    if cmdVar.didFail:
+        cmd.warn('text="Failed to issue offset"')
+        return False
 
-        if offsetRot:
-            gState.pid['rot'].update_count()  # Updates exposure count for rot
-            if numpy.abs(offsetRot) < rotMinimum:
-                cmd.warn('text="not applying this absurdly small rotation change of {0:g} deg"'
-                         .format(-offsetRot))
-            else:
-                rot_cmdStr = 'offset guide 0.0, 0.0, {0:g}'.format(-offsetRot)
-                apply_tcc_corr(cmd, 'rot', rot_cmdStr, gState, actor)
-
-    elif gState.centerUp:
-        # If we are in the middle of an fk5InFiber (or other TCC track/pterr),
-        # adjust the calibration offsets
-        doCalibOffset = actorState.models['tcc'].keyVarDict['objName'][
-            0] == 'position reference star'
-        if doCalibOffset:
-            cmd.warn('text="using arc offsets at a pointing star"')
-
-        cmdVar = actor.cmdr.call(
-            actor='tcc', forUserCmd=cmd, cmdStr='offset arc %f, %f' % (-offsetRa, -offsetDec))
-        if cmdVar.didFail:
-            cmd.warn('text="Failed to issue centering offset"')
-        else:
-            if not doCalibOffset:
-                gState.setGuideMode('axes', True)
+    return True
 
 
 def guideStep(actor,
@@ -421,13 +407,7 @@ def guideStep(actor,
                                       gState.plugPlateScale)
 
     actorState = guiderActor.myGlobals.actorState
-
-    # Gets the min/max offsets from the configuration
-    scale_offset_min = actorState.actorConfig.getfloat('offsets', 'scale_offset_min')
-    scale_offset_mult_min = actorState.actorConfig.getfloat('offsets', 'scale_offset_mult_min')
-    scale_offset_mult_max = actorState.actorConfig.getfloat('offsets', 'scale_offset_mult_max')
-
-    focus_offset_min = actorState.actorConfig.getfloat('offsets', 'focus_offset_min')
+    actorConfig = guiderActor.myGlobals.actorState.actorConfig
 
     guideCmd = gState.cmd
     guideCmd.respond('processing=%s' % inFile)
@@ -596,7 +576,7 @@ def guideStep(actor,
         if gState.centerUp or gState.decenterCmd:
             offsetRa = -dRA
             offsetDec = -dDec
-            offsetRot = 0
+            offsetRot = -dRot
         else:
             offsetRa = -gState.pid['raDec'].update(dRA, dt=dt)
             offsetDec = -gState.pid['raDec'].update(dDec, dt=dt)
@@ -611,10 +591,16 @@ def guideStep(actor,
         frameInfo.offsetDec = offsetDec if (gState.guideAxes or gState.centerUp) else 0.0
         frameInfo.offsetRot = offsetRot if (gState.guideAxes or gState.centerUp) else 0.0
 
+        rot_minimum = actorConfig.getfloat('offsets', 'rotation_min')
+        if frameInfo.offsetRot > 0 and frameInfo.offsetRot < rot_minimum:
+            guideCmd.warn('text="not applying this absurdly small rotation change of {0:g} deg"'
+                          .format(frameInfo.offsetRot))
+
         guideCmd.respond('axisError=%g, %g, %g' % (3600 * dRA, 3600 * dDec, 3600 * dRot))
-        guideCmd.respond('axisChange=%g, %g, %g, %s' % (3600 * offsetRa, 3600 * offsetDec,
-                                                        3600 * offsetRot, 'enabled'
-                                                        if gState.guideAxes else 'disabled'))
+        guideCmd.respond('axisChange=%g, %g, %g, %s' %
+                         (3600 * offsetRa, 3600 * offsetDec, 3600 * offsetRot,
+                          'enabled' if gState.guideAxes else 'disabled'))
+
         # calc FWHM with trimmed mean for 8 in focus fibers
         nFwhm = len(frameInfo.inFocusFwhm)
         trimLo = 1 if nFwhm > 4 else 0
@@ -659,24 +645,27 @@ def guideStep(actor,
         # frameInfo.guideAzRMS = guideAzRMS
         # frameInfo.guideAltRMS = guideAltRMS
 
-        apply_radecrot(cmd, gState, actor, actorState, offsetRa, offsetDec, offsetRot)
-
     except numpy.linalg.LinAlgError:
         guideCmd.warn('text=%s' % qstr('Unable to solve for axis offsets'))
 
     # don't bother with focus/scale!
     if nStar <= 1 or gState.centerUp:
+
         # LCOHACK: replaced gprobes with gState in writeFITS to output PID coefficients
         guiderImageAnalysis.writeFITS(
             actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
+
         if oneExposure:
             queues[MASTER].put(Msg(Msg.STATUS, cmd, finish=True))
             gState.cmd = None
+
+        apply_guide_offset(cmd, gState, actor, actorState,
+                           offsetRA=frameInfo.offsetRA, offsetDec=frameInfo.offsetDec,
+                           offsetRot=frameInfo.offsetRot)
+
         return frameInfo
 
-    #
     # Scale
-    #
     dScale = frameInfo.b3 / frameInfo.A[2, 2]
     dt = gState.update_pid_time('scale', time.time())
     offsetScale = -gState.pid['scale'].update(dScale, dt=dt)
@@ -691,12 +680,15 @@ def guideStep(actor,
     # the below is used by the observers to track the scale deltas.
     guideCmd.inform('text="delta percentage scale correction = %g"' % (-dScale * 100.))
 
-    # There is (not terribly surprisingly) evidence of crosstalk between scale and focus
-    # adjustements. So for now defer focus changes if we apply a scale change.
-    blockFocusMove = False
+    # Gets the min/max offsets from the configuration
+    scale_offset_min = actorConfig.getfloat('offsets', 'scale_offset_min')
+    scale_offset_mult_min = actorConfig.getfloat('offsets', 'scale_offset_mult_min')
+    scale_offset_mult_max = actorConfig.getfloat('offsets', 'scale_offset_mult_max')
 
     if gState.guideScale:
+
         gState.pid['scale'].update_count()  # Updates exposure count for scale
+
         # This should be a tiny bit bigger than one full M1 axial step.
         if abs(offsetScale) < scale_offset_min:
             cmd.diag('text="skipping small scale change=%0.8f"' % (offsetScale))
@@ -707,12 +699,8 @@ def guideStep(actor,
             # Last chance to bailout.
             if offsetScale < scale_offset_mult_min or offsetScale > scale_offset_mult_max:
                 cmd.warn('text="NOT setting scarily large scale=%0.8f"' % (offsetScale))
-            else:
-                # blockFocusMove = True
-                scale_cmdStr = 'set scale={0:.9f} /mult'.format(offsetScale)
-                result_scale = apply_tcc_corr(cmd, 'scale', scale_cmdStr, gState, actor)
-                if result_scale:
-                    offsetScale = 0.0
+                offsetScale = 0.0
+                frameInfo.offsetScale = offsetScale
 
     # Evaluate RMS on fit over fibers used in fits here
     # FIXME--PH not calculated yet
@@ -776,31 +764,26 @@ def guideStep(actor,
 
         guideCmd.respond('seeing=%g' % (rms0 * frameInfo.sigmaToFWHM))
         guideCmd.respond('focusError=%g' % (dFocus))
-        guideCmd.respond('focusChange=%g, %s' %
-                         (offsetFocus, 'enabled'
-                          if (gState.guideFocus and not blockFocusMove) else 'disabled'))
+        guideCmd.respond('focusChange=%g, %s' % (offsetFocus, 'enabled'
+                                                 if gState.guideFocus else 'disabled'))
 
-        if gState.guideFocus and not blockFocusMove:
+        focus_offset_min = actorConfig.getfloat('offsets', 'focus_offset_min')
+
+        if gState.guideFocus:
+
             gState.pid['focus'].update_count()  # Updates exposure count for focus
+
             # Checks that the offset is not too small
             if numpy.abs(offsetFocus) < focus_offset_min:
                 cmd.warn('text="NOT applying too small focus offset=%0.5f"' % (offsetFocus))
-            else:
-                # Sets the right direction in which the focus offset moves the focus
-                # on the telescope.
-                focusDirection = actorState.actorConfig.getint('telescope', 'focusDirection')
-                tccOffsetFocus = focusDirection * offsetFocus
-
-                focus_cmdStr = 'set focus={0:f}/incremental'.format(tccOffsetFocus)
-                result_focus = apply_tcc_corr(cmd, 'focus', focus_cmdStr, gState, actor)
-                if result_focus:
-                    offsetScale = 0.0
+                offsetFocus = 0.0
+                frameInfo.offsetFocus = offsetFocus
 
     except numpy.linalg.LinAlgError:
+
         guideCmd.respond('focusError=%g' % (numpy.nan))
         guideCmd.respond('focusChange=%g, %s' %
-                         (numpy.nan, 'enabled'
-                          if (gState.guideFocus and not blockFocusMove) else 'disabled'))
+                         (numpy.nan, 'enabled' if gState.guideFocus else 'disabled'))
         guideCmd.warn('text=%s' % qstr('Unable to solve for focus offset'))
         x = None
 
@@ -808,6 +791,13 @@ def guideStep(actor,
     # LCOHACK: replaced gprobes with gState in writeFITS to output PID coefficients
     guiderImageAnalysis.writeFITS(
         actorState.models, guideCmd, frameInfo, gState, output_verify=output_verify)
+
+    # Applies all corrections
+    apply_guide_offset(cmd, gState, actor, actorState,
+                       offsetRA=frameInfo.offsetRA, offsetDec=frameInfo.offsetDec,
+                       offsetRot=frameInfo.offsetRot, offsetScale=frameInfo.offsetScale,
+                       offsetFocus=frameInfo.offsetFocus)
+
     return frameInfo
 
 
