@@ -595,9 +595,10 @@ def guideStep(actor,
         frameInfo.offsetRot = offsetRot if (gState.guideAxes or gState.centerUp) else 0.0
 
         rot_minimum = actorConfig.getfloat('offsets', 'rotation_min')
-        if frameInfo.offsetRot > 0 and frameInfo.offsetRot < rot_minimum:
+        if numpy.abs(frameInfo.offsetRot) > 0 and numpy.abs(frameInfo.offsetRot) < rot_minimum:
             guideCmd.warn('text="not applying this absurdly small rotation change of {0:g} deg"'
                           .format(frameInfo.offsetRot))
+            frameInfo.offsetRot = offsetRot = 0.0
 
         guideCmd.respond('axisError=%g, %g, %g' % (3600 * dRA, 3600 * dDec, 3600 * dRot))
         guideCmd.respond('axisChange=%g, %g, %g, %s' %

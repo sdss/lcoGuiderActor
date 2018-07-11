@@ -30,6 +30,7 @@ Refactored
 Fixed
 ^^^^^
 * Ticket `#1433 <https://trac.sdss.org/ticket/1433>`__: lack of plateGuideOffset files should be fatal for APOGEE.
+* Set ``offsetRot=0`` when the rotation offset is less than the deadband.
 
 `View changes <https://github.com/sdss/lcoGuiderActor/compare/1.0.1...HEAD>`__
 
