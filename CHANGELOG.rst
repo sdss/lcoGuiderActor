@@ -9,7 +9,7 @@ This document records the main changes to the lcoGuiderActor code.
 
 .. _changelog-1.0.2:
 
-1.0.2 (unreleased)
+1.0.2 (2018-07-19)
 ------------------
 
 Added
@@ -32,7 +32,7 @@ Fixed
 * Ticket `#1433 <https://trac.sdss.org/ticket/1433>`__: lack of plateGuideOffset files should be fatal for APOGEE.
 * Set ``offsetRot=0`` when the rotation offset is less than the deadband.
 
-`View changes <https://github.com/sdss/lcoGuiderActor/compare/1.0.1...HEAD>`__
+`View changes <https://github.com/sdss/lcoGuiderActor/compare/1.0.1...1.0.2>`__
 
 
 .. _changelog-1.0.1:
