@@ -123,4 +123,4 @@ class Msg(actorcore.Actor.Msg):
 
 __all__ = ['MASTER', 'GCAMERA', 'MOVIE', 'Msg']
 
-__version__ = '1.0.2'
+__version__ = '1.0.3dev'
