@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# isort:skip_file
+
 """
 Generate a movie from processed guider files to show the guider behavior.
 """
@@ -8,16 +10,16 @@ import subprocess
 import sys
 import tempfile
 
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import pyfits
-from matplotlib import cm
 
 from opscore.utility import assembleImage
 
-
+import matplotlib
 matplotlib.use('agg')
+
+from matplotlib import cm
+import matplotlib.pyplot as plt
 
 
 gimgbase = 'proc-gimg-%04d.fits.gz'
