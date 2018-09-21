@@ -9,12 +9,12 @@ This document records the main changes to the lcoGuiderActor code.
 
 .. _changelog-1.0.3:
 
-1.0.3 (unreleased)
+1.0.3 (2018-09-21)
 ------------------
 
 Changed
 ^^^^^^^
-* Ticket `#1433 <https://trac.sdss.org/ticket/2885>`__: changed order of imports in ``guider_movies.py`` to avoid the script crashing because the matplotlib backend causes a conflict.
+* Ticket `#2885 <https://trac.sdss.org/ticket/2885>`__: changed order of imports in ``guider_movies.py`` to avoid the script crashing because the matplotlib backend causes a conflict.
 
 
 .. _changelog-1.0.2:
