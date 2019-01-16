@@ -243,6 +243,10 @@ class GuiderImageAnalysis(object):
                 self.cmd.diag('text="Using stored bias level={0:.1f}"'
                               .format(bias))
             else:
+                if hdr_bias_fn.strip() == '':
+                    raise GuiderExceptions.BadBiasError(
+                        'BIASFILE header is empty for image {}. '
+                        'Maybe you took a dark before a bias?'.format(filename))
                 bias_fn = os.path.join(os.path.dirname(filename),
                                        os.path.basename(hdr_bias_fn))
                 if not os.path.exists(bias_fn):

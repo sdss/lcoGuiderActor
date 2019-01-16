@@ -7,6 +7,16 @@ Change Log
 This document records the main changes to the lcoGuiderActor code.
 
 
+.. _changelog-1.0.4:
+
+1.0.4 (unreleased)
+------------------
+
+Added
+^^^^^^^
+* Added a check for ticket `#2888 <https://trac.sdss.org/ticket/2888>`__. If ``BIASFILE`` is empty it will fail with a clear message.
+
+
 .. _changelog-1.0.3:
 
 1.0.3 (2018-09-21)
